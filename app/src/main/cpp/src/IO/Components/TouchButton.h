@@ -1,5 +1,5 @@
 //	This file is part of the continued Journey MMORPG client
-//	Copyright (C) 2015-2019  Daniel Allendorf, Ryan Payton
+//	Copyright (C) 2015-2024  Daniel Allendorf, Ryan Payton, Bizhou Xing
 //
 //	This program is free software: you can redistribute it and/or modify
 //	it under the terms of the GNU Affero General Public License as published by
@@ -15,7 +15,6 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 #include "IconCover.h"
-#include "Button.h"
 #include "glfm.h"
 
 namespace ms {
@@ -36,7 +35,7 @@ public:
 
     void update();
 
-    void set_state(Point<double_t> cursor_pos);
+    bool set_state(Point<double_t> cursor_pos);
 
 private:
     Point<int16_t> position_;
