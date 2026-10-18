@@ -219,6 +219,10 @@ Cursor::State Textfield::send_cursor(Point<int16_t> cursorpos, bool clicked) {
         if (clicked) {
             if (state_ == State::NORMAL) {
                 set_state(State::FOCUSED);
+            } else {
+                // Dismissing the keyboard is a system gesture that leaves this field focused, so
+                // tapping it again never goes through set_state() and the keyboard stayed away.
+                glfmSetKeyboardVisible(Window::get().get_display(), true);
             }
             return Cursor::State::CLICKING;
         }

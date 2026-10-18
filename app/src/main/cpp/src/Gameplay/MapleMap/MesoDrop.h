@@ -32,6 +32,8 @@ public:
 
     void draw(double viewx, double viewy, float alpha) const override;
 
+    Rectangle<int16_t> bounds() const override;
+
 private:
     const Animation &icon_;
 };

@@ -116,4 +116,58 @@ MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
 
     return { 0, {} };
 }
+
+MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius) {
+    if (!loot_enabled_) {
+        return { 0, {} };
+    }
+
+    const int64_t rangesq = static_cast<int64_t>(radius) * radius;
+    int64_t best_dist = rangesq;
+    Loot best = { 0, {} };
+
+    for (auto &mmo : drops_) {
+        auto drop = create_optional<const Drop>(mmo.second.get());
+
+        if (!drop) {
+            continue;
+        }
+
+        const Point<int16_t> droppos = drop->get().get_position();
+
+        // Measured against the icon as it is drawn, and to its nearest edge. The point the drop is
+        // stored at sits inside that picture instead of at its middle, so a radius counted from it
+        // reached further on one side of the character than on the other.
+        const Rectangle<int16_t> box = drop->get().bounds();
+
+        int64_t deltax = 0;
+
+        if (playerpos.x() < box.left()) {
+            deltax = box.left() - playerpos.x();
+        } else if (playerpos.x() > box.right()) {
+            deltax = playerpos.x() - box.right();
+        }
+
+        int64_t deltay = 0;
+
+        if (playerpos.y() < box.top()) {
+            deltay = box.top() - playerpos.y();
+        } else if (playerpos.y() > box.bottom()) {
+            deltay = playerpos.y() - box.bottom();
+        }
+
+        const int64_t dist = deltax * deltax + deltay * deltay;
+
+        if (dist <= best_dist) {
+            best_dist = dist;
+            best = { mmo.first, droppos };
+        }
+    }
+
+    if (best.first) {
+        loot_enabled_ = false;
+    }
+
+    return best;
+}
 }  // namespace ms

@@ -27,19 +27,19 @@
 #include "Singleton.h"
 #include "Stage.h"
 
+#include <algorithm>
+#include <cmath>
 #include <utility>
 #include <android/log.h>
+
+#include "Gamepad.h"
 
 namespace ms {
     Window::Window() :
             display(nullptr),
             fullscreen_(true),
             opacity_(1.0f),
-            opc_step_(0.0f),
-            ratio_x(0.0f),
-            ratio_y(0.0f),
-            width_(Constants::Constants::get().get_viewwidth()),
-            height_(Constants::Constants::get().get_viewheight()) {
+            opc_step_(0.0f) {
     }
 
     Window::~Window() {
@@ -54,6 +54,11 @@ namespace ms {
     bool key_callback(GLFMDisplay *display, GLFMKeyCode keyCode, GLFMKeyAction action,
                       int modifiers) {
         std::cout << "key_callback" << keyCode << " action " << action << std::endl;
+
+        if (Gamepad::get().on_key(keyCode, action != GLFMKeyActionReleased)) {
+            return true;
+        }
+
         UI::get().send_key(keyCode, action != GLFMKeyActionReleased);
         return true;
     }
@@ -91,59 +96,58 @@ namespace ms {
 
     bool sent = false;
 
+    void joystick_axis_callback(GLFMDisplay *display, double x, double y) {
+        Gamepad::get().set_stick(x, y);
+    }
+
     bool mousekey_callback(GLFMDisplay *display, int touch, GLFMTouchPhase phase,
                            double x, double y) {
-        Point<double_t> relative_pos = Point<double_t>(x / Window::get().get_ratio_x(),
-                                                       y / Window::get().get_ratio_y());
-        UI::get().set_touch_phase(touch, TouchInfo(relative_pos, phase));
-        if (UI::get().should_send_cursor()) {
-            Window::get().move_cursor(x, y);
-            switch (phase) {
-                case GLFMTouchPhaseHover:
-                    break;
-                case GLFMTouchPhaseBegan: {
-                    click_start_time = std::chrono::steady_clock::now();
-                    UI::get().send_cursor(false);
-                    break;
-                }
-                case GLFMTouchPhaseMoved: {
-                    auto diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::steady_clock::now() - click_start_time).count();
-                    if (diff_ms > 500) {
-                        if (!sent)
-                            UI::get().send_cursor(true);
-                    } else {
-                        UI::get().send_cursor(false);
-                    }
-                    break;
-                }
-                case GLFMTouchPhaseEnded: {
-                    if (sent)
-                        sent = false;
-                    else {
-                        UI::get().send_cursor(true);
-                    }
-                    auto diff_ms = ContinuousTimer::get().stop(start) / 1000;
-                    start = ContinuousTimer::get().start();
-
-                    if (diff_ms > 10 && diff_ms < 200) {
-                        UI::get().doubleclick();
-                    }
-                    UI::get().send_cursor(false);
-                    break;
-                }
-                case GLFMTouchPhaseCancelled:
-                    break;
+        Window::get().move_cursor(x, y);
+        switch (phase) {
+            case GLFMTouchPhaseHover:
+                break;
+            case GLFMTouchPhaseBegan: {
+                click_start_time = std::chrono::steady_clock::now();
+                UI::get().send_cursor(false);
+                break;
             }
+            case GLFMTouchPhaseMoved: {
+                auto diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - click_start_time).count();
+                if (diff_ms > 500) {
+                    if (!sent)
+                        UI::get().send_cursor(true);
+                } else {
+                    UI::get().send_cursor(false);
+                }
+                break;
+            }
+            case GLFMTouchPhaseEnded: {
+                if (sent)
+                    sent = false;
+                else {
+                    UI::get().send_cursor(true);
+                }
+                auto diff_ms = ContinuousTimer::get().stop(start) / 1000;
+                start = ContinuousTimer::get().start();
+
+                if (diff_ms > 10 && diff_ms < 200) {
+                    UI::get().doubleclick();
+                }
+                UI::get().send_cursor(false);
+                break;
+            }
+            case GLFMTouchPhaseCancelled:
+                break;
         }
 
         return true;
     }
 
     void Window::move_cursor(double x, double y) {
-        auto xpos = static_cast<int16_t>(x / Window::get().get_ratio_x());
-        auto ypos = static_cast<int16_t>(y / Window::get().get_ratio_y());
-        Point<int16_t> pos = Point<int16_t>(xpos, ypos);
+        Point<double_t> game_pos = to_game(x, y);
+        auto pos = Point<int16_t>(static_cast<int16_t>(game_pos.x()),
+                                  static_cast<int16_t>(game_pos.y()));
         UI::get().send_cursor(pos);
     }
 
@@ -170,23 +174,31 @@ namespace ms {
             Stage::get().init();
             UI::get().init();
             Timer::get().start();
-
-            int width, height;
-            glfmGetDisplaySize(display, &width, &height);
-            Window::get().set_ratio(width / 1366.0, height / 768.0);
         }
         const int64_t timestep = Constants::TIMESTEP * 1000;
         int64_t accumulator = timestep;
         if (game.is_running()) {
+            Gamepad::get().update();
             int64_t elapsed = Timer::get().stop();
 
             // Update game with constant timestep as many times as possible.
-            for (accumulator += elapsed; accumulator >= timestep;
-                 accumulator -= timestep) {
+            for (accumulator += static_cast<int64_t>(elapsed * Constants::SIMULATION_SPEED);
+                 accumulator >= timestep; accumulator -= timestep) {
                 game.update();
             }
             float alpha = static_cast<float>(accumulator) / timestep;
             game.draw(alpha);
+        } else {
+            // Nothing is drawn until the server connection is up, which would leave the surface
+            // presenting the uninitialised contents it was created with.
+            int surface_width, surface_height;
+            glfmGetDisplaySize(display, &surface_width, &surface_height);
+
+            glViewport(0, 0, surface_width, surface_height);
+            glDisable(GL_SCISSOR_TEST);
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            glfmSwapBuffers(display);
         }
     }
 
@@ -203,13 +215,12 @@ namespace ms {
     }
 
     Error Window::init_window() {
-        glViewport(0, 0, width_, height_);
-
         glfmSetMouseCursor(display, GLFMMouseCursorDefault);
         glfmSetKeyFunc(display, key_callback);
         glfmSetCharFunc(display, char_callback);
         glfmSetRenderFunc(display, onDraw);
         glfmSetTouchFunc(display, mousekey_callback);
+        glfmJoystickAxisFunc = joystick_axis_callback;
 //        glfmSetMouseWheelFunc(display, cursor_callback);
         glfmSetAppFocusFunc(display, focus_callback);
 //        glfwSetScrollCallback(pApp, scroll_callback);
@@ -246,24 +257,17 @@ namespace ms {
     void Window::check_events() {
         int16_t max_width = Configuration::get().get_max_width();
         int16_t max_height = Configuration::get().get_max_height();
-        int16_t new_width = Constants::Constants::get().get_viewwidth();
-        int16_t new_height = Constants::Constants::get().get_viewheight();
+        int16_t view_width = Constants::Constants::get().get_viewwidth();
+        int16_t view_height = Constants::Constants::get().get_viewheight();
 
-        if (width_ != new_width || height_ != new_height) {
-            width_ = new_width;
-            height_ = new_height;
-
-            if (new_width >= max_width || new_height >= max_height) {
-                fullscreen_ = true;
-            }
-
-//            init_window();
+        if (view_width >= max_width || view_height >= max_height) {
+            fullscreen_ = true;
         }
-
-//        glfwPollEvents();
     }
 
-    void Window::begin() const {
+    void Window::begin() {
+        GraphicsGL::get().sync_screen_size();
+        update_viewport();
         GraphicsGL::get().clear_scene();
     }
 
@@ -291,27 +295,50 @@ namespace ms {
     void Window::toggle_fullscreen() {
         int16_t max_width = Configuration::get().get_max_width();
         int16_t max_height = Configuration::get().get_max_height();
+        int16_t view_width = Constants::Constants::get().get_viewwidth();
+        int16_t view_height = Constants::Constants::get().get_viewheight();
 
-        if (width_ < max_width && height_ < max_height) {
+        if (view_width < max_width && view_height < max_height) {
             fullscreen_ = !fullscreen_;
             Setting<Fullscreen>::get().save(fullscreen_);
-
-//            init_window();
-//            glfwPollEvents();
         }
     }
 
-    double Window::get_ratio_x() {
-        return ratio_x;
+    void Window::update_viewport() {
+        int surface_width, surface_height;
+        glfmGetDisplaySize(display, &surface_width, &surface_height);
+
+        if (surface_width <= 0 || surface_height <= 0) {
+            return;
+        }
+
+        // Fit the size the scene is actually being drawn at, which the renderer holds back while a
+        // transition fades: a box cut for a resolution the picture isn't drawn at yet leaves that
+        // picture in the corner of it.
+        const int view_width = GraphicsGL::get().get_screen_width();
+        const int view_height = GraphicsGL::get().get_screen_height();
+
+        // Fitting the view by the smaller scale keeps the whole picture and its aspect; anything
+        // the surface has to spare on that axis becomes a bar.
+        const double scale
+                = std::min(static_cast<double>(surface_width) / view_width,
+                           static_cast<double>(surface_height) / view_height);
+        const int32_t box_width = static_cast<int32_t>(std::lround(view_width * scale));
+        const int32_t box_height = static_cast<int32_t>(std::lround(view_height * scale));
+
+        scale_ = scale;
+        offset_x_ = (surface_width - box_width) / 2;
+        offset_y_ = (surface_height - box_height) / 2;
+
+        glViewport(offset_x_, offset_y_, box_width, box_height);
+        // Keeps the bars black, since the view itself is cleared over its own box.
+        glScissor(offset_x_, offset_y_, box_width, box_height);
     }
 
-    double Window::get_ratio_y() {
-        return ratio_y;
-    }
-
-    void Window::set_ratio(double ratio_x, double ratio_y) {
-        this->ratio_x = ratio_x;
-        this->ratio_y = ratio_y;
+    Point<double_t> Window::to_game(double x, double y) const {
+        // Touches arrive as surface pixels from the top left. The view box is centred, so the bar
+        // trimmed off the top is the same height as the one at the bottom.
+        return Point<double_t>((x - offset_x_) / scale_, (y - offset_y_) / scale_);
     }
 
     GLFMDisplay *Window::get_display() {

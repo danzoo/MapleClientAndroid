@@ -18,9 +18,11 @@
 #include <optional>
 #include <utility>
 
+#include "../Constants.h"
 #include "../Gameplay/Stage.h"
 #include "../../Audio/Audio.h"
 #include "../../Configuration.h"
+#include "Cursor.h"
 #include "OptionalCreator.h"
 #include "UIStateCashShop.h"
 #include "UIStateGame.h"
@@ -39,6 +41,12 @@
 #include "Window.h"
 
 namespace ms {
+    namespace {
+        // The size the login and character selection screens are designed around.
+        constexpr int16_t LOGIN_WIDTH = 800;
+        constexpr int16_t LOGIN_HEIGHT = 600;
+    }
+
     UI::UI() :
             state_(std::make_unique<UIStateNull>()),
             enabled_(true),
@@ -55,14 +63,12 @@ namespace ms {
         state_->draw(alpha, cursor_.get_position());
         scrolling_notice_.draw(alpha);
         cursor_.draw(alpha);
-        mobile_input_.draw();
     }
 
     void UI::update() {
         state_->update();
         scrolling_notice_.update();
         cursor_.update();
-        mobile_input_.update();
     }
 
     void UI::enable() {
@@ -76,6 +82,10 @@ namespace ms {
     void UI::change_state(State id) {
         switch (id) {
             case State::LOGIN:
+                // Every login screen lays itself out inside 800x600, so make that the picture the
+                // screen is scaled from instead of leaving it in the corner of the game resolution.
+                Constants::Constants::get().set_viewwidth(LOGIN_WIDTH);
+                Constants::Constants::get().set_viewheight(LOGIN_HEIGHT);
                 state_ = std::make_unique<UIStateLogin>();
                 break;
             case State::GAME:
@@ -443,26 +453,29 @@ namespace ms {
                          bolded);
     }
 
-    bool UI::should_send_cursor() {
-        if (UI::get().get_state_type() == typeid(UIStateGame)) {
-            VirtualJoyStick joyStick = mobile_input_.getVirtualJoyStick();
-            for (const auto &touch_phase: touch_phase_) {
-                if (joyStick.set_state(touch_phase.second))
-                    return false;
-            }
+    void UI::send_action(KeyAction::Id action) {
+        state_->send_key(KeyType::Id::MENU, action, true, false);
+    }
 
-            for (const auto &iter: mobile_input_.getTouchButtons()) {
-                bool should_not_send = false;
-                for (const auto &touch_phase: touch_phase_) {
-                    if (TouchButton *button = iter.second.get()) {
-                        should_not_send = should_not_send || button->set_state(touch_phase.second);
-                    }
-                }
-                if (should_not_send)
-                    return false;
+    bool UI::is_modal_active() {
+        auto active = [](auto element) {
+            return element && element->get().is_active();
+        };
+
+        if (auto statusbar = get_element<UIStatusBar>()) {
+            if (statusbar->get().is_menu_active()) {
+                return true;
             }
         }
-        return true;
+
+        return active(get_element<UINpcTalk>())
+               || active(get_element<UIChannel>())
+               || active(get_element<UIWorldMap>())
+               || active(get_element<UIOptionMenu>())
+               || active(get_element<UIShop>())
+               || active(get_element<UIJoypad>())
+               || active(get_element<UIRank>())
+               || active(get_element<UIQuit>());
     }
 
     Keyboard &UI::get_keyboard() {
@@ -472,18 +485,6 @@ namespace ms {
     void UI::remove(UIElement::Type type) {
         focused_text_field_ = {};
         state_->remove(type);
-    }
-
-    void UI::set_touch_phase(int16_t touch, TouchInfo touchPhase) {
-        touch_phase_[touch] = touchPhase;
-    }
-
-    void UI::remove_touch_phase(int16_t touch_id) {
-        touch_phase_.erase(touch_id);
-    }
-
-    const std::unordered_map<int16_t, TouchInfo> &UI::get_touch_phase() {
-        return touch_phase_;
     }
 
     std::type_info const& UI::get_state_type() {

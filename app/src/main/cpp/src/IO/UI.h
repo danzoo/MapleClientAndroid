@@ -23,12 +23,11 @@
 
 #include "Components/ScrollingNotice.h"
 #include "Components/Textfield.h"
+#include "KeyAction.h"
 #include "Point.h"
 #include "Singleton.h"
 #include "../Template/OptionalCreator.h"
 #include "UIState.h"
-#include "UIMobileInput.h"
-#include "TouchInfo.h"
 
 namespace ms {
     class UI : public Singleton<UI> {
@@ -105,7 +104,11 @@ namespace ms {
                       int32_t mapid,
                       bool bolded);
 
-        bool should_send_cursor();
+        // Send a menu action without going through a key mapping, used by the gamepad.
+        void send_action(KeyAction::Id action);
+
+        // True while a dialog or menu owns the arrow and confirm keys.
+        bool is_modal_active();
 
         Keyboard &get_keyboard();
 
@@ -123,21 +126,13 @@ namespace ms {
 
         void remove(UIElement::Type type);
 
-        void set_touch_phase(int16_t touch, TouchInfo touchPhase);
-
-        void remove_touch_phase(int16_t touch_id);
-
-        const std::unordered_map<int16_t, TouchInfo> &get_touch_phase();
-
         std::type_info const& get_state_type();
 
     private:
         std::unique_ptr<UIState> state_;
-        std::unordered_map<int16_t, TouchInfo> touch_phase_;
         Keyboard keyboard_;
         Cursor cursor_;
         ScrollingNotice scrolling_notice_;
-        UIMobileInput mobile_input_;
 
         std::optional<std::reference_wrapper<Textfield>> focused_text_field_;
         std::unordered_map<int32_t, bool> is_key_down_;

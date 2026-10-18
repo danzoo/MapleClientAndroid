@@ -28,7 +28,8 @@ namespace ms {
     }
 
     Error GraphicsGL::init(GLFMDisplay *pApp) {
-        // Set image to left top, multiplied by phone (screensize y / 384), screen resolution is 1366 * 768
+        // Set image to left top. Each axis is normalised by the view's own size, so whatever
+        // resolution the game runs at still covers the whole viewport.
         // Frag color changes to bgra because color is incorrect on Android platform
         const char *vertexShaderSource =
                 "#version 320 es\n"
@@ -42,8 +43,8 @@ namespace ms {
 
                 "void main(void)"
                 "{"
-                "	float x = (-1.0 + coord.x * (screensize.y / 384.0) / screensize.x);"
-                "	float y = 1.0 - (coord.y + float(yoffset)) / 384.0;"
+                "	float x = -1.0 + 2.0 * coord.x / screensize.x;"
+                "	float y = 1.0 - 2.0 * (coord.y + float(yoffset)) / screensize.y;"
                 "   gl_Position = vec4(x, y, 0.0, 1.0);"
                 "	texpos = coord.zw;"
                 "	colormod = color;"
@@ -1269,6 +1270,26 @@ namespace ms {
         locked_ = false;
     }
 
+    void GraphicsGL::sync_screen_size() {
+        if (locked_) {
+            return;
+        }
+
+        int16_t new_width = Constants::Constants::get().get_viewwidth();
+        int16_t new_height = Constants::Constants::get().get_viewheight();
+
+        if (new_width == VWIDTH && new_height == VHEIGHT) {
+            return;
+        }
+
+        VWIDTH = new_width;
+        VHEIGHT = new_height;
+        SCREEN = Rectangle<int16_t>(0, VWIDTH, 0, VHEIGHT);
+
+        glUseProgram(shader_program_);
+        glUniform2f(uniform_screen_size_, VWIDTH, VHEIGHT);
+    }
+
     void GraphicsGL::flush(float opacity) {
         bool coverscene = opacity != 1.0f;
 
@@ -1286,6 +1307,11 @@ namespace ms {
             circles_.emplace_back(1, 1, 1, color);
         }
 
+        // The bars around the view are cleared separately from it, so they stay black.
+        glDisable(GL_SCISSOR_TEST);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glEnable(GL_SCISSOR_TEST);
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 

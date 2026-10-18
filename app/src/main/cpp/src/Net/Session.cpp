@@ -60,6 +60,12 @@ std::string Session::readHostIP(GLFMDisplay* pApp) {
         }
     }
 
+    // The file is as likely to be written by hand as by the app, and a trailing newline would
+    // otherwise become part of the address.
+    while (!hostIP.empty() && static_cast<unsigned char>(hostIP.back()) <= ' ') {
+        hostIP.pop_back();
+    }
+
     return hostIP;
 }
 

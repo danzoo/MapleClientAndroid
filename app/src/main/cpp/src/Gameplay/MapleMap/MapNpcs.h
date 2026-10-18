@@ -47,6 +47,9 @@ public:
                               Point<int16_t> position,
                               Point<int16_t> viewpos);
 
+    // Start talking to the closest NPC within range of the player.
+    void talk_to_nearest(Point<int16_t> playerpos, int16_t range);
+
 private:
     MapObjects npcs_;
 

@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "MapObjectHandlers.h"
 
+#include <algorithm>
 #include <functional>
 #include <optional>
 
@@ -251,7 +252,7 @@ void CancelForeignBuffHandler::handle_buff(InPacket &recv,
 
 void SpawnMobHandler::handle(InPacket &recv) const {
     int32_t oid = recv.read_int();
-    recv.read_byte();  // 5 if controller == null
+    int8_t mode = recv.read_byte();  // 5 if controller == null
     int32_t id = recv.read_int();
 
     recv.skip(16);
@@ -278,7 +279,7 @@ void SpawnMobHandler::handle(InPacket &recv) const {
     recv.skip(4);  // item effect
 
     Stage::get().get_mobs().spawn(
-        { oid, id, 0, stance, fh, effect == -2, team, position });
+        { oid, id, mode, stance, fh, effect == -2, team, position });
 }
 
 void KillMobHandler::handle(InPacket &recv) const {
@@ -472,7 +473,7 @@ void DropLootHandler::handle(InPacket &recv) const {
     int8_t pickuptype = recv.read_byte();
     Point<int16_t> dropto = recv.read_point();
 
-    recv.skip(4);
+    int32_t dropper = recv.read_int();
 
     Point<int16_t> dropfrom;
 
@@ -489,6 +490,39 @@ void DropLootHandler::handle(InPacket &recv) const {
     }
 
     bool playerdrop = !recv.read_bool();
+
+    // The server leaves every mob at the spot it spawned it at: this client moves mobs around on
+    // its own and never reports where they got to, so the positions in this packet are placed
+    // around a mob that is no longer standing there. Anchoring them on the mob the player is
+    // looking at drops the loot on the corpse instead.
+    //
+    // Pickups are measured against the position the server gave the item, so a shift bigger than
+    // that measurement would put the loot out of reach; anything past it is left where it is.
+    if (mode != 2 && !playerdrop) {
+        auto &mobs = Stage::get().get_mobs();
+
+        if (mobs.contains(dropper)) {
+            auto mobpos = mobs.get_mob_position(dropper);
+            int32_t shiftx =
+                std::clamp<int32_t>(mobpos.x() - dropfrom.x(), -700, 700);
+            int32_t shifty =
+                std::clamp<int32_t>(mobpos.y() - dropfrom.y(), -500, 500);
+
+            dropfrom =
+                Point<int16_t>(dropfrom.x() + shiftx, dropfrom.y() + shifty);
+
+            auto ground = Stage::get().get_physics().get_y_below(
+                Point<int16_t>(dropto.x() + shiftx, mobpos.y()));
+
+            // Nothing under the spot the item was fanned out to - the search runs all the way to
+            // the bottom of the map, so keep the item on the platform the mob died on instead.
+            if (ground.y() - mobpos.y() > 400) {
+                ground.set_y(mobpos.y());
+            }
+
+            dropto = ground;
+        }
+    }
 
     // bug: plays sound when entering a map containing drops owned by self
     if (mode == 0 || (owner == Stage::get().is_player(owner) && !playerdrop)) {

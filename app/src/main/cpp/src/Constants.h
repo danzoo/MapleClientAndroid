@@ -23,6 +23,15 @@ namespace ms::Constants {
 // Timestep, e.g. the granularity in which the game advances.
 constexpr uint16_t TIMESTEP = 8;
 
+// Fraction of real time the simulation advances at. Movement, jumps and animations are all
+// driven by the timestep, so scaling it slows them together and keeps every trajectory intact;
+// lowering walk speed or jump force directly would shorten the jumps instead.
+constexpr double SIMULATION_SPEED = 0.85;
+
+// Downward acceleration of a free falling object, in pixels per timestep squared. Anything that
+// predicts a trajectory has to use the same value the integrator applies.
+constexpr double GRAVITY = 0.14;
+
 class Constants : public Singleton<Constants> {
 public:
     Constants() : VIEWWIDTH(1366), VIEWHEIGHT(768) {}
