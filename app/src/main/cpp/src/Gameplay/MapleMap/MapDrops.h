@@ -50,6 +50,9 @@ public:
 
     Loot find_loot_at(Point<int16_t> playerpos);
 
+    // Find the closest drop within radius of the specified position.
+    Loot find_loot_near(Point<int16_t> playerpos, int16_t radius);
+
 private:
     MapObjects drops_;
 

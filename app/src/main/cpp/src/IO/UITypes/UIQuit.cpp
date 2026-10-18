@@ -188,9 +188,6 @@ Button::State UIQuit::button_pressed(uint16_t buttonid) {
     switch (buttonid) {
         case Buttons::NO: deactivate(); break;
         case Buttons::YES: {
-            Constants::Constants::get().set_viewwidth(800);
-            Constants::Constants::get().set_viewheight(600);
-
             float fadestep = 0.025f;
 
             Window::get().fadeout(fadestep, []() {

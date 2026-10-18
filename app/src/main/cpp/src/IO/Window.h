@@ -16,6 +16,7 @@
 #pragma once
 
 #include "../Error.h"
+#include "../Template/Point.h"
 #include "../Template/Singleton.h"
 #include "glfm.h"
 #include <functional>
@@ -40,7 +41,7 @@ namespace ms {
 
         void update();
 
-        void begin() const;
+        void begin();
 
         void end() const;
 
@@ -56,25 +57,26 @@ namespace ms {
 
         void move_cursor(double x, double y);
 
-        void set_ratio(double ratio_x, double ratio_y);
-
-        double get_ratio_x();
-
-        double get_ratio_y();
+        // Translate a touch position in surface pixels from the top left into the game's own
+        // coordinate space, undoing the letterbox offset.
+        Point<double_t> to_game(double x, double y) const;
 
         GLFMDisplay* get_display();
 
     private:
         void update_opc();
 
+        // Stretch the game view over the surface, keeping its aspect and centring it.
+        void update_viewport();
+
         GLFMDisplay *display;
         bool fullscreen_;
         float opacity_;
         float opc_step_;
-        double ratio_x;
-        double ratio_y;
+        // Surface pixels per game unit, and the centring offsets of the view box.
+        double scale_ = 1.0;
+        int32_t offset_x_ = 0;
+        int32_t offset_y_ = 0;
         std::function<void()> fade_procedure_;
-        int16_t width_;
-        int16_t height_;
     };
 }  // namespace ms

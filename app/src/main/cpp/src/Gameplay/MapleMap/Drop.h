@@ -26,7 +26,7 @@ public:
 
     void expire(int8_t, const PhysicsObject *);
 
-    Rectangle<int16_t> bounds() const;
+    virtual Rectangle<int16_t> bounds() const;
 
 protected:
     Drop(int32_t oid,
@@ -36,6 +36,12 @@ protected:
          int8_t type,
          int8_t mode,
          bool playerdrop);
+
+    // The box an icon covers on screen, laid out exactly the way the renderer lays it out. The
+    // position a drop is stored at is only one point of that box, so measuring from it makes an
+    // item look nearer on one side of the character than on the other.
+    Rectangle<int16_t> icon_bounds(Point<int16_t> origin,
+                                  Point<int16_t> dimensions) const;
 
     Linear<float> opacity_;
     Linear<float> angle_;
@@ -51,7 +57,10 @@ private:
     State state_;
 
     Point<int16_t> dest_;
+    Point<int16_t> launch_;
     double base_y_;
     double moved_;
+    double fallen_;
+    double air_ticks_;
 };
 }  // namespace ms

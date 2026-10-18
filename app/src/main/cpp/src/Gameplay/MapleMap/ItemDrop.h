@@ -33,6 +33,8 @@ public:
 
     void draw(double viewx, double viewy, float alpha) const override;
 
+    Rectangle<int16_t> bounds() const override;
+
 private:
     const Texture &icon_;
 //    int32_t item_id_;

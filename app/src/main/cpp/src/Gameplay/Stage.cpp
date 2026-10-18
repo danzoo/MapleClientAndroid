@@ -175,6 +175,13 @@ void Stage::update() {
     drops_.update(physics_);
     player_.update(physics_);
 
+    // A ladder is only grabbed when the key goes down, so reaching one a frame after the stick was
+    // pushed up - on foot, or flying past it mid-jump - left it untouched until the key was pressed
+    // again. Checking whenever the key is held covers both.
+    if (player_.is_key_down(KeyAction::Id::UP)) {
+        check_ladders(true);
+    }
+
     portals_.update(player_.get_position());
     camera_.update(player_.get_position());
 
@@ -242,6 +249,14 @@ void Stage::check_ladders(bool up) {
 void Stage::check_drops() {
     Point<int16_t> playerpos = player_.get_position();
     auto [drop_oid, drop_pos] = drops_.find_loot_at(playerpos);
+
+    if (drop_oid) {
+        fn_pickup_item(drop_oid, drop_pos);
+    }
+}
+
+void Stage::pick_up_near(int16_t radius) {
+    auto [drop_oid, drop_pos] = drops_.find_loot_near(player_.get_position(), radius);
 
     if (drop_oid) {
         fn_pickup_item(drop_oid, drop_pos);
@@ -327,6 +342,10 @@ MapReactors &Stage::get_reactors() {
 
 MapDrops &Stage::get_drops() {
     return drops_;
+}
+
+const Physics &Stage::get_physics() const {
+    return physics_;
 }
 
 Player &Stage::get_player() {

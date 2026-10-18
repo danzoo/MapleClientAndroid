@@ -16,13 +16,19 @@
 #include "Physics.h"
 
 namespace ms {
-const double GRAVFORCE = 0.14;
+const double GRAVFORCE = Constants::GRAVITY;
 const double SWIMGRAVFORCE = 0.03;
 const double FRICTION = 0.3;
 const double SLOPEFACTOR = 0.1;
 const double GROUNDSLIP = 3.0;
 const double FLYFRICTION = 0.05;
 const double SWIMFRICTION = 0.08;
+
+// Fastest a fall can go, in pixels per tick. Gravity is added to the downward speed every tick
+// with nothing taking it back off, so a long drop keeps building up until the character crosses the
+// screen in a handful of frames. This only binds past v*v/2g, about a hundred and twenty eight
+// pixels down, so platform-height drops and jumps fall exactly as they always have.
+const double MAXFALLSPEED = 6.0;
 
 Physics::Physics(const nl::node &src) {
     fh_tree_ = src;
@@ -88,6 +94,10 @@ void Physics::move_normal(PhysicsObject &phobj) const {
 
     phobj.hspeed += phobj.hacc;
     phobj.vspeed += phobj.vacc;
+
+    if (!phobj.onground && phobj.vspeed > MAXFALLSPEED) {
+        phobj.vspeed = MAXFALLSPEED;
+    }
 }
 
 void Physics::move_flying(PhysicsObject &phobj) const {

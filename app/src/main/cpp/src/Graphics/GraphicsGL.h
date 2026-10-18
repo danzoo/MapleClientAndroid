@@ -113,6 +113,15 @@ namespace ms {
         // Draw the buffer contents with the specified scene opacity
         void flush(float opacity);
 
+        // Adopt the resolution the game is set to. A transition that holds the scene frozen keeps
+        // the coordinates it was drawn at, so the size only changes once the scene is live again.
+        void sync_screen_size();
+
+        // The resolution the scene is drawn at, which is what the viewport has to fit.
+        int16_t get_screen_width() const { return VWIDTH; }
+
+        int16_t get_screen_height() const { return VHEIGHT; }
+
         // Clear the buffer contents.
         void clear_scene();
 

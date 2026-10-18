@@ -25,6 +25,20 @@ namespace {
 auto fn_talk_to_npc = []<typename... T>(T && ...args) {
     TalkToNPCPacket(std::forward<T>(args)...).dispatch();
 };
+
+auto fn_show_npctalk = [](int id,
+                         int msgtype,
+                         int b0,
+                         int b1,
+                         int speaker,
+                         std::string str) {
+    UI::get().emplace<UINpcTalk>();
+
+    if (auto npctalk = UI::get().get_element<UINpcTalk>()) {
+        npctalk->get()
+            .change_text(id, msgtype, b0, b1, speaker, str);
+    }
+};
 }  // namespace
 
 void MapNpcs::draw(Layer::Id layer,
@@ -77,27 +91,47 @@ Cursor::State MapNpcs::send_cursor(bool pressed,
 
         if (npc && npc->is_active() && npc->inrange(position, viewpos)) {
             if (pressed) {
-                npc->talk([](int id,
-                             int msgtype,
-                             int b0,
-                             int b1,
-                             int speaker,
-                             std::string str) {
-                    UI::get().emplace<UINpcTalk>();
-                    if (auto npctalk = UI::get().get_element<UINpcTalk>()) {
-                        npctalk->get()
-                            .change_text(id, msgtype, b0, b1, speaker, str);
-                    }
-                });
+                npc->talk(fn_show_npctalk);
 
                 fn_talk_to_npc(npc->get_oid());
 
                 return Cursor::State::IDLE;
             }
+
             return Cursor::State::CAN_CLICK;
         }
     }
 
     return pressed ? Cursor::State::CLICKING : Cursor::State::IDLE;
+}
+
+void MapNpcs::talk_to_nearest(Point<int16_t> playerpos, int16_t range) {
+    int64_t best_dist = static_cast<int64_t>(range) * range;
+    Npc *nearest = nullptr;
+
+    for (auto &map_object : npcs_) {
+        Npc *npc = static_cast<Npc *>(map_object.second.get());
+
+        if (!npc || !npc->is_active()) {
+            continue;
+        }
+
+        const Point<int16_t> npcpos = npc->get_position();
+        const int64_t deltax = npcpos.x() - playerpos.x();
+        const int64_t deltay = npcpos.y() - playerpos.y();
+        const int64_t dist = deltax * deltax + deltay * deltay;
+
+        if (dist <= best_dist) {
+            best_dist = dist;
+            nearest = npc;
+        }
+    }
+
+    if (!nearest) {
+        return;
+    }
+
+    nearest->talk(fn_show_npctalk);
+    fn_talk_to_npc(nearest->get_oid());
 }
 }  // namespace ms

@@ -17,3 +17,13 @@ FetchContent_Declare(
         SOURCE_DIR        "${CMAKE_SOURCE_DIR}/thirdparty/glfm"
 )
 FetchContent_MakeAvailable(stb glfm)
+
+# Controller support needs the AKEYCODE_BUTTON_* entries and the axis hook that upstream glfm
+# doesn't ship. A re-fetched glfm silently loses them, so fail the configure step instead.
+file(STRINGS "${CMAKE_SOURCE_DIR}/thirdparty/glfm/src/glfm_android.c" GLFM_GAMEPAD_MAPPING
+        REGEX "AKEYCODE_BUTTON_A")
+if(NOT GLFM_GAMEPAD_MAPPING)
+    message(FATAL_ERROR
+            "thirdparty/glfm has no gamepad support. Restore it with: "
+            "git -C app/src/main/cpp/thirdparty/glfm apply ../glfm-gamepad-keys.patch")
+endif()

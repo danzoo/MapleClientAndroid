@@ -87,6 +87,9 @@ public:
     // Returns a reference to the drops on the current map.
     MapDrops &get_drops();
 
+    // Returns a reference to the terrain the current map is walked on.
+    const Physics &get_physics() const;
+
     // Returns a reference to the Player.
     Player &get_player();
 
@@ -116,6 +119,9 @@ public:
     void transfer_player();
 
     void change_channel(uint8_t ch);
+
+    // Pick up the closest drop within radius of the player.
+    void pick_up_near(int16_t radius);
 
 private:
     void load_map(int32_t mapid);
