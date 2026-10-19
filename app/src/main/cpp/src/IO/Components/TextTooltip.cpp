@@ -36,8 +36,8 @@ void TextTooltip::draw(Point<int16_t> pos) const {
     int16_t fillwidth = text_label_.width();
     int16_t fillheight = text_label_.height();
 
-    int16_t max_width = Constants::Constants::get().get_viewwidth();
-    int16_t max_height = Constants::Constants::get().get_viewheight();
+    int16_t max_width = Constants::Constants::get().get_ui_viewwidth();
+    int16_t max_height = Constants::Constants::get().get_ui_viewheight();
     int16_t cur_width = pos.x() + fillwidth + 21;
     int16_t cur_height = pos.y() + fillheight + 40;
 

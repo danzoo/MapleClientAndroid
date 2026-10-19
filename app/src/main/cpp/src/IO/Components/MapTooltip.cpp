@@ -41,8 +41,8 @@ void MapTooltip::draw(Point<int16_t> pos) const {
         return;
     }
 
-    int16_t max_width = Constants::Constants::get().get_viewwidth();
-    int16_t max_height = Constants::Constants::get().get_viewheight();
+    int16_t max_width = Constants::Constants::get().get_ui_viewwidth();
+    int16_t max_height = Constants::Constants::get().get_ui_viewheight();
 
     if (parent_ == Tooltip::Parent::MINI_MAP && mob_labels_->empty()
         && npc_labels_->empty()) {

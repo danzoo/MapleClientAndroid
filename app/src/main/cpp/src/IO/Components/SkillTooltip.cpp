@@ -150,8 +150,8 @@ void SkillTooltip::draw(Point<int16_t> pos) const {
         return;
     }
 
-    int16_t max_width = Constants::Constants::get().get_viewwidth();
-    int16_t max_height = Constants::Constants::get().get_viewheight();
+    int16_t max_width = Constants::Constants::get().get_ui_viewwidth();
+    int16_t max_height = Constants::Constants::get().get_ui_viewheight();
     int16_t cur_width = pos.x() + width_ + 45;
     int16_t cur_height = pos.y() + height_ + 35;
 

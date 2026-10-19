@@ -15,8 +15,10 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 
+#include "Template/Point.h"
 #include "Template/Singleton.h"
 
 namespace ms::Constants {
@@ -41,6 +43,29 @@ constexpr int16_t DROP_DELAY = 40;
 // flinch never reports that it has finished playing.
 constexpr int16_t HIT_DEATH_WAIT = 40;
 
+// How far short of the end of a platform a knocked-back mob is held. Mobs hang off the point they
+// are stored at, so keeping this much clearance stops them from ending up over the gap they would
+// fall into.
+constexpr int16_t PLATFORM_EDGE_MARGIN = 8;
+
+// How much bigger the interface is drawn than the world around it. Everything the UI lays out is
+// measured in a screen that is this much smaller than the real one and then magnified, so raising
+// it grows every window, button and piece of text together while the map stays the same size.
+constexpr float UI_SCALE = 1.5f;
+
+// The interface is laid out on a screen UI_SCALE smaller than the view, so a placement made
+// against the view - a window's stored origin, for instance - has to be brought into that space
+// before the interface can use it. Writing it back out goes the other way.
+constexpr Point<int16_t> to_ui_space(const Point<int16_t> &viewpos) {
+    return Point<int16_t>(static_cast<int16_t>(viewpos.x() / UI_SCALE),
+                          static_cast<int16_t>(viewpos.y() / UI_SCALE));
+}
+
+constexpr Point<int16_t> to_view_space(const Point<int16_t> &uipos) {
+    return Point<int16_t>(static_cast<int16_t>(uipos.x() * UI_SCALE),
+                          static_cast<int16_t>(uipos.y() * UI_SCALE));
+}
+
 class Constants : public Singleton<Constants> {
 public:
     Constants() : VIEWWIDTH(1366), VIEWHEIGHT(768) {}
@@ -54,6 +79,14 @@ public:
     int16_t get_viewheight() { return VIEWHEIGHT; }
 
     void set_viewheight(int16_t height) { VIEWHEIGHT = height; }
+
+    // The size of the screen the interface is laid out on. Positions and sizes given in this
+    // space are magnified by UI_SCALE on their way to the frame, so a window that has to reach an
+    // edge has to be anchored in here rather than in the view size. Rounded up so that an element
+    // which is made to fill this screen still covers the view once it is magnified.
+    int16_t get_ui_viewwidth() { return static_cast<int16_t>(std::ceil(VIEWWIDTH / UI_SCALE)); }
+
+    int16_t get_ui_viewheight() { return static_cast<int16_t>(std::ceil(VIEWHEIGHT / UI_SCALE)); }
 
 private:
     // Window and screen width.

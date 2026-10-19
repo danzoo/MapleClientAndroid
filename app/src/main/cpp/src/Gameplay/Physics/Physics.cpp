@@ -152,6 +152,40 @@ Point<int16_t> Physics::get_y_below(Point<int16_t> position) const {
     return Point<int16_t>(position.x(), ground - 1);
 }
 
+Physics::Platform Physics::get_platform(uint16_t fhid) const {
+    if (!fhid) {
+        return {};
+    }
+
+    const Foothold &start = fh_tree_.get_foothold(fhid);
+    Platform platform { start.l(), start.r() };
+
+    // Follow the links this platform is joined to on both sides. Every step has to reach further
+    // out than the last, which is what makes the walk end at the last platform of the stretch -
+    // and at a wall, whose two horizontal components are the same place.
+    for (uint16_t id = start.prev(); id; id = fh_tree_.get_foothold(id).prev()) {
+        const Foothold &fh = fh_tree_.get_foothold(id);
+
+        if (fh.l() >= platform.left) {
+            break;
+        }
+
+        platform.left = fh.l();
+    }
+
+    for (uint16_t id = start.next(); id; id = fh_tree_.get_foothold(id).next()) {
+        const Foothold &fh = fh_tree_.get_foothold(id);
+
+        if (fh.r() <= platform.right) {
+            break;
+        }
+
+        platform.right = fh.r();
+    }
+
+    return platform;
+}
+
 const FootholdTree &Physics::get_fht() const {
     return fh_tree_;
 }

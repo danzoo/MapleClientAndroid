@@ -65,8 +65,10 @@ namespace ms {
         emplace<UIBuffList>();
         emplace<UIShop>(look, inventory);
 
-        VWIDTH = Constants::Constants::get().get_viewwidth();
-        VHEIGHT = Constants::Constants::get().get_viewheight();
+        // The elements below place themselves against the interface's own screen, so that is the
+        // size to remember and to hand out when it changes.
+        VWIDTH = Constants::Constants::get().get_ui_viewwidth();
+        VHEIGHT = Constants::Constants::get().get_ui_viewheight();
     }
 
     void UIStateGame::draw(float inter, Point<int16_t> cursor) const {
@@ -89,8 +91,8 @@ namespace ms {
 
     void UIStateGame::update() {
         bool update_screen = false;
-        int16_t new_width = Constants::Constants::get().get_viewwidth();
-        int16_t new_height = Constants::Constants::get().get_viewheight();
+        int16_t new_width = Constants::Constants::get().get_ui_viewwidth();
+        int16_t new_height = Constants::Constants::get().get_ui_viewheight();
 
         if (VWIDTH != new_width || VHEIGHT != new_height) {
             update_screen = true;

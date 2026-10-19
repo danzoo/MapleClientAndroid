@@ -43,7 +43,9 @@ void ScrollingNotice::draw(float alpha) const {
 
 void ScrollingNotice::update() {
     if (active_) {
-        int16_t new_width = Constants::Constants::get().get_viewwidth();
+        // The notice banner is interface, so it spans the interface's own screen and is magnified
+        // with it.
+        int16_t new_width = Constants::Constants::get().get_ui_viewwidth();
 
         if (new_width != width_) {
             width_ = new_width;

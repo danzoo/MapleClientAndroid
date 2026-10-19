@@ -110,8 +110,17 @@ namespace ms {
         // Unlock the scene.
         void unlock();
 
-        // Draw the buffer contents with the specified scene opacity
-        void flush(float opacity);
+        // Submit the scene and interface batches into their own targets. The fade is applied by
+        // end_scene(), once everything has been stretched onto the surface.
+        void flush();
+
+        // Start collecting draws into the interface batch. Everything queued between this and
+        // end_ui is laid out on a screen UI_SCALE smaller than the view and magnified onto the
+        // frame, which is what makes the whole interface bigger without touching the world.
+        void begin_ui();
+
+        // Stop collecting draws into the interface batch.
+        void end_ui();
 
         // Adopt the resolution the game is set to. A transition that holds the scene frozen keeps
         // the coordinates it was drawn at, so the size only changes once the scene is live again.
@@ -123,10 +132,11 @@ namespace ms {
         // lines across the screen.
         void begin_scene();
 
-        // Stretch the scene over the letterboxed view box and leave the state as the scene program
-        // expects to find it.
+        // Stretch the scene and the interface over the letterboxed view box and leave the state as
+        // the scene program expects to find it. Each of them is resampled exactly once, which is
+        // what keeps the interface as sharp as the picture behind it.
         void end_scene(int32_t box_x, int32_t box_y, int32_t box_width, int32_t box_height,
-                       int32_t surface_width, int32_t surface_height);
+                       int32_t surface_width, int32_t surface_height, float opacity);
 
         // The resolution the scene is drawn at, which is what the viewport has to fit.
         int16_t get_screen_width() const { return VWIDTH; }
@@ -350,8 +360,35 @@ namespace ms {
 
         bool locked_;
 
+        // True while draws are being collected for the interface rather than the scene.
+        bool ui_pass_ = false;
+
+        std::vector<Quad>& batch_quads();
+
+        std::vector<Circle>& batch_circles();
+
+        // Submit one batch, mapping its coordinates onto a screen of the given size.
+        void flush_batch(const std::vector<Quad> &quads,
+                         const std::vector<Circle> &circles,
+                         int16_t screen_width,
+                         int16_t screen_height);
+
+        // Draw the interface into its own target at its own size. Keeping it apart from the scene
+        // is what lets the magnified interface be interpolated: the atlas it is drawn from has to
+        // stay nearest, or neighbouring bitmaps bleed into each other.
+        void flush_ui();
+
+        // Leave the scene program, its atlas and its attribute pointers bound, as the next batch
+        // submission and the bitmaps packed outside the frame both expect.
+        void set_scene_attribs();
+
+        // Stretch a texture over whatever viewport is currently set, through the filter program.
+        void draw_filter(GLuint source);
+
         std::vector<Quad> quads_;
         std::vector<Circle> circles_;
+        std::vector<Quad> ui_quads_;
+        std::vector<Circle> ui_circles_;
         GLuint VBO_;
         GLuint atlas_;
 
@@ -373,6 +410,12 @@ namespace ms {
         GLuint scene_tex_;
         int16_t scene_width_;
         int16_t scene_height_;
+
+        // The same thing for the interface, which is laid out on a UI_SCALE smaller screen.
+        GLuint ui_fbo_;
+        GLuint ui_tex_;
+        int16_t ui_width_;
+        int16_t ui_height_;
 
         GLuint filter_vbo_;
         GLint filter_program_;

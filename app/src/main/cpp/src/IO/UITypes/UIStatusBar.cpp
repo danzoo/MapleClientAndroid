@@ -51,7 +51,8 @@ UIStatusBar::UIStatusBar(const CharStats &st, uint8_t channel_count) :
     quickslot_active_ = false;
     quickslot_adj_ = Point<int16_t>(QUICKSLOT_MAX_, 0);
     VWIDTH_ = Constants::Constants::get().get_viewwidth();
-    VHEIGHT_ = Constants::Constants::get().get_viewheight();
+    UIWIDTH_ = Constants::Constants::get().get_ui_viewwidth();
+    UIHEIGHT_ = Constants::Constants::get().get_ui_viewheight();
 
     menu_active_ = false;
     setting_active_ = false;
@@ -77,10 +78,10 @@ UIStatusBar::UIStatusBar(const CharStats &st, uint8_t channel_count) :
 
     sprites_.emplace_back(
         EXPBar["backgrnd"],
-        DrawArgument(Point<int16_t>(0, 87), Point<int16_t>(VWIDTH_, 0)));
+        DrawArgument(Point<int16_t>(0, 87), Point<int16_t>(UIWIDTH_, 0)));
     sprites_.emplace_back(EXPBarRes["layer:back"], exp_pos_);
 
-    int16_t exp_max = VWIDTH_ - 16;
+    int16_t exp_max = UIWIDTH_ - 16;
 
     exp_bar_ = Gauge(Gauge::Type::GAME,
                      EXPBarRes.resolve("layer:gauge"),
@@ -105,17 +106,22 @@ UIStatusBar::UIStatusBar(const CharStats &st, uint8_t channel_count) :
         quickslot_min_ = 0;
     }
 
+    // The meters are placed from the left of the bar but reach its right edge, so on the
+    // interface's narrower screen the whole cluster has to move left by the difference between the
+    // two. The nudges above are the art's own spacing and stay untouched.
+    pos_adj += UIWIDTH_ - VWIDTH_;
+
     if (VWIDTH_ == 800) {
-        hpmp_pos_ = Point<int16_t>(412, 40);
-        hpset_pos_ = Point<int16_t>(530, 70);
-        mpset_pos_ = Point<int16_t>(528, 86);
-        statset_pos_ = Point<int16_t>(427, 111);
-        levelset_pos_ = Point<int16_t>(461, 48);
-        namelabel_pos_ = Point<int16_t>(487, 40);
-        quickslot_pos_ = Point<int16_t>(579, 0);
+        hpmp_pos_ = Point<int16_t>(412 + pos_adj, 40);
+        hpset_pos_ = Point<int16_t>(530 + pos_adj, 70);
+        mpset_pos_ = Point<int16_t>(528 + pos_adj, 86);
+        statset_pos_ = Point<int16_t>(427 + pos_adj, 111);
+        levelset_pos_ = Point<int16_t>(461 + pos_adj, 48);
+        namelabel_pos_ = Point<int16_t>(487 + pos_adj, 40);
+        quickslot_pos_ = Point<int16_t>(579 + pos_adj, 0);
 
         // Menu
-        menu_pos_ = Point<int16_t>(682, -280);
+        menu_pos_ = Point<int16_t>(682 + pos_adj, -280);
         setting_pos_ = menu_pos_ + Point<int16_t>(0, 168);
         community_pos_ = menu_pos_ + Point<int16_t>(-26, 196);
         character_pos_ = menu_pos_ + Point<int16_t>(-61, 168);
@@ -255,7 +261,7 @@ UIStatusBar::UIStatusBar(const CharStats &st, uint8_t channel_count) :
     }
 
     if (VWIDTH_ == 800) {
-        Point<int16_t> quickslot_qs = Point<int16_t>(579, 0);
+        Point<int16_t> quickslot_qs = Point<int16_t>(579 + pos_adj, 0);
 
         buttons_[Buttons::BT_FOLD_QS] =
             std::make_unique<MapleButton>(quickSlot[fold], quickslot_qs);
@@ -405,31 +411,34 @@ UIStatusBar::UIStatusBar(const CharStats &st, uint8_t channel_count) :
     menu_title_[4] = submenu["title"]["setting"];
 #pragma endregion
 
+    // Both anchors are edges of the screen the interface is laid out on - the bar against its
+    // bottom, the meters against its right - while how far in from those edges the art reaches is
+    // the art's own size, so it stays as authored.
     if (VWIDTH_ == 800) {
-        position_ = Point<int16_t>(0, 480);
-        position_x_ = 410;
+        position_ = Point<int16_t>(0, UIHEIGHT_ - 120);
+        position_x_ = UIWIDTH_ - 390;
         position_y_ = position_.y();
-        dimension_ = Point<int16_t>(VWIDTH_ - position_x_, 140);
+        dimension_ = Point<int16_t>(390, 140);
     } else if (VWIDTH_ == 1024) {
-        position_ = Point<int16_t>(0, 648);
-        position_x_ = 410;
+        position_ = Point<int16_t>(0, UIHEIGHT_ - 120);
+        position_x_ = UIWIDTH_ - 614;
         position_y_ = position_.y() + 42;
-        dimension_ = Point<int16_t>(VWIDTH_ - position_x_, 75);
+        dimension_ = Point<int16_t>(614, 75);
     } else if (VWIDTH_ == 1280) {
-        position_ = Point<int16_t>(0, 600);
-        position_x_ = 500;
+        position_ = Point<int16_t>(0, UIHEIGHT_ - 120);
+        position_x_ = UIWIDTH_ - 780;
         position_y_ = position_.y() + 42;
-        dimension_ = Point<int16_t>(VWIDTH_ - position_x_, 75);
+        dimension_ = Point<int16_t>(780, 75);
     } else if (VWIDTH_ == 1366) {
-        position_ = Point<int16_t>(0, 648);
-        position_x_ = 585;
+        position_ = Point<int16_t>(0, UIHEIGHT_ - 120);
+        position_x_ = UIWIDTH_ - 781;
         position_y_ = position_.y() + 42;
-        dimension_ = Point<int16_t>(VWIDTH_ - position_x_, 75);
+        dimension_ = Point<int16_t>(781, 75);
     } else if (VWIDTH_ == 1920) {
-        position_ = Point<int16_t>(0, 960 + (VHEIGHT_ - 1080));
-        position_x_ = 860;
+        position_ = Point<int16_t>(0, UIHEIGHT_ - 120);
+        position_x_ = UIWIDTH_ - 1060;
         position_y_ = position_.y() + 40;
-        dimension_ = Point<int16_t>(VWIDTH_ - position_x_, 80);
+        dimension_ = Point<int16_t>(1060, 80);
     }
 }
 
@@ -853,7 +862,9 @@ bool UIStatusBar::is_in_range(Point<int16_t> cursorpos) const {
             pos_y_adj = 248;
         }
 
-        pos_y_adj += VHEIGHT_ - 600;
+        // Measured against the interface's own screen, whose height the author's 600 was a
+        // fraction of when the interface and the view were the same size.
+        pos_y_adj += UIHEIGHT_ - 480;
 
         Point<int16_t> pos_adj = get_quickslot_pos();
         pos = Point<int16_t>(pos.x(), std::abs(pos.y()) + pos_y_adj) + pos_adj;

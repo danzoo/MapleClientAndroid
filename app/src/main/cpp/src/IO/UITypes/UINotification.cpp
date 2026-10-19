@@ -18,6 +18,7 @@
 #include <nlnx/nx.hpp>
 
 #include "../Components/MapleButton.h"
+#include "../Constants.h"
 #include "../Net/Packets/PlayerInteractionPackets.h"
 
 namespace ms {
@@ -28,20 +29,22 @@ auto fn_player_interaction = []<typename... T>(T && ...args) {
 }  // namespace
 
 UINotification::UINotification(std::string message) :
-    UIElement({ 500, 400 }, { 200, 100 }) {
+    // The parts below are placed against the dialog's own top-left, so only that is brought onto
+    // the screen the interface is laid out on; the gaps between them are the art's and stay.
+    UIElement(Constants::to_ui_space(Point<int16_t>(500, 400)), { 200, 100 }) {
     nl::node src = nl::nx::ui["UIWindow2.img"]["FadeYesNo"];
 
     sprites_.emplace_back(src["backgrnd"],
-                          Point<int16_t>(500, 400) - position_);
+                          Point<int16_t>(0, 0));
 
     buttons_[Buttons::YES] =
         std::make_unique<MapleButton>(src["BtOK"],
-                                      Point<int16_t>(685, 405) - position_);
+                                      Point<int16_t>(185, 5));
     buttons_[Buttons::NO] =
         std::make_unique<MapleButton>(src["BtCancel"],
-                                      Point<int16_t>(685, 435) - position_);
+                                      Point<int16_t>(185, 35));
 
-    sprites_.emplace_back(src["icon2"], Point<int16_t>(500, 415) - position_);
+    sprites_.emplace_back(src["icon2"], Point<int16_t>(0, 15));
 
     message_ = Text(Text::Font::A11M,
                     Text::Alignment::CENTER,

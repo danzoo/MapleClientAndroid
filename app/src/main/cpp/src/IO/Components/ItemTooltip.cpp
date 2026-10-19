@@ -98,8 +98,10 @@ void ItemTooltip::draw(Point<int16_t> pos) const {
         return;
     }
 
-    int16_t max_width = Constants::Constants::get().get_viewwidth();
-    int16_t max_height = Constants::Constants::get().get_viewheight();
+    // The tooltip is part of the interface, so it has to be kept inside the interface's screen;
+    // that one is magnified onto the view, which is what stops it hanging off the edge.
+    int16_t max_width = Constants::Constants::get().get_ui_viewwidth();
+    int16_t max_height = Constants::Constants::get().get_ui_viewheight();
     int16_t cur_width = pos.x() + fill_width_ + 32;
     int16_t cur_height = pos.y() + fill_height_ + 40;
 

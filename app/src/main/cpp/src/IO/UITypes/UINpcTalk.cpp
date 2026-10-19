@@ -18,6 +18,7 @@
 #include <nlnx/nx.hpp>
 
 #include "../Components/MapleButton.h"
+#include "../Constants.h"
 #include "../Gameplay/Stage.h"
 #include "../Net/Packets/NpcInteractionPackets.h"
 #include "../UI.h"
@@ -523,7 +524,14 @@ namespace ms {
                 break;
         }
 
-        position_ = Point<int16_t>(400 - top_.width() / 2, 240 - height_ / 2);
+        // The dialog is put in the middle of the screen the interface is laid out on - which is
+        // magnified onto the view - and a little above that centre, as it was when the screen it
+        // was measured against was 800x600.
+        const int16_t ui_width = Constants::Constants::get().get_ui_viewwidth();
+        const int16_t ui_height = Constants::Constants::get().get_ui_viewheight();
+
+        position_ = Point<int16_t>(ui_width / 2 - top_.width() / 2,
+                                   ui_height * 2 / 5 - height_ / 2);
         dimension_ = Point<int16_t>(top_.width(), height_ + 120);
     }
 

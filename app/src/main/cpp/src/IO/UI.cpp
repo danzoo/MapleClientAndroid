@@ -20,6 +20,7 @@
 
 #include "../Constants.h"
 #include "../Gameplay/Stage.h"
+#include "../Graphics/GraphicsGL.h"
 #include "../../Audio/Audio.h"
 #include "../../Configuration.h"
 #include "Cursor.h"
@@ -60,9 +61,14 @@ namespace ms {
     }
 
     void UI::draw(float alpha) const {
+        // Everything queued from here on belongs to the interface, so it is drawn against a screen
+        // UI_SCALE smaller than the view and magnified onto the frame. That is what makes the
+        // windows, buttons and text bigger without the map changing size.
+        GraphicsGL::get().begin_ui();
         state_->draw(alpha, cursor_.get_position());
         scrolling_notice_.draw(alpha);
         cursor_.draw(alpha);
+        GraphicsGL::get().end_ui();
     }
 
     void UI::update() {
@@ -84,8 +90,13 @@ namespace ms {
             case State::LOGIN:
                 // Every login screen lays itself out inside 800x600, so make that the picture the
                 // screen is scaled from instead of leaving it in the corner of the game resolution.
-                Constants::Constants::get().set_viewwidth(LOGIN_WIDTH);
-                Constants::Constants::get().set_viewheight(LOGIN_HEIGHT);
+                // Nothing of the login is drawn as world, only as interface, and the interface is
+                // magnified by UI_SCALE on the way to the frame - so the view it fills has to be
+                // that much bigger than the art, or the screens would hang off the bottom right.
+                Constants::Constants::get().set_viewwidth(
+                        static_cast<int16_t>(LOGIN_WIDTH * Constants::UI_SCALE));
+                Constants::Constants::get().set_viewheight(
+                        static_cast<int16_t>(LOGIN_HEIGHT * Constants::UI_SCALE));
                 state_ = std::make_unique<UIStateLogin>();
                 break;
             case State::GAME:

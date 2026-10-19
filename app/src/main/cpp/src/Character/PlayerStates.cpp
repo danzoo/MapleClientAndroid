@@ -203,6 +203,15 @@ void PlayerFallState::update_state(Player &player) const {
         } else {
             player.set_state(Char::State::STAND);
         }
+
+        // Holding the jump key generates a single press event, so the impulse has to be renewed
+        // every time the character touches the ground or the jumping stops after one jump.
+        if (!player.is_key_down(KeyAction::Id::DOWN)
+            && player.is_key_down(KeyAction::Id::JUMP)
+            && !player.is_attacking()) {
+            play_jumpsound();
+            player.get_phobj().vforce = -player.get_jumpforce();
+        }
     } else if (player.is_underwater()) {
         player.set_state(Char::State::SWIM);
     }

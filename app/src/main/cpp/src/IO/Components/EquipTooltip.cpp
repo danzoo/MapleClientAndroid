@@ -603,8 +603,8 @@ void EquipTooltip::draw(Point<int16_t> pos) const {
 
     draw_preview(pos);
 
-    int16_t max_width = Constants::Constants::get().get_viewwidth();
-    int16_t max_height = Constants::Constants::get().get_viewheight();
+    int16_t max_width = Constants::Constants::get().get_ui_viewwidth();
+    int16_t max_height = Constants::Constants::get().get_ui_viewheight();
     int16_t cur_width = pos.x() + top_.width();
     int16_t cur_height = pos.y() + 36;
 
@@ -747,8 +747,8 @@ void EquipTooltip::draw_preview(Point<int16_t> pos) const {
 
     pos.shift_x(top_.width());
 
-    int16_t max_width = Constants::Constants::get().get_viewwidth();
-    int16_t max_height = Constants::Constants::get().get_viewheight();
+    int16_t max_width = Constants::Constants::get().get_ui_viewwidth();
+    int16_t max_height = Constants::Constants::get().get_ui_viewheight();
     int16_t cur_width = pos.x() + top_.width();
     int16_t cur_height = pos.y() + height_preview_ + 36;
 
