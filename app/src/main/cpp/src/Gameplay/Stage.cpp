@@ -147,6 +147,11 @@ void Stage::draw(float alpha) const {
         mobs_.draw(id, viewx, viewy, alpha);
         chars_.draw(id, viewx, viewy, alpha);
         player_.draw(id, viewx, viewy, alpha);
+
+        // Loot comes last within its own layer: the mob it fell out of and the character walking
+        // over it cannot paint it out, but the layer above still can. Grass and railings someone
+        // walks behind live up there, and an item lying on the ground is behind them just the same.
+        // A drop is layered with the platform it ended up on, not the one it was thrown from.
         drops_.draw(id, viewx, viewy, alpha);
     }
 

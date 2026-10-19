@@ -17,7 +17,8 @@
 
 #include <memory>
 #include <optional>
-#include <unordered_set>
+#include <unordered_map>
+#include <vector>
 
 #include "Layer.h"
 #include "MapObject.h"
@@ -71,6 +72,9 @@ public:
     // Return a begin iterator.
     underlying_t::const_iterator begin() const;
 
+    // Return the oids in the order they are drawn: bottom layer first, oldest within a layer.
+    std::vector<int32_t> draw_order() const;
+
     // Return an end iterator.
     underlying_t::const_iterator end() const;
 
@@ -79,7 +83,10 @@ public:
 
 private:
     std::unordered_map<int32_t, std::unique_ptr<MapObject>> objects_;
-    std::array<std::unordered_set<int32_t>, Layer::Id::LENGTH> layers_;
+    // Oids in the order they joined the layer, oldest first. Objects are drawn with no depth test,
+    // so whatever is drawn last covers what it overlaps; keeping the arrival order means a drop
+    // that landed after its neighbour is the one on top instead of the two competing in hash order.
+    std::array<std::vector<int32_t>, Layer::Id::LENGTH> layers_;
 };
 
 template<typename T>

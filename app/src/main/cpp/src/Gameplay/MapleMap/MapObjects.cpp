@@ -15,7 +15,15 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "MapObjects.h"
 
+#include <algorithm>
+
 namespace ms {
+namespace {
+void erase_oid(std::vector<int32_t> &layer, int32_t oid) {
+    layer.erase(std::remove(layer.begin(), layer.end(), oid), layer.end());
+}
+}  // namespace
+
 void MapObjects::draw(Layer::Id layer,
                       double viewx,
                       double viewy,
@@ -41,8 +49,8 @@ void MapObjects::update(const Physics &physics) {
                 remove_mob = true;
             } else if (newlayer != oldlayer) {
                 int32_t oid = iter->first;
-                layers_[oldlayer].erase(oid);
-                layers_[newlayer].insert(oid);
+                erase_oid(layers_[oldlayer], oid);
+                layers_[newlayer].push_back(oid);
             }
         } else {
             remove_mob = true;
@@ -71,8 +79,15 @@ bool MapObjects::contains(int32_t oid) const {
 void MapObjects::add(std::unique_ptr<MapObject> toadd) {
     int32_t oid = toadd->get_oid();
     int8_t layer = toadd->get_layer();
+
+    // A respawned oid can still be listed on the layer it was on before it expired. Drop the stale
+    // entry so the object is drawn once, on its new layer, and at the end of that layer.
+    for (auto &oids : layers_) {
+        erase_oid(oids, oid);
+    }
+
     objects_[oid] = std::move(toadd);
-    layers_[layer].insert(oid);
+    layers_[layer].push_back(oid);
 }
 
 void MapObjects::remove(int32_t oid) {
@@ -82,7 +97,7 @@ void MapObjects::remove(int32_t oid) {
         int8_t layer = iter->second->get_layer();
         objects_.erase(iter);
 
-        layers_[layer].erase(oid);
+        erase_oid(layers_[layer], oid);
     }
 }
 
@@ -118,6 +133,16 @@ MapObjects::underlying_t::iterator MapObjects::end() {
 
 MapObjects::underlying_t::const_iterator MapObjects::begin() const {
     return objects_.begin();
+}
+
+std::vector<int32_t> MapObjects::draw_order() const {
+    std::vector<int32_t> oids;
+
+    for (const auto &layer : layers_) {
+        oids.insert(oids.end(), layer.begin(), layer.end());
+    }
+
+    return oids;
 }
 
 MapObjects::underlying_t::const_iterator MapObjects::end() const {

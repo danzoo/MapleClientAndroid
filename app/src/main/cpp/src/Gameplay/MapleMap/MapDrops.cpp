@@ -114,17 +114,18 @@ MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
         return { 0, {} };
     }
 
-    for (auto &mmo : drops_) {
-        // auto drop = mmo.second.get();
-        auto drop = create_optional<const Drop>(mmo.second.get());
+    // Bottom of the pile first: the item whose icon is covered by the rest is the one that landed
+    // earliest, and that is the one the hand closes on.
+    const std::vector<int32_t> oids = drops_.draw_order();
 
-        if (drop && drop->get().bounds().contains(playerpos)) {
+    for (auto iter = oids.begin(); iter != oids.end(); ++iter) {
+        auto drop = drops_.get<const Drop>(*iter);
+
+        if (drop && drop->get().is_active() && !drop->get().claimed()
+            && drop->get().bounds().contains(playerpos)) {
             loot_enabled_ = false;
 
-            int32_t oid = mmo.first;
-            Point<int16_t> position = drop->get().get_position();
-
-            return { oid, position };
+            return { *iter, drop->get().get_position() };
         }
     }
 
@@ -137,17 +138,17 @@ MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius
     }
 
     const int64_t rangesq = static_cast<int64_t>(radius) * radius;
-    int64_t best_dist = rangesq;
-    Loot best = { 0, {} };
+    const std::vector<int32_t> oids = drops_.draw_order();
 
-    for (auto &mmo : drops_) {
-        auto drop = create_optional<const Drop>(mmo.second.get());
+    // Up from the bottom of the pile, taking the first item that is within reach at all. Measuring
+    // how close each one is instead would hand over whichever icon happens to sit a few pixels
+    // nearer the character, which in a stack of overlapping items is usually the last one dropped.
+    for (auto iter = oids.begin(); iter != oids.end(); ++iter) {
+        auto drop = drops_.get<const Drop>(*iter);
 
-        if (!drop) {
+        if (!drop || !drop->get().is_active() || drop->get().claimed()) {
             continue;
         }
-
-        const Point<int16_t> droppos = drop->get().get_position();
 
         // Measured against the icon as it is drawn, and to its nearest edge. The point the drop is
         // stored at sits inside that picture instead of at its middle, so a radius counted from it
@@ -170,18 +171,13 @@ MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius
             deltay = playerpos.y() - box.bottom();
         }
 
-        const int64_t dist = deltax * deltax + deltay * deltay;
+        if (deltax * deltax + deltay * deltay <= rangesq) {
+            loot_enabled_ = false;
 
-        if (dist <= best_dist) {
-            best_dist = dist;
-            best = { mmo.first, droppos };
+            return { *iter, drop->get().get_position() };
         }
     }
 
-    if (best.first) {
-        loot_enabled_ = false;
-    }
-
-    return best;
+    return { 0, {} };
 }
 }  // namespace ms

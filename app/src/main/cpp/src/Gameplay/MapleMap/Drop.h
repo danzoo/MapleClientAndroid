@@ -28,6 +28,11 @@ public:
 
     virtual Rectangle<int16_t> bounds() const;
 
+    // Whether the item has already been claimed and is flying to whoever claimed it. It is still
+    // drawn and still active while that happens, so without this a pile keeps handing out the same
+    // item until the flight has faded.
+    bool claimed() const;
+
 protected:
     Drop(int32_t oid,
          int32_t owner,
@@ -58,6 +63,9 @@ private:
 
     Point<int16_t> dest_;
     Point<int16_t> launch_;
+    // The height the flight peaks at and how long it takes to get there from the corpse.
+    double apex_;
+    double rise_ticks_;
     double base_y_;
     double moved_;
     double fallen_;

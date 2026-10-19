@@ -80,6 +80,10 @@ public:
     // 0 - no control, 1 - control, 2 - aggro
     void set_control(int8_t mode);
 
+    // Note whether the server still has this mob on the player's tail. One that is not chasing
+    // keeps to the platform it is standing on, one that is chasing follows the player off it.
+    void set_aggro(bool aggro);
+
     // Send movement to the mob.
     void send_movement(Point<int16_t> start, std::vector<Movement> &&movements);
 
@@ -231,7 +235,7 @@ private:
     bool dying_;
     bool dead_;
     bool control_;
-    bool aggro_;
+    bool aggro_ = false;
     Stance stance_;
     bool flip_;
     FlyDirection fly_direction_;
@@ -242,6 +246,9 @@ private:
     // Set when the kill arrived while the client still had a blow coming for this mob: the flinch
     // waits for that blow, and the death animation waits for the flinch.
     bool death_pending_;
+    // Set once the flinch and its sound for the blow being waited on have been played, so the
+    // death doesn't add a second reaction for the same swing.
+    bool hit_played_;
     int16_t death_wait_;
     int16_t pending_hit_;
     Linear<float> opacity_;

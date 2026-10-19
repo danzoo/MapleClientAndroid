@@ -44,6 +44,9 @@ public:
     // Update who a mob is controlled by.
     void set_control(int32_t oid, bool control);
 
+    // Update whether the server has a mob chasing the player.
+    void set_aggro(int32_t oid, bool aggro);
+
     // Update a mob's hp display.
     void send_mobhp(int32_t oid, int8_t percent, uint16_t playerlevel);
 
