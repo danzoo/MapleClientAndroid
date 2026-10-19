@@ -55,6 +55,12 @@ namespace ms {
                       int modifiers) {
         std::cout << "key_callback" << keyCode << " action " << action << std::endl;
 
+        // The device's volume keys are the keys with no mapping of their own, and claiming to have
+        // handled one is what stops the framework from showing its own volume slider.
+        if (keyCode == GLFMKeyCodeUnknown) {
+            return false;
+        }
+
         if (Gamepad::get().on_key(keyCode, action != GLFMKeyActionReleased)) {
             return true;
         }
@@ -145,9 +151,9 @@ namespace ms {
     }
 
     void Window::move_cursor(double x, double y) {
-        Point<double_t> game_pos = to_game(x, y);
-        auto pos = Point<int16_t>(static_cast<int16_t>(game_pos.x()),
-                                  static_cast<int16_t>(game_pos.y()));
+        Point<double_t> ui_pos = to_ui(x, y);
+        auto pos = Point<int16_t>(static_cast<int16_t>(ui_pos.x()),
+                                  static_cast<int16_t>(ui_pos.y()));
         UI::get().send_cursor(pos);
     }
 
@@ -273,9 +279,9 @@ namespace ms {
     }
 
     void Window::end() const {
-        GraphicsGL::get().flush(opacity_);
+        GraphicsGL::get().flush();
         GraphicsGL::get().end_scene(offset_x_, offset_y_, box_width_, box_height_,
-                                    surface_width_, surface_height_);
+                                    surface_width_, surface_height_, opacity_);
         glfmSwapBuffers(display);
     }
 
@@ -342,10 +348,15 @@ namespace ms {
         glScissor(offset_x_, offset_y_, box_width, box_height);
     }
 
-    Point<double_t> Window::to_game(double x, double y) const {
+    Point<double_t> Window::to_ui(double x, double y) const {
         // Touches arrive as surface pixels from the top left. The view box is centred, so the bar
         // trimmed off the top is the same height as the one at the bottom.
-        return Point<double_t>((x - offset_x_) / scale_, (y - offset_y_) / scale_);
+        const double_t view_x = (x - offset_x_) / scale_;
+        const double_t view_y = (y - offset_y_) / scale_;
+
+        // The cursor belongs to the interface, which is drawn on a screen UI_SCALE smaller than
+        // the view, so that is the space a touch has to be read in.
+        return Point<double_t>(view_x / Constants::UI_SCALE, view_y / Constants::UI_SCALE);
     }
 
     GLFMDisplay *Window::get_display() {

@@ -16,6 +16,7 @@
 #pragma once
 
 #include "../Configuration.h"
+#include "../Constants.h"
 #include "UIElement.h"
 
 namespace ms {
@@ -29,7 +30,7 @@ public:
         if (dragged_) {
             dragged_ = false;
 
-            Setting<T>::get().save(position_);
+            Setting<T>::get().save(Constants::to_view_space(position_));
         }
     }
 
@@ -50,7 +51,7 @@ public:
             if (dragged_) {
                 dragged_ = false;
 
-                Setting<T>::get().save(position_);
+                Setting<T>::get().save(Constants::to_view_space(position_));
             }
         }
 
@@ -61,7 +62,9 @@ protected:
     UIDragElement() : UIDragElement(Point<int16_t>(0, 0)) {}
 
     UIDragElement(Point<int16_t> d) : drag_area_(d) {
-        position_ = Setting<T>::get().load();
+        // Where a window was left is remembered against the view, which is not the screen the
+        // interface is laid out on.
+        position_ = Constants::to_ui_space(Setting<T>::get().load());
     }
 
     bool dragged_ = false;

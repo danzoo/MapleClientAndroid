@@ -150,7 +150,10 @@ private:
 
     bool quickslot_active_;
     int16_t VWIDTH_;
-    int16_t VHEIGHT_;
+    // The screen the interface is laid out on, which is the one this bar is drawn against. The
+    // branches above still read the view's own width, because that is what selects the artwork.
+    int16_t UIWIDTH_;
+    int16_t UIHEIGHT_;
 
     uint8_t channel_count_;
 

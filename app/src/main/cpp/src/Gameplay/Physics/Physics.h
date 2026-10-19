@@ -32,6 +32,19 @@ public:
     // Determine the point on the ground below the specified position.
     Point<int16_t> get_y_below(Point<int16_t> position) const;
 
+    // The x-range of the stretch of platform the specified foothold is part of: the footholds
+    // joined end to end along it, up to the gap or the wall at either end. Empty when the id is
+    // not a foothold.
+    //
+    // Anything shoved sideways along a platform has to be stopped at the ends of this, because the
+    // platform lookup follows the chain of footholds off the end of it and lets the object fall.
+    struct Platform {
+        int16_t left = 0;
+        int16_t right = 0;
+    };
+
+    Platform get_platform(uint16_t fhid) const;
+
     // Return a reference to the collection of platforms.
     const FootholdTree &get_fht() const;
 

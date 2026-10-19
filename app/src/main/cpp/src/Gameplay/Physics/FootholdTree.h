@@ -39,6 +39,9 @@ public:
     // Determine the point on the ground below the specified position.
     int16_t get_y_below(Point<int16_t> position) const;
 
+    // Returns the platform with the specified identifier, or a null platform.
+    const Foothold &get_foothold(uint16_t fhid) const;
+
     // Returns the leftmost and rightmost platform positions of the map.
     Range<int16_t> get_walls() const;
 

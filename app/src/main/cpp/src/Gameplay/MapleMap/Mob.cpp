@@ -263,6 +263,25 @@ int8_t Mob::update(const Physics &physics) {
                 if (can_move_) {
                     double KBFORCE = phobj_.onground ? 0.2 : 0.1;
                     phobj_.hforce = flip_ ? -KBFORCE : KBFORCE;
+
+                    // The platform lookup follows the chain of footholds off the end of a
+                    // platform, so a mob shoved as far as the edge of the one it stands on has to
+                    // be stopped there rather than knocked off it.
+                    if (phobj_.onground && phobj_.fhid) {
+                        const Physics::Platform platform =
+                            physics.get_platform(phobj_.fhid);
+                        const double projected =
+                            phobj_.crnt_x() + phobj_.hspeed + phobj_.hforce;
+                        const double edgeleft =
+                            platform.left + Constants::PLATFORM_EDGE_MARGIN;
+                        const double edgeright =
+                            platform.right - Constants::PLATFORM_EDGE_MARGIN;
+
+                        if (projected > edgeright || projected < edgeleft) {
+                            phobj_.hforce = 0.0;
+                            phobj_.hspeed = 0.0;
+                        }
+                    }
                 }
 
                 break;

@@ -493,42 +493,11 @@ void DropLootHandler::handle(InPacket &recv) const {
 
     bool playerdrop = !recv.read_bool();
 
-    // The server leaves every mob at the spot it spawned it at: this client moves mobs around on
-    // its own and never reports where they got to, so the positions in this packet are placed
-    // around a mob that is no longer standing there. Anchoring them on the mob the player is
-    // looking at drops the loot on the corpse instead.
-    //
-    // Pickups are measured against the position the server gave the item, so a shift bigger than
-    // that measurement would put the loot out of reach; anything past it is left where it is.
-    if (mode != 2 && !playerdrop) {
-        auto &mobs = Stage::get().get_mobs();
-
-        if (mobs.contains(dropper)) {
-            auto mobpos = mobs.get_mob_position(dropper);
-            int32_t shiftx =
-                std::clamp<int32_t>(mobpos.x() - dropfrom.x(), -700, 700);
-            int32_t shifty =
-                std::clamp<int32_t>(mobpos.y() - dropfrom.y(), -500, 500);
-
-            dropfrom =
-                Point<int16_t>(dropfrom.x() + shiftx, dropfrom.y() + shifty);
-
-            auto ground = Stage::get().get_physics().get_y_below(
-                Point<int16_t>(dropto.x() + shiftx, mobpos.y()));
-
-            // Nothing under the spot the item was fanned out to - the search runs all the way to
-            // the bottom of the map, so keep the item on the platform the mob died on instead.
-            if (ground.y() - mobpos.y() > 400) {
-                ground.set_y(mobpos.y());
-            }
-
-            dropto = ground;
-        }
-    }
-
-    // bug: plays sound when entering a map containing drops owned by self
-    bool playsound =
-        mode == 0 || (owner == Stage::get().is_player(owner) && !playerdrop);
+    // The sound belongs to the item being thrown out. Mode 2 is an item that has been lying on
+    // this map all along and is only now being shown to whoever just walked in, so playing it made
+    // coming back to a map with unlooted drops on it clatter as though every one of them had just
+    // fallen; mode 3 is one that never lands at all.
+    bool playsound = mode == 0 || mode == 1;
 
     // Everything a mob leaves behind reaches the client before the packet that kills it, and the
     // death itself waits for the blow that caused it, so the loot has to wait for that too. Drops

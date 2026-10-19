@@ -41,8 +41,8 @@ bool StatusInfo::update() {
 }
 
 UIStatusMessenger::UIStatusMessenger() {
-    int16_t height = Constants::Constants::get().get_viewheight();
-    int16_t width = Constants::Constants::get().get_viewwidth();
+    int16_t height = Constants::Constants::get().get_ui_viewheight();
+    int16_t width = Constants::Constants::get().get_ui_viewwidth();
 
     update_screen(width, height);
 }

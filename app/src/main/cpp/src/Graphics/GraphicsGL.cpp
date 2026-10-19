@@ -30,6 +30,11 @@ namespace ms {
         scene_tex_ = 0;
         scene_width_ = 0;
         scene_height_ = 0;
+
+        ui_fbo_ = 0;
+        ui_tex_ = 0;
+        ui_width_ = 0;
+        ui_height_ = 0;
     }
 
     Error GraphicsGL::init(GLFMDisplay *pApp) {
@@ -655,13 +660,13 @@ namespace ms {
             return;
         }
 
-        quads_.emplace_back(rect.left(),
-                            rect.right(),
-                            rect.top(),
-                            rect.bottom(),
-                            get_offset(bmp),
-                            color,
-                            angle);
+        batch_quads().emplace_back(rect.left(),
+                                   rect.right(),
+                                   rect.top(),
+                                   rect.bottom(),
+                                   get_offset(bmp),
+                                   color,
+                                   angle);
     }
 
 // Text::Layout GraphicsGL::create_layout(const std::string &text,
@@ -1209,27 +1214,27 @@ namespace ms {
                     GLshort bottom = top + h - 2;
                     Color ntcolor = Color(0.0f, 0.0f, 0.0f, 0.6f);
 
-                    quads_.emplace_back(left,
-                                        right,
-                                        top,
-                                        bottom,
-                                        null_offset_,
-                                        ntcolor,
-                                        0.0f);
-                    quads_.emplace_back(left - 1,
-                                        left,
-                                        top + 1,
-                                        bottom - 1,
-                                        null_offset_,
-                                        ntcolor,
-                                        0.0f);
-                    quads_.emplace_back(right,
-                                        right + 1,
-                                        top + 1,
-                                        bottom - 1,
-                                        null_offset_,
-                                        ntcolor,
-                                        0.0f);
+                    batch_quads().emplace_back(left,
+                                               right,
+                                               top,
+                                               bottom,
+                                               null_offset_,
+                                               ntcolor,
+                                               0.0f);
+                    batch_quads().emplace_back(left - 1,
+                                               left,
+                                               top + 1,
+                                               bottom - 1,
+                                               null_offset_,
+                                               ntcolor,
+                                               0.0f);
+                    batch_quads().emplace_back(right,
+                                               right + 1,
+                                               top + 1,
+                                               bottom - 1,
+                                               null_offset_,
+                                               ntcolor,
+                                               0.0f);
                 }
 
                 break;
@@ -1290,13 +1295,13 @@ namespace ms {
                         continue;
                     }
 
-                    quads_.emplace_back(char_x,
-                                        char_x + char_width,
-                                        char_y,
-                                        char_bottom,
-                                        offset,
-                                        abscolor,
-                                        0.0f);
+                    batch_quads().emplace_back(char_x,
+                                               char_x + char_width,
+                                               char_y,
+                                               char_bottom,
+                                               offset,
+                                               abscolor,
+                                               0.0f);
                 }
             }
         }
@@ -1314,13 +1319,13 @@ namespace ms {
             return;
         }
 
-        quads_.emplace_back(x,
-                            x + width,
-                            y,
-                            y + height,
-                            null_offset_,
-                            Color(red, green, blue, alpha),
-                            0.0f);
+        batch_quads().emplace_back(x,
+                                   x + width,
+                                   y,
+                                   y + height,
+                                   null_offset_,
+                                   Color(red, green, blue, alpha),
+                                   0.0f);
     }
 
     void GraphicsGL::draw_circle(int16_t x,
@@ -1334,8 +1339,8 @@ namespace ms {
             return;
         }
 
-        circles_.emplace_back(x, y, radius,
-                              Color(red, green, blue, alpha));
+        batch_circles().emplace_back(x, y, radius,
+                                     Color(red, green, blue, alpha));
     }
 
     void GraphicsGL::draw_screen_fill(float red,
@@ -1407,6 +1412,10 @@ namespace ms {
         glViewport(0, 0, scene_width_, scene_height_);
         glScissor(0, 0, scene_width_, scene_height_);
 
+        set_scene_attribs();
+    }
+
+    void GraphicsGL::set_scene_attribs() {
         glUseProgram(shader_program_);
         glBindTexture(GL_TEXTURE_2D, atlas_);
 
@@ -1430,7 +1439,7 @@ namespace ms {
 
     void GraphicsGL::end_scene(int32_t box_x, int32_t box_y, int32_t box_width,
                                int32_t box_height, int32_t surface_width,
-                               int32_t surface_height) {
+                               int32_t surface_height, float opacity) {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         glDisable(GL_SCISSOR_TEST);
@@ -1445,9 +1454,51 @@ namespace ms {
         // The scene is already blended into itself; blending it again over the black bars would
         // only wash out whatever alpha the last sprite left behind.
         glDisable(GL_BLEND);
+        draw_filter(scene_tex_);
+        glEnable(GL_BLEND);
+
+        if (!ui_quads_.empty() || !ui_circles_.empty()) {
+            // The interface goes onto the surface through the same single stretch the scene just
+            // went through, never into the scene texture first - being resampled twice is what
+            // made the buttons softer than the picture behind them. Unlike the scene blit this one
+            // keeps blending, because it lies over a picture that is already there, and it blends
+            // as premultiplied: its target was cleared to nothing, so what it holds is already
+            // multiplied by its own alpha. Blending it as if it weren't would multiply twice and
+            // leave a grey line along every hard edge the interface draws.
+            glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+            draw_filter(ui_tex_);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        }
+
+        if (opacity != 1.0f) {
+            const Color color = Color(0.0f, 0.0f, 0.0f, 1.0f - opacity);
+            std::vector<Quad> fade;
+            std::vector<Circle> fade_circles;
+
+            // Applied last, so the transition darkens the interface along with the scene.
+            fade.emplace_back(0,
+                              static_cast<GLshort>(box_width),
+                              0,
+                              static_cast<GLshort>(box_height),
+                              null_offset_,
+                              color,
+                              0.0f);
+            fade_circles.emplace_back(1, 1, 1, color);
+
+            set_scene_attribs();
+            flush_batch(fade, fade_circles,
+                        static_cast<int16_t>(box_width), static_cast<int16_t>(box_height));
+        }
+
+        // Bitmaps get packed into the atlas from Game::update(), which runs outside this frame, so
+        // leaving a texture bound here would upload them into it instead.
+        glBindTexture(GL_TEXTURE_2D, atlas_);
+    }
+
+    void GraphicsGL::draw_filter(GLuint source) {
         glUseProgram(filter_program_);
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, scene_tex_);
+        glBindTexture(GL_TEXTURE_2D, source);
         glUniform1i(filter_uniform_scene_, 0);
 
         glBindBuffer(GL_ARRAY_BUFFER, filter_vbo_);
@@ -1456,41 +1507,41 @@ namespace ms {
         glDrawArrays(GL_TRIANGLES, 0, 6);
         glDisableVertexAttribArray(filter_attribute_coord_);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glEnable(GL_BLEND);
-
-        // Bitmaps get packed into the atlas from Game::update(), which runs outside this frame, so
-        // leaving the scene texture bound would upload them into it instead.
-        glBindTexture(GL_TEXTURE_2D, atlas_);
     }
 
-    void GraphicsGL::flush(float opacity) {
-        bool coverscene = opacity != 1.0f;
+    std::vector<GraphicsGL::Quad> &GraphicsGL::batch_quads() {
+        return ui_pass_ ? ui_quads_ : quads_;
+    }
 
-        if (coverscene) {
-            float complement = 1.0f - opacity;
-            Color color = Color(0.0f, 0.0f, 0.0f, complement);
+    std::vector<GraphicsGL::Circle> &GraphicsGL::batch_circles() {
+        return ui_pass_ ? ui_circles_ : circles_;
+    }
 
-            quads_.emplace_back(SCREEN.left(),
-                                SCREEN.right(),
-                                SCREEN.top(),
-                                SCREEN.bottom(),
-                                null_offset_,
-                                color,
-                                0.0f);
-            circles_.emplace_back(1, 1, 1, color);
+    void GraphicsGL::begin_ui() {
+        ui_pass_ = true;
+    }
+
+    void GraphicsGL::end_ui() {
+        ui_pass_ = false;
+    }
+
+    void GraphicsGL::flush_batch(const std::vector<Quad> &quads,
+                                  const std::vector<Circle> &circles,
+                                  int16_t screen_width,
+                                  int16_t screen_height) {
+        if (quads.empty() && circles.empty()) {
+            return;
         }
 
-        // The bars around the view are cleared separately from it, so they stay black.
-        glDisable(GL_SCISSOR_TEST);
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glEnable(GL_SCISSOR_TEST);
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        // A batch's coordinates are divided by this size to land in clip space, so drawing the
+        // interface against a smaller screen is what magnifies every window, button and letter of
+        // it together. Nothing else about the submission changes.
+        glUseProgram(shader_program_);
+        glUniform2f(uniform_screen_size_, screen_width, screen_height);
 
         std::vector<Quad::Vertex> triangles;
-        std::vector<Circle::Vertex> circles;
-        for (const Quad &quad: quads_) {
+        std::vector<Circle::Vertex> circle_vertices;
+        for (const Quad &quad: quads) {
             triangles.push_back(quad.vertices[0]);
             triangles.push_back(quad.vertices[1]);
             triangles.push_back(quad.vertices[2]);
@@ -1500,9 +1551,9 @@ namespace ms {
             triangles.push_back(quad.vertices[3]);
         }
 
-        for (const Circle &circle: circles_) {
+        for (const Circle &circle: circles) {
             for (int i = 0; i < Circle::NUM_SEGMENTS; i++) {
-                circles.push_back(circle.vertices[i]);
+                circle_vertices.push_back(circle.vertices[i]);
             }
         }
 
@@ -1510,29 +1561,98 @@ namespace ms {
         glEnableVertexAttribArray(attribute_color_);
 
         glBindBuffer(GL_ARRAY_BUFFER, VBO_);
-        glBufferData(GL_ARRAY_BUFFER, triangles.size() * sizeof(Quad::Vertex), triangles.data(),
-                     GL_STREAM_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, triangles.size() * sizeof(Quad::Vertex),
+                     triangles.data(), GL_STREAM_DRAW);
         glDrawArrays(GL_TRIANGLES, 0, triangles.size());
 
         glBindBuffer(GL_ARRAY_BUFFER, VBO_);
-        glBufferData(GL_ARRAY_BUFFER, circles.size() * sizeof(Circle::Vertex), circles.data(),
-                     GL_STREAM_DRAW);
-        glDrawArrays(GL_TRIANGLE_FAN, 0, circles.size());
+        glBufferData(GL_ARRAY_BUFFER, circle_vertices.size() * sizeof(Circle::Vertex),
+                     circle_vertices.data(), GL_STREAM_DRAW);
+        glDrawArrays(GL_TRIANGLE_FAN, 0, circle_vertices.size());
 
         glDisableVertexAttribArray(attribute_coord_);
         glDisableVertexAttribArray(attribute_color_);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
 
-        if (coverscene) {
-            quads_.pop_back();
-            circles_.pop_back();
+    void GraphicsGL::flush() {
+        // The bars around the view are cleared separately from it, so they stay black.
+        glDisable(GL_SCISSOR_TEST);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glEnable(GL_SCISSOR_TEST);
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        flush_batch(quads_, circles_, VWIDTH, VHEIGHT);
+        flush_ui();
+    }
+
+    void GraphicsGL::flush_ui() {
+        if (ui_quads_.empty() && ui_circles_.empty()) {
+            return;
         }
+
+        // The interface is laid out on a screen UI_SCALE smaller than the scene. Taking that size
+        // from the scene the picture is actually being drawn at, instead of from the live
+        // resolution, is what keeps a held transition frame mapped the way it was drawn: reading
+        // the live size while the scene is frozen squeezed the picture into the left of the view.
+        const int16_t ui_width = static_cast<int16_t>(std::ceil(VWIDTH / Constants::UI_SCALE));
+        const int16_t ui_height = static_cast<int16_t>(std::ceil(VHEIGHT / Constants::UI_SCALE));
+
+        if (ui_width_ != ui_width || ui_height_ != ui_height) {
+            if (ui_fbo_) {
+                glDeleteFramebuffers(1, &ui_fbo_);
+                glDeleteTextures(1, &ui_tex_);
+            }
+
+            glGenTextures(1, &ui_tex_);
+            glBindTexture(GL_TEXTURE_2D, ui_tex_);
+            // The interface is magnified by a non-integer factor when it is stretched back over
+            // the scene, so this is the pass that has to interpolate. The atlas itself stays
+            // nearest: it holds bitmaps with nothing between them, so smoothing a sprite as it is
+            // drawn would pull in its neighbour's edge.
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ui_width, ui_height, 0, GL_RGBA,
+                         GL_UNSIGNED_BYTE, nullptr);
+
+            glGenFramebuffers(1, &ui_fbo_);
+            glBindFramebuffer(GL_FRAMEBUFFER, ui_fbo_);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                                   ui_tex_, 0);
+
+            ui_width_ = ui_width;
+            ui_height_ = ui_height;
+        }
+
+        // Drawn one-to-one into its own target, so every atlas texel lands on exactly one texel
+        // of it and the only magnification left is the one end_scene() applies to the surface.
+        glBindFramebuffer(GL_FRAMEBUFFER, ui_fbo_);
+        glViewport(0, 0, ui_width_, ui_height_);
+        glScissor(0, 0, ui_width_, ui_height_);
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        flush_batch(ui_quads_, ui_circles_, ui_width_, ui_height_);
+
+        // Nothing else is expected to read this target while the frame is still open, so hand the
+        // scene pass back the state it left.
+        glBindFramebuffer(GL_FRAMEBUFFER, scene_fbo_);
+        glViewport(0, 0, scene_width_, scene_height_);
+        glScissor(0, 0, scene_width_, scene_height_);
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        set_scene_attribs();
     }
 
     void GraphicsGL::clear_scene() {
         if (!locked_) {
             quads_.clear();
             circles_.clear();
+            ui_quads_.clear();
+            ui_circles_.clear();
         }
     }
 }  // namespace ms

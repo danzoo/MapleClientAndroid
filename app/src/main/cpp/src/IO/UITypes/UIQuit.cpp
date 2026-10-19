@@ -111,8 +111,10 @@ UIQuit::UIQuit(const CharStats &st) : stats_(st), screen_adj_(212, 114) {
 
     exp_adj_ = Point<int16_t>(0, 6);
 
-    int16_t width = Constants::Constants::get().get_viewwidth();
-    int16_t height = Constants::Constants::get().get_viewheight();
+    // The whole screen is dimmed and the dialog put in the middle of it, both of which are
+    // measured on the interface's own screen - the one that gets magnified onto the view.
+    int16_t width = Constants::Constants::get().get_ui_viewwidth();
+    int16_t height = Constants::Constants::get().get_ui_viewheight();
 
     background_ = ColorBox(width, height, Color::Name::BLACK, 0.5f);
     position_ = Point<int16_t>(width / 2, height / 2);

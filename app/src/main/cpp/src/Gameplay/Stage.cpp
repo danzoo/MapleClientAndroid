@@ -305,16 +305,21 @@ Cursor::State Stage::send_cursor(bool pressed, Point<int16_t> position) {
         }
     }
 
-    return npcs_.send_cursor(pressed, position, camera_.position());
+    // The cursor is measured on the screen the interface is laid out on; whatever of the map it
+    // reaches has to be asked about in the picture's own pixels.
+    const Point<int16_t> viewpos = Constants::to_view_space(position);
+
+    return npcs_.send_cursor(pressed, viewpos, camera_.position());
 }
 
 void Stage::doubleclick(Point<int16_t> pos) {
-    auto chr = chars_.get_char(pos, camera_.position());
+    const Point<int16_t> viewpos = Constants::to_view_space(pos);
+    auto chr = chars_.get_char(viewpos, camera_.position());
 
     if (chr) {
         fn_char_info_req(chr->get().get_oid());
     } else if (chars_.inrange(player_.get_position(),
-                              pos,
+                              viewpos,
                               camera_.position())) {
         fn_char_info_req(player_.get_oid());
     }

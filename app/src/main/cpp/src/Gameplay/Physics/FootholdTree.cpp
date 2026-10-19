@@ -332,6 +332,10 @@ Range<int16_t> FootholdTree::get_walls() const {
     return walls_;
 }
 
+const Foothold &FootholdTree::get_foothold(uint16_t fhid) const {
+    return get_fh(fhid);
+}
+
 Range<int16_t> FootholdTree::get_borders() const {
     return borders_;
 }

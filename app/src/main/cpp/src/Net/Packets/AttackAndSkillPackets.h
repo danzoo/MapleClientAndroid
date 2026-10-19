@@ -57,11 +57,23 @@ public:
         for (const auto &damage_to_mob : attack.damage_lines) {
             write_int(damage_to_mob.first);
 
-            skip(12);
+            skip(4);
+
+            // Where the mob stood when the blow was worked out, reported twice: the server has
+            // no idea where its mobs got to, and everything it derives from the attack - range,
+            // aggro, where the loot lands - is measured from here.
+            auto position_it = attack.target_positions.find(damage_to_mob.first);
+            Point<int16_t> position =
+                position_it != attack.target_positions.end()
+                    ? position_it->second
+                    : Point<int16_t>(0, 0);
+
+            write_point(position);
+            write_point(position);
 
             // How long this attack takes to land. The server holds the mob's death and everything
-            // it drops for this many milliseconds; the 14 skipped bytes above are the two target
-            // positions plus this short.
+            // it drops for this many milliseconds; the 14 bytes above are the two target positions
+            // plus this short.
             write_short(static_cast<int16_t>(attack.hitdelay));
 
             for (const auto &single_damage : damage_to_mob.second) {

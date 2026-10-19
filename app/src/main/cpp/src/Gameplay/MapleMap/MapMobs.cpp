@@ -97,6 +97,7 @@ void MapMobs::send_attack(AttackResult &result,
     for (const auto &target : targets) {
         if (auto mob = mobs_.get<Mob>(target)) {
             result.damage_lines[target] = mob->get().calculate_damage(attack);
+            result.target_positions[target] = mob->get().get_position();
             result.mobcount++;
 
             if (result.mobcount == 1) {

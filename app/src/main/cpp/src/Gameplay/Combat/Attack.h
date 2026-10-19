@@ -120,6 +120,10 @@ struct AttackResult {
     bool toleft = false;
     std::unordered_map<int32_t, std::vector<std::pair<int32_t, bool>>>
         damage_lines;
+    // Where each attacked mob actually stood when the blow was worked out. The server never
+    // learns this on its own - nothing here reports mob movement - so without it the server
+    // computes range, aggro and drop positions around the spot the mob spawned at.
+    std::unordered_map<int32_t, Point<int16_t>> target_positions;
     // Milliseconds until this attack actually lands, reported to the server so it can hold back
     // the mob's death and its loot until then instead of killing it mid-swing.
     uint16_t hitdelay = 0;

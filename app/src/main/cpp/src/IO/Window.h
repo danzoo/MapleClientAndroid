@@ -57,9 +57,9 @@ namespace ms {
 
         void move_cursor(double x, double y);
 
-        // Translate a touch position in surface pixels from the top left into the game's own
-        // coordinate space, undoing the letterbox offset.
-        Point<double_t> to_game(double x, double y) const;
+        // Translate a touch position in surface pixels from the top left into the space the
+        // interface is laid out in, undoing the letterbox offset and the interface's own scale.
+        Point<double_t> to_ui(double x, double y) const;
 
         GLFMDisplay* get_display();
 
