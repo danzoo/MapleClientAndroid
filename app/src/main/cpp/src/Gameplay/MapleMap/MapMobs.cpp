@@ -76,6 +76,12 @@ void MapMobs::set_control(int32_t oid, bool control) {
     }
 }
 
+void MapMobs::set_aggro(int32_t oid, bool aggro) {
+    if (auto mob = mobs_.get<Mob>(oid)) {
+        mob->get().set_aggro(aggro);
+    }
+}
+
 void MapMobs::send_mobhp(int32_t oid, int8_t percent, uint16_t playerlevel) {
     if (auto mob = mobs_.get<Mob>(oid)) {
         mob->get().show_hp(percent, playerlevel);

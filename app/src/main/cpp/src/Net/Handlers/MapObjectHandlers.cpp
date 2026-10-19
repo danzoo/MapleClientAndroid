@@ -355,23 +355,24 @@ void MobMovedHandler::handle(InPacket &recv) const {
 void MobMoveResponseHandler::handle(InPacket &recv) const {
     int32_t oid = recv.read_int();
     int16_t moveid = recv.read_short();
-    bool use_skills = recv.read_bool();
+
+    // The slot the packet calls "use skills" is the server's answer to whether it still has this
+    // mob on the player's tail. It is the only place the client is told, and it decides whether
+    // the mob may leave the platform it is wandering on.
+    bool aggro = recv.read_bool();
+
     uint16_t curr_mp = recv.read_ushort();
     uint8_t skillid = recv.read_ubyte();
     uint8_t skill_level = recv.read_ubyte();
 
-    if (skillid == 0) {
-        // Stage::get().get_mob_combat().use_some_attack(oid);
-    } else {
+    Stage::get().get_mobs().set_aggro(oid, aggro);
+
+    if (skillid != 0) {
         Stage::get().get_mob_combat().use_move(oid,
                                                moveid,
                                                skillid,
                                                skill_level);
     }
-
-    std::cerr << std::endl
-              << "Opcode [240] Error: Handler exists but is not implemented."
-              << std::endl;
 }
 
 void ApplyMobStatusHandler::handle(InPacket &recv) const {
@@ -552,7 +553,7 @@ void RemoveLootHandler::handle(InPacket &recv) const {
         Sound(Sound::Name::PICKUP).play();
     }
 
-    Stage::get().get_drops().remove(oid, mode, &looter->get());
+    Stage::get().get_drops().remove(oid, mode, looter ? &looter->get() : nullptr);
 }
 
 void HitReactorHandler::handle(InPacket &recv) const {

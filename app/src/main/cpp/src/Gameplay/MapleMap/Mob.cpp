@@ -18,6 +18,7 @@
 #include <nlnx/nx.hpp>
 
 #include "../../Net/Packets/GameplayPackets.h"
+#include "../Stage.h"
 #include "StringHandling.h"
 
 namespace ms {
@@ -25,6 +26,10 @@ namespace {
 auto fn_move_mob = []<typename... T>(T && ...args) {
     MoveMobPacket(std::forward<T>(args)...).dispatch();
 };
+
+// How near the player can get before a chasing mob stops bothering to re-face them. Measured
+// against nothing, a mob standing on the player spins in place between two pixels.
+constexpr double CHASE_TURN = 4.0;
 }  // namespace
 
 Mob::Mob(int32_t oi,
@@ -116,6 +121,7 @@ Mob::Mob(int32_t oi,
     dead_ = false;
     fading_ = false;
     death_pending_ = false;
+    hit_played_ = false;
     death_wait_ = 0;
     pending_hit_ = 0;
     set_stance(st);
@@ -189,11 +195,20 @@ int8_t Mob::update(const Physics &physics) {
                 apply_death();
             }
         } else if (pending_hit_ == 0) {
-            // Nothing local is going to land on this mob, so there is no blow to line the flinch
-            // up with. Making one here keeps a death the client knows nothing about from looking
-            // like the mob simply vanished.
-            set_stance(Stance::HIT);
-            hit_sound_.play();
+            if (hit_played_) {
+                // The blow this died of has already been reacted to; the kill simply turned up after
+                // that flinch had played out. Reacting again would sound like two blows landing for
+                // one swing, so the death goes straight ahead.
+                death_pending_ = false;
+                apply_death();
+            } else {
+                // Nothing local is going to land on this mob, so there is no blow to line the
+                // flinch up with. Making one here keeps a death the client knows nothing about from
+                // looking like the mob simply vanished.
+                set_stance(Stance::HIT);
+                hit_sound_.play();
+                hit_played_ = true;
+            }
         }
     }
 
@@ -231,13 +246,36 @@ int8_t Mob::update(const Physics &physics) {
 
     if (!dying_) {
         if (!can_fly_) {
-            if (phobj_.is_flag_not_set(PhysicsObject::Flag::TURN_AT_EDGES)) {
+            if (aggro_) {
+                // Off after the player, so the end of the platform is not a barrier. The turn has
+                // to be switched off whole: left armed it stops the mob at the one place the hate
+                // is telling it to walk over. Walls are a separate check and still hold.
+                phobj_.clear_flag(PhysicsObject::Flag::TURN_AT_EDGES);
+            } else if (phobj_.is_flag_not_set(PhysicsObject::Flag::TURN_AT_EDGES)) {
                 flip_ = !flip_;
                 phobj_.set_flag(PhysicsObject::Flag::TURN_AT_EDGES);
 
                 if (stance_ == Stance::HIT) {
                     set_stance(Stance::STAND);
                 }
+            }
+        }
+
+        // Chasing settles the facing here rather than in next_move: the wander only picks a
+        // direction every couple of seconds, which is nowhere near often enough to follow someone
+        // walking past. Blows and skills still play out, they simply lose the say over where the
+        // mob goes the moment they are over.
+        if (aggro_ && can_move_ && stance_ != Stance::HIT
+            && stance_ != Stance::SKILL) {
+            const double deltax =
+                Stage::get().get_player().get_position().x() - phobj_.crnt_x();
+
+            if (deltax > CHASE_TURN || deltax < -CHASE_TURN) {
+                flip_ = deltax > 0.0;
+            }
+
+            if (stance_ == Stance::STAND) {
+                set_stance(Stance::MOVE);
             }
         }
 
@@ -286,6 +324,34 @@ int8_t Mob::update(const Physics &physics) {
 
                 break;
             case Stance::JUMP: phobj_.vforce = -5.0; break;
+        }
+
+        // A mob that wanders stays on the platform it is standing on. Off the end of it the
+        // foothold lookup hands the mob to whatever is below, so without this a slow walk to the
+        // edge becomes a drop it cannot climb back out of. Being after the player is the one
+        // reason to step over that edge; walls still stop it either way.
+        if (!aggro_ && !can_fly_ && !can_jump_ && phobj_.onground && phobj_.fhid) {
+            const Physics::Platform platform = physics.get_platform(phobj_.fhid);
+            const double edgeleft =
+                platform.left + Constants::PLATFORM_EDGE_MARGIN;
+            const double edgeright =
+                platform.right - Constants::PLATFORM_EDGE_MARGIN;
+            const double x = phobj_.crnt_x();
+
+            // Held to the stretch only while standing on it, so a mob that has come off somewhere
+            // else keeps walking instead of freezing where the two margins cross over.
+            if (edgeleft < edgeright && x >= platform.left && x <= platform.right) {
+                const double projected = x + phobj_.hspeed + phobj_.hforce;
+
+                if (projected > edgeright || projected < edgeleft) {
+                    phobj_.hforce = 0.0;
+                    phobj_.hspeed = 0.0;
+
+                    // Turning is left to the edge logic above, which flips the mob on the tick it
+                    // finds this flag gone. Flipping here as well would cancel that one out.
+                    phobj_.clear_flag(PhysicsObject::Flag::TURN_AT_EDGES);
+                }
+            }
         }
 
         physics.move_object(phobj_);
@@ -446,7 +512,17 @@ void Mob::draw(double viewx, double viewy, float alpha) const {
 
 void Mob::set_control(int8_t mode) {
     control_ = mode > 0;
-    aggro_ = mode == 2;
+    set_aggro(mode == 2);
+}
+
+void Mob::set_aggro(bool aggro) {
+    if (aggro_ && !aggro && !can_fly_) {
+        // Coming off a chase with the edge turn switched off, so put it back before the update loop
+        // sees the flag down and reads it as something the mob has just walked into.
+        phobj_.set_flag(PhysicsObject::Flag::TURN_AT_EDGES);
+    }
+
+    aggro_ = aggro;
 }
 
 void Mob::send_movement(Point<int16_t> start,
@@ -670,12 +746,14 @@ void Mob::apply_damage(int32_t damage, bool toleft) {
             flip_ = toleft;
             set_stance(Stance::HIT);
             hit_sound_.play();
+            hit_played_ = true;
         }
 
         return;
     }
 
     hit_sound_.play();
+    hit_played_ = true;
 
     if (dying_ && stance_ != Stance::DIE) {
         apply_death();
@@ -691,6 +769,7 @@ void Mob::apply_damage(int32_t damage, bool toleft) {
 void Mob::expect_hit(int16_t ticks) {
     if (ticks > pending_hit_) {
         pending_hit_ = ticks;
+        hit_played_ = false;
     }
 }
 

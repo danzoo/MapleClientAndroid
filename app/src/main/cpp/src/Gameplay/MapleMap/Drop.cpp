@@ -50,12 +50,7 @@ double fall_ticks(double distance) {
     return CAP_TICKS + (distance - CAP_DIST) / DROP_MAX_FALL;
 }
 
-// Height above the launch point after ticks of the rise, and distance below the peak after ticks
-// of the fall.
-double rise_offset(double ticks) {
-    return ACCEL * RISE_TICKS * ticks - 0.5 * ACCEL * ticks * ticks;
-}
-
+// Height below the peak after ticks of the fall.
 double fall_offset(double ticks) {
     if (ticks <= CAP_TICKS) {
         return 0.5 * ACCEL * ticks * ticks;
@@ -86,7 +81,7 @@ Drop::Drop(int32_t id,
 
     switch (mode) {
         case 0:
-        case 1:
+        case 1: {
             state_ = Drop::State::DROPPED;
             base_y_ = static_cast<double>(dest_.y() - 4);
             // The walk to the destination is animated directly rather than handed to the terrain,
@@ -96,13 +91,19 @@ Drop::Drop(int32_t id,
             launch_ = Point<int16_t>(start.x(), start.y() - 4);
             fallen_ = 0.0;
 
-            // How far the destination sits below the corpse. Zero on level ground.
-            air_ticks_ = RISE_TICKS + fall_ticks(
-                DROP_RISE + std::max(0.0,
-                    static_cast<double>((dest_.y() - 4) - launch_.y())));
+            // The peak sits DROP_RISE above whichever end of the flight is higher, so an item the
+            // server put on a step above the corpse is thrown onto it instead of running out of
+            // flight at the corpse's own height and jumping the last step. Over level ground and
+            // downhill this is the launch point minus DROP_RISE, exactly as before.
+            const double landing = dest_.y() - 4;
+
+            apex_ = std::min(static_cast<double>(launch_.y()), landing) - DROP_RISE;
+            rise_ticks_ = std::sqrt(2.0 * (launch_.y() - apex_) / ACCEL);
+            air_ticks_ = rise_ticks_ + fall_ticks(landing - apex_);
 
             phobj_.type = PhysicsObject::Type::FIXATED;
             break;
+        }
         case 2:
             state_ = Drop::State::FLOATING;
             base_y_ = phobj_.crnt_y();
@@ -128,14 +129,28 @@ int8_t Drop::update(const Physics &physics) {
             state_ = Drop::State::FLOATING;
             angle_.set(0.0f);
             set_position(dest_.x(), dest_.y() - 4);
+
+            // Layered with what it landed on rather than with where it was thrown from. The
+            // foothold is pinned for the whole flight, so an item that came off something up on a
+            // bridge and landed on the ground would keep the bridge's layer and be drawn over the
+            // scenery the ground is behind.
+            const uint16_t landed =
+                physics.get_fht().get_fhid_below(dest_.x(), dest_.y() - 4);
+
+            if (landed) {
+                phobj_.fhid = landed;
+                phobj_.fhlayer = physics.get_fht().get_foothold(landed).layer();
+            }
         } else {
             phobj_.x = launch_.x() + (dest_.x() - launch_.x()) * progress;
 
-            if (fallen_ <= RISE_TICKS) {
-                phobj_.y = launch_.y() - rise_offset(fallen_);
+            // The rise is the fall run backwards from the peak, so both halves are one curve.
+            if (fallen_ <= rise_ticks_) {
+                const double since = fallen_ - rise_ticks_;
+
+                phobj_.y = apex_ + 0.5 * ACCEL * since * since;
             } else {
-                phobj_.y = launch_.y() - DROP_RISE
-                           + fall_offset(fallen_ - RISE_TICKS);
+                phobj_.y = apex_ + fall_offset(fallen_ - rise_ticks_);
             }
 
             static const float SPINSTEP = 0.2f;
@@ -149,20 +164,35 @@ int8_t Drop::update(const Physics &physics) {
     }
 
     if (state_ == Drop::State::PICKED_UP) {
-        // Also how long the item takes to drift in to the player, so slowing the fade slows the
-        // flight with it instead of leaving the item half way there when it disappears.
-        static const uint16_t PICKUPTIME = 76;
-        static const float OPCSTEP = 1.0f / PICKUPTIME;
+        // The fade is spread over exactly the flight, so the item reaches the hand at the moment it
+        // disappears. With nothing to fly to (someone else's loot, or a plain despawn) it fades out
+        // where it lies, over the length of a toss across level ground.
+        const float step = looter_ ? static_cast<float>(1.0 / air_ticks_)
+                                   : static_cast<float>(1.0 / DROP_TICKS);
 
         if (looter_) {
-            double hdelta = looter_->x - phobj_.x;
-            phobj_.hspeed =
-                looter_->hspeed / 2.0 + (hdelta - 16.0) / PICKUPTIME;
+            fallen_ += 1.0;
+
+            const double progress = fallen_ / air_ticks_;
+
+            // Aimed at where the hand is now rather than where it was when the item left the ground,
+            // so walking off with a flight already under way still ends at the character.
+            const double handx = looter_->x.get() - 16.0;
+
+            phobj_.x = launch_.x() + (handx - launch_.x()) * progress;
+
+            if (fallen_ <= rise_ticks_) {
+                const double since = fallen_ - rise_ticks_;
+
+                phobj_.y = apex_ + 0.5 * ACCEL * since * since;
+            } else {
+                phobj_.y = apex_ + fall_offset(fallen_ - rise_ticks_);
+            }
         }
 
-        opacity_ -= OPCSTEP;
+        opacity_ -= step;
 
-        if (opacity_.last() <= OPCSTEP) {
+        if (opacity_.last() <= step) {
             opacity_.set(1.0f);
 
             MapObject::deactivate();
@@ -181,8 +211,26 @@ void Drop::expire(int8_t type, const PhysicsObject *lt) {
             angle_.set(0.0f);
             state_ = Drop::State::PICKED_UP;
             looter_ = lt;
-            phobj_.vspeed = -4.5f;
-            phobj_.type = PhysicsObject::Type::NORMAL;
+
+            // The same toss the item got coming out of the mob, aimed at the hand instead of at the
+            // ground: same rise, same acceleration, same capped fall, so being picked up carries the
+            // weight the drop had. Gravity is kept out of it, otherwise it decides how long the hop
+            // takes and the flight ends well before the fade does.
+            launch_ = phobj_.get_position();
+            fallen_ = 0.0;
+
+            {
+                const double landing =
+                    lt ? lt->y.get() : static_cast<double>(launch_.y());
+
+                apex_ = std::min(static_cast<double>(launch_.y()), landing) - DROP_RISE;
+                rise_ticks_ = std::sqrt(2.0 * (launch_.y() - apex_) / ACCEL);
+                air_ticks_ = rise_ticks_ + fall_ticks(landing - apex_);
+            }
+
+            phobj_.hspeed = 0.0;
+            phobj_.vspeed = 0.0;
+            phobj_.type = PhysicsObject::Type::FIXATED;
             break;
     }
 }
@@ -192,6 +240,10 @@ Rectangle<int16_t> Drop::bounds() const {
     auto rb = lt + Point<int16_t>(32, 32);
 
     return Rectangle<int16_t>(lt, rb);
+}
+
+bool Drop::claimed() const {
+    return state_ == Drop::State::PICKED_UP;
 }
 
 Rectangle<int16_t> Drop::icon_bounds(Point<int16_t> origin,

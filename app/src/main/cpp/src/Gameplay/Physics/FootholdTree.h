@@ -39,6 +39,10 @@ public:
     // Determine the point on the ground below the specified position.
     int16_t get_y_below(Point<int16_t> position) const;
 
+    // Determine the platform directly below the specified position, or zero if there is none
+    // within the borders of the map.
+    uint16_t get_fhid_below(double fx, double fy) const;
+
     // Returns the platform with the specified identifier, or a null platform.
     const Foothold &get_foothold(uint16_t fhid) const;
 
@@ -49,8 +53,6 @@ public:
     Range<int16_t> get_borders() const;
 
 private:
-    uint16_t get_fhid_below(double fx, double fy) const;
-
     double get_wall(uint16_t fhid, bool left, double fy) const;
 
     double get_edge(uint16_t fhid, bool left) const;
