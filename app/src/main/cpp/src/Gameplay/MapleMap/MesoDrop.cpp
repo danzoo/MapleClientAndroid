@@ -33,7 +33,10 @@ void MesoDrop::draw(double viewx, double viewy, float alpha) const {
     }
 
     Point<int16_t> absp = phobj_.get_absolute(viewx, viewy, alpha);
-    icon_.draw({ angle_.get(alpha), absp, opacity_.get(alpha) }, alpha);
+    icon_.draw({ angle_.get(alpha),
+                 absp - icon_shift(icon_.get_origin(), icon_.get_dimensions()),
+                 opacity_.get(alpha) },
+               alpha);
 }
 
 Rectangle<int16_t> MesoDrop::bounds() const {

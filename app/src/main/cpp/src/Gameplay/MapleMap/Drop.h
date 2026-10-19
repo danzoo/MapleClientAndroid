@@ -48,6 +48,13 @@ protected:
     Rectangle<int16_t> icon_bounds(Point<int16_t> origin,
                                   Point<int16_t> dimensions) const;
 
+    // What to draw an icon from so that it sits centred over the drop's own position. Icons hang off
+    // their origin, which puts the sprite to one side of the point it is stored at: an item coming
+    // out of the character appeared to leave from beside them rather than from them. Only the width
+    // is squared up, because the height an icon hangs at is what makes it rest on the ground.
+    static Point<int16_t> icon_shift(Point<int16_t> origin,
+                                     Point<int16_t> dimensions);
+
     Linear<float> opacity_;
     Linear<float> angle_;
 
@@ -63,9 +70,12 @@ private:
 
     Point<int16_t> dest_;
     Point<int16_t> launch_;
-    // The height the flight peaks at and how long it takes to get there from the corpse.
+    // The height the current flight peaks at, how long it takes to get there, and how high above
+    // the ground it was thrown. The height picks the gravity the rest of the flight is computed
+    // with, so the toss out of a mob and the hop to whoever picks it up are separate routes.
     double apex_;
     double rise_ticks_;
+    double rise_;
     double base_y_;
     double moved_;
     double fallen_;
