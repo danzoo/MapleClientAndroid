@@ -58,6 +58,7 @@ Mob::Mob(int32_t oi,
     not_attack_ = info["notAttack"].get_bool();
     can_jump_ = src["jump"].size() > 0;
     can_fly_ = src["fly"].size() > 0;
+    can_hit_ = src["hit1"].size() > 0;
     can_move_ = src["move"].size() > 0 || can_fly_;
 
     if (can_fly_) {
@@ -114,6 +115,9 @@ Mob::Mob(int32_t oi,
     dying_ = false;
     dead_ = false;
     fading_ = false;
+    death_pending_ = false;
+    death_wait_ = 0;
+    pending_hit_ = 0;
     set_stance(st);
     fly_direction_ = STRAIGHT;
     counter_ = 0;
@@ -172,6 +176,25 @@ int8_t Mob::update(const Physics &physics) {
 
     if (aniend && stance_ == Stance::DIE) {
         dead_ = true;
+    }
+
+    if (pending_hit_ > 0) {
+        --pending_hit_;
+    }
+
+    if (death_pending_) {
+        if (stance_ == Stance::HIT) {
+            if (aniend || ++death_wait_ >= Constants::HIT_DEATH_WAIT) {
+                death_pending_ = false;
+                apply_death();
+            }
+        } else if (pending_hit_ == 0) {
+            // Nothing local is going to land on this mob, so there is no blow to line the flinch
+            // up with. Making one here keeps a death the client knows nothing about from looking
+            // like the mob simply vanished.
+            set_stance(Stance::HIT);
+            hit_sound_.play();
+        }
     }
 
     if (fading_) {
@@ -392,7 +415,8 @@ void Mob::draw(double viewx, double viewy, float alpha) const {
         if (show_hp_) {
             name_label_.draw(absp);
 
-            if (!dying_ && hp_percent_ > 0) {
+            // The bar stays up while the death is still waiting for the blow that caused it.
+            if ((!dying_ || death_pending_) && hp_percent_ > 0) {
                 hp_bar_.draw(headpos, hp_percent_);
             }
         }
@@ -443,7 +467,22 @@ void Mob::kill(int8_t animation) {
         case 1:
             dying_ = true;
 
-            apply_death();
+            // The server has already resolved the blow the player is still swinging: the damage
+            // that killed this mob is sitting in the local attack queue and lands a few hundred
+            // milliseconds from now. Waiting for it is what keeps the flinch, the death and the
+            // loot in step with the attack instead of running ahead of it.
+            if (can_hit_ && stance_ != Stance::DIE) {
+                death_pending_ = true;
+                death_wait_ = 0;
+
+                // Movement stops the moment the mob is marked dying, so a mob that was walking has
+                // to stop moving its legs too or it slides through the wait.
+                if (stance_ == Stance::MOVE) {
+                    set_stance(Stance::STAND);
+                }
+            } else {
+                apply_death();
+            }
             break;
         case 2:
             fading_ = true;
@@ -603,6 +642,20 @@ std::pair<int32_t, bool> Mob::next_damage(double mindamage,
 }
 
 void Mob::apply_damage(int32_t damage, bool toleft) {
+    if (death_pending_) {
+        // This is the blow the server already reported the death of. It gets the flinch, and the
+        // death animation follows once the flinch has played out.
+        pending_hit_ = 0;
+
+        if (stance_ != Stance::HIT) {
+            flip_ = toleft;
+            set_stance(Stance::HIT);
+            hit_sound_.play();
+        }
+
+        return;
+    }
+
     hit_sound_.play();
 
     if (dying_ && stance_ != Stance::DIE) {
@@ -614,6 +667,16 @@ void Mob::apply_damage(int32_t damage, bool toleft) {
 
         update_movement();
     }
+}
+
+void Mob::expect_hit(int16_t ticks) {
+    if (ticks > pending_hit_) {
+        pending_hit_ = ticks;
+    }
+}
+
+int16_t Mob::pending_hit() const {
+    return pending_hit_;
 }
 
 MobAttack Mob::create_touch_attack() const {

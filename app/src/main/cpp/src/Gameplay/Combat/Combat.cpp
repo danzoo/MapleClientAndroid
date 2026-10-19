@@ -71,6 +71,10 @@ void Combat::update() {
 
             if (apply) {
                 apply_damage_effect(mb.damageeffect);
+            } else {
+                // A projectile that is still travelling counts as a blow this mob has coming for
+                // it, so a death reported over the network keeps waiting until the arrow lands.
+                mobs_.expect_hit(target_oid, 2 * Constants::TIMESTEP);
             }
 
             return apply;
@@ -142,6 +146,8 @@ void Combat::apply_move(const SpecialMove &move) {
 
         apply_use_movement(move);
         apply_result_movement(move, result);
+
+        result.hitdelay = player_.get_attackdelay(0);
 
         fn_attack(result);
 
@@ -311,7 +317,10 @@ void Combat::extract_effects(const Char &user,
                         result.toleft, oid,    move.get_id()
                     };
 
-                    bullet_effects_.emplace(user.get_attackdelay(i),
+                    uint16_t hitdelay = user.get_attackdelay(i);
+                    mobs_.expect_hit(oid, hitdelay);
+
+                    bullet_effects_.emplace(hitdelay,
                                             std::move(effect),
                                             bullet,
                                             head);
@@ -341,7 +350,10 @@ void Combat::extract_effects(const Char &user,
                 size_t i = 0;
 
                 for (auto &number : numbers) {
-                    damage_effects_.emplace(user.get_attackdelay(i),
+                    uint16_t hitdelay = user.get_attackdelay(i);
+                    mobs_.expect_hit(oid, hitdelay);
+
+                    damage_effects_.emplace(hitdelay,
                                             attack_user,
                                             number,
                                             vec[i].first,

@@ -268,11 +268,14 @@ namespace ms {
     void Window::begin() {
         GraphicsGL::get().sync_screen_size();
         update_viewport();
+        GraphicsGL::get().begin_scene();
         GraphicsGL::get().clear_scene();
     }
 
     void Window::end() const {
         GraphicsGL::get().flush(opacity_);
+        GraphicsGL::get().end_scene(offset_x_, offset_y_, box_width_, box_height_,
+                                    surface_width_, surface_height_);
         glfmSwapBuffers(display);
     }
 
@@ -329,6 +332,10 @@ namespace ms {
         scale_ = scale;
         offset_x_ = (surface_width - box_width) / 2;
         offset_y_ = (surface_height - box_height) / 2;
+        box_width_ = box_width;
+        box_height_ = box_height;
+        surface_width_ = surface_width;
+        surface_height_ = surface_height;
 
         glViewport(offset_x_, offset_y_, box_width, box_height);
         // Keeps the bars black, since the view itself is cleared over its own box.

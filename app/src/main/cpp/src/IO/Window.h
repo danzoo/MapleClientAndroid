@@ -77,6 +77,11 @@ namespace ms {
         double scale_ = 1.0;
         int32_t offset_x_ = 0;
         int32_t offset_y_ = 0;
+        // The view box and the surface around it, which the frame has to be stretched onto.
+        int32_t box_width_ = 0;
+        int32_t box_height_ = 0;
+        int32_t surface_width_ = 0;
+        int32_t surface_height_ = 0;
         std::function<void()> fade_procedure_;
     };
 }  // namespace ms

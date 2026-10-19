@@ -120,6 +120,9 @@ struct AttackResult {
     bool toleft = false;
     std::unordered_map<int32_t, std::vector<std::pair<int32_t, bool>>>
         damage_lines;
+    // Milliseconds until this attack actually lands, reported to the server so it can hold back
+    // the mob's death and its loot until then instead of killing it mid-swing.
+    uint16_t hitdelay = 0;
     int32_t first_oid;
     int32_t last_oid;
 };
