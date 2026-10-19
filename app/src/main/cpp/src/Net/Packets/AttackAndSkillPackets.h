@@ -57,7 +57,12 @@ public:
         for (const auto &damage_to_mob : attack.damage_lines) {
             write_int(damage_to_mob.first);
 
-            skip(14);
+            skip(12);
+
+            // How long this attack takes to land. The server holds the mob's death and everything
+            // it drops for this many milliseconds; the 14 skipped bytes above are the two target
+            // positions plus this short.
+            write_short(static_cast<int16_t>(attack.hitdelay));
 
             for (const auto &single_damage : damage_to_mob.second) {
                 write_int(single_damage.first);

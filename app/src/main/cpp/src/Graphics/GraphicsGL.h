@@ -117,6 +117,17 @@ namespace ms {
         // the coordinates it was drawn at, so the size only changes once the scene is live again.
         void sync_screen_size();
 
+        // Start the pass the scene is drawn into. Filtering has to happen after the picture is
+        // composited: every bitmap sits in one atlas with nothing between them, so smoothing a
+        // sprite as it is drawn also pulls in its neighbour's edge and the tile seams come out as
+        // lines across the screen.
+        void begin_scene();
+
+        // Stretch the scene over the letterboxed view box and leave the state as the scene program
+        // expects to find it.
+        void end_scene(int32_t box_x, int32_t box_y, int32_t box_width, int32_t box_height,
+                       int32_t surface_width, int32_t surface_height);
+
         // The resolution the scene is drawn at, which is what the viewport has to fit.
         int16_t get_screen_width() const { return VWIDTH; }
 
@@ -355,6 +366,18 @@ namespace ms {
 
         std::unordered_map<size_t, Offset> offsets_;
         Offset null_offset_;
+
+        // The scene is composited into this texture and only then stretched to the screen, so the
+        // filter never sees two neighbouring bitmaps bleeding into each other.
+        GLuint scene_fbo_;
+        GLuint scene_tex_;
+        int16_t scene_width_;
+        int16_t scene_height_;
+
+        GLuint filter_vbo_;
+        GLint filter_program_;
+        GLint filter_attribute_coord_;
+        GLint filter_uniform_scene_;
 
         QuadTree<size_t, Leftover> leftovers_;
         size_t rlid_;

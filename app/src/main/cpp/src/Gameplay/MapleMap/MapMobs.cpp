@@ -123,6 +123,20 @@ void MapMobs::apply_damage(int32_t oid,
     }
 }
 
+void MapMobs::expect_hit(int32_t oid, uint16_t delay) {
+    if (auto mob = mobs_.get<Mob>(oid)) {
+        mob->get().expect_hit(static_cast<int16_t>(delay / Constants::TIMESTEP));
+    }
+}
+
+int16_t MapMobs::pending_hit(int32_t oid) const {
+    if (auto mob = mobs_.get<const Mob>(oid)) {
+        return mob->get().pending_hit();
+    }
+
+    return 0;
+}
+
 bool MapMobs::contains(int32_t oid) const {
     return mobs_.contains(oid);
 }

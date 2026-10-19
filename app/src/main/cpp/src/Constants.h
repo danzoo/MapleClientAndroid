@@ -32,6 +32,15 @@ constexpr double SIMULATION_SPEED = 0.85;
 // predicts a trajectory has to use the same value the integrator applies.
 constexpr double GRAVITY = 0.14;
 
+// How long loot that a mob dropped stays hidden after its packet arrives, on top of however long
+// that mob is still waiting for the blow that killed it. The server sends the loot before it sends
+// the kill, so without a wait the items are already flying out of a mob that is still standing.
+constexpr int16_t DROP_DELAY = 40;
+
+// Longest a mob flinches before the death animation starts, in timesteps. Only reached if the
+// flinch never reports that it has finished playing.
+constexpr int16_t HIT_DEATH_WAIT = 40;
+
 class Constants : public Singleton<Constants> {
 public:
     Constants() : VIEWWIDTH(1366), VIEWHEIGHT(768) {}

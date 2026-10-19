@@ -65,6 +65,13 @@ public:
                       const AttackUser &user,
                       const SpecialMove &move);
 
+    // Note that a blow the client has queued locally is due to land on this mob in the specified
+    // number of milliseconds.
+    void expect_hit(int32_t oid, uint16_t delay);
+
+    // How long until the next locally queued blow lands on this mob, in timesteps.
+    int16_t pending_hit(int32_t oid) const;
+
     // Check if the mob with the specified oid exists.
     bool contains(int32_t oid) const;
 

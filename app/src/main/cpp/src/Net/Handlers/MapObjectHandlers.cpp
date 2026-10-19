@@ -19,6 +19,7 @@
 #include <functional>
 #include <optional>
 
+#include "../../Constants.h"
 #include "../../Gameplay/Stage.h"
 #include "Helpers/LoginParser.h"
 #include "Helpers/MovementParser.h"
@@ -476,11 +477,12 @@ void DropLootHandler::handle(InPacket &recv) const {
     int32_t dropper = recv.read_int();
 
     Point<int16_t> dropfrom;
+    int16_t serverdelay = 0;
 
     if (mode != 2) {
         dropfrom = recv.read_point();
 
-        recv.skip(2);
+        serverdelay = recv.read_short();
     } else {
         dropfrom = dropto;
     }
@@ -525,8 +527,29 @@ void DropLootHandler::handle(InPacket &recv) const {
     }
 
     // bug: plays sound when entering a map containing drops owned by self
-    if (mode == 0 || (owner == Stage::get().is_player(owner) && !playerdrop)) {
-        Sound(Sound::Name::DROP).play();
+    bool playsound =
+        mode == 0 || (owner == Stage::get().is_player(owner) && !playerdrop);
+
+    // Everything a mob leaves behind reaches the client before the packet that kills it, and the
+    // death itself waits for the blow that caused it, so the loot has to wait for that too. Drops
+    // the player itself threw (mode 2, and anything flagged as a player drop) still land right
+    // away.
+    int16_t delay = 0;
+
+    if (mode != 2 && !playerdrop) {
+        // The server echoes back the swing length of the blow that killed the mob and holds that
+        // mob's death for the same time, so this is the wait the loot has to match. For a death the
+        // server worked out on its own - a script, a dot - it says nothing here, and the local
+        // countdown for the blow still coming for that mob is the only thing to go on.
+        int32_t serverticks = serverdelay / Constants::TIMESTEP;
+        int32_t ticks
+            = std::max(serverticks,
+                       static_cast<int32_t>(
+                           Stage::get().get_mobs().pending_hit(dropper)));
+
+        delay = Constants::DROP_DELAY
+                + std::min(ticks,
+                           static_cast<int32_t>(INT16_MAX - Constants::DROP_DELAY));
     }
 
     Stage::get().get_drops().spawn({ oid,
@@ -537,7 +560,9 @@ void DropLootHandler::handle(InPacket &recv) const {
                                      dropto,
                                      pickuptype,
                                      mode,
-                                     playerdrop });
+                                     playerdrop,
+                                     playsound,
+                                     delay });
 }
 
 void RemoveLootHandler::handle(InPacket &recv) const {

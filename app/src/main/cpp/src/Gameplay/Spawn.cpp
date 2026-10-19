@@ -105,7 +105,9 @@ DropSpawn::DropSpawn(int32_t o,
                      Point<int16_t> d,
                      int8_t t,
                      int8_t m,
-                     bool pd) :
+                     bool pd,
+                     bool ps,
+                     int16_t dl) :
     oid_(o),
     id_(i),
     meso_(ms),
@@ -114,7 +116,9 @@ DropSpawn::DropSpawn(int32_t o,
     dest_(d),
     drop_type_(t),
     mode_(m),
-    player_drop_(pd) {}
+    player_drop_(pd),
+    play_sound_(ps),
+    delay_(dl) {}
 
 bool DropSpawn::is_meso() const {
     return meso_;
@@ -126,6 +130,19 @@ int32_t DropSpawn::get_itemid() const {
 
 int32_t DropSpawn::get_oid() const {
     return oid_;
+}
+
+bool DropSpawn::elapsed() {
+    if (delay_ > 0) {
+        --delay_;
+        return false;
+    }
+
+    return true;
+}
+
+bool DropSpawn::plays_sound() const {
+    return play_sound_;
 }
 
 std::unique_ptr<MapObject> DropSpawn::instantiate(const Animation &icon) const {

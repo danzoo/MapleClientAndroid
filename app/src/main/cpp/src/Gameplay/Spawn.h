@@ -98,13 +98,20 @@ public:
               Point<int16_t> destination,
               int8_t droptype,
               int8_t mode,
-              bool playerdrop);
+              bool playerdrop,
+              bool playsound,
+              int16_t delay);
 
     bool is_meso() const;
 
     int32_t get_itemid() const;
 
     int32_t get_oid() const;
+
+    // Count one timestep against the wait and report whether the drop may come out yet.
+    bool elapsed();
+
+    bool plays_sound() const;
 
     std::unique_ptr<MapObject> instantiate(const Animation &icon) const;
 
@@ -120,6 +127,8 @@ private:
     int8_t drop_type_;
     int8_t mode_;
     bool player_drop_;
+    bool play_sound_;
+    int16_t delay_;
 };
 
 class CharSpawn {

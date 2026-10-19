@@ -104,6 +104,13 @@ public:
     // Apply damage to the mob.
     void apply_damage(int32_t damage, bool toleft);
 
+    // Note that a blow the client has queued locally for this mob is due to land in the specified
+    // number of timesteps.
+    void expect_hit(int16_t ticks);
+
+    // How long until the next locally queued blow lands on this mob.
+    int16_t pending_hit() const;
+
     // Create a touch damage attack to the player
     MobAttack create_touch_attack() const;
 
@@ -205,6 +212,7 @@ private:
     bool can_move_;
     bool can_jump_;
     bool can_fly_;
+    bool can_hit_;
     bool is_boss_;
 
     EffectLayer effects_;
@@ -231,6 +239,11 @@ private:
     int8_t hp_percent_;
     bool fading_;
     bool fade_in_;
+    // Set when the kill arrived while the client still had a blow coming for this mob: the flinch
+    // waits for that blow, and the death animation waits for the flinch.
+    bool death_pending_;
+    int16_t death_wait_;
+    int16_t pending_hit_;
     Linear<float> opacity_;
 };
 }  // namespace ms

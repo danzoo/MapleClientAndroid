@@ -18,6 +18,7 @@
 #include <nlnx/node.hpp>
 #include <nlnx/nx.hpp>
 
+#include "../Audio/Audio.h"
 #include "../Constants.h"
 #include "../Data/ItemData.h"
 #include "Drop.h"
@@ -45,8 +46,21 @@ void MapDrops::draw(Layer::Id layer,
 }
 
 void MapDrops::update(const Physics &physics) {
-    for (; !spawns_.empty(); spawns_.pop()) {
-        const DropSpawn &spawn = spawns_.front();
+    for (size_t pending = spawns_.size(); pending > 0; --pending) {
+        DropSpawn spawn = std::move(spawns_.front());
+
+        spawns_.pop();
+
+        if (!spawn.elapsed()) {
+            // The mob it came out of is still dying. Put it back so that a drop with a shorter
+            // wait, or none at all, isn't held up behind this one.
+            spawns_.emplace(std::move(spawn));
+            continue;
+        }
+
+        if (spawn.plays_sound()) {
+            Sound(Sound::Name::DROP).play();
+        }
 
         int32_t oid = spawn.get_oid();
 

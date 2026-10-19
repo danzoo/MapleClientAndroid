@@ -25,6 +25,11 @@ namespace ms {
         VWIDTH = Constants::Constants::get().get_viewwidth();
         VHEIGHT = Constants::Constants::get().get_viewheight();
         SCREEN = Rectangle<int16_t>(0, VWIDTH, 0, VHEIGHT);
+
+        scene_fbo_ = 0;
+        scene_tex_ = 0;
+        scene_width_ = 0;
+        scene_height_ = 0;
     }
 
     Error GraphicsGL::init(GLFMDisplay *pApp) {
@@ -172,6 +177,84 @@ namespace ms {
             || uniform_screen_size_ == -1 || uniform_yoffset == -1) {
             return Error::Code::SHADER_VARS;
         }
+
+        // The scene is composited into an off-screen texture and only then stretched over the view
+        // box, which is where this program applies the filter.
+        const char *filterVertexSource =
+                "#version 320 es\n"
+                "precision highp float;"
+                "in vec2 coord;"
+                "out vec2 texpos;"
+
+                "void main(void)"
+                "{"
+                "   gl_Position = vec4(coord, 0.0, 1.0);"
+                "   texpos = coord * 0.5 + 0.5;"
+                "}";
+
+        const char *filterFragmentSource =
+                "#version 320 es\n"
+                "precision highp float;"
+                "in vec2 texpos;"
+                "out vec4 FragColor;"
+                "uniform sampler2D scene;"
+
+                "void main(void)"
+                "{"
+                "   FragColor = texture(scene, texpos);"
+                "}";
+
+        GLuint filterVertex = glCreateShader(GL_VERTEX_SHADER);
+        glShaderSource(filterVertex, 1, &filterVertexSource, nullptr);
+        glCompileShader(filterVertex);
+        glGetShaderiv(filterVertex, GL_COMPILE_STATUS, &success);
+
+        if (success != GL_TRUE) {
+            glGetShaderInfoLog(filterVertex, bufSize, nullptr, infoLog);
+
+            return Error(Error::Code::VERTEX_SHADER, infoLog);
+        }
+
+        GLuint filterFragment = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(filterFragment, 1, &filterFragmentSource, nullptr);
+        glCompileShader(filterFragment);
+        glGetShaderiv(filterFragment, GL_COMPILE_STATUS, &success);
+
+        if (success != GL_TRUE) {
+            glGetShaderInfoLog(filterFragment, bufSize, nullptr, infoLog);
+
+            return Error(Error::Code::FRAGMENT_SHADER, infoLog);
+        }
+
+        filter_program_ = glCreateProgram();
+        glAttachShader(filter_program_, filterVertex);
+        glAttachShader(filter_program_, filterFragment);
+        glLinkProgram(filter_program_);
+        glGetProgramiv(filter_program_, GL_LINK_STATUS, &success);
+
+        if (success != GL_TRUE) {
+            glGetProgramInfoLog(filter_program_, bufSize, nullptr, infoLog);
+
+            return Error(Error::Code::SHADER_PROGRAM_LINK, infoLog);
+        }
+
+        filter_attribute_coord_ = glGetAttribLocation(filter_program_, "coord");
+        filter_uniform_scene_ = glGetUniformLocation(filter_program_, "scene");
+
+        if (filter_attribute_coord_ == -1 || filter_uniform_scene_ == -1) {
+            return Error::Code::SHADER_VARS;
+        }
+
+        // One unit quad already covers clip space, so the scene only needs stretching to the view.
+        static const GLfloat FULLSCREEN[] = {
+                -1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 1.0f,
+                -1.0f, -1.0f, 1.0f, 1.0f, -1.0f, 1.0f
+        };
+
+        glGenBuffers(1, &filter_vbo_);
+        glBindBuffer(GL_ARRAY_BUFFER, filter_vbo_);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(FULLSCREEN), FULLSCREEN, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
 
         // Vertex Buffer Object
         glGenBuffers(1, &VBO_);
@@ -1288,6 +1371,96 @@ namespace ms {
 
         glUseProgram(shader_program_);
         glUniform2f(uniform_screen_size_, VWIDTH, VHEIGHT);
+    }
+
+    void GraphicsGL::begin_scene() {
+        if (scene_width_ != VWIDTH || scene_height_ != VHEIGHT) {
+            if (scene_fbo_) {
+                glDeleteFramebuffers(1, &scene_fbo_);
+                glDeleteTextures(1, &scene_tex_);
+            }
+
+            glGenTextures(1, &scene_tex_);
+            glBindTexture(GL_TEXTURE_2D, scene_tex_);
+            // The scene is magnified by a non-integer factor, so the blit interpolates between
+            // source texels instead of duplicating them.
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, VWIDTH, VHEIGHT, 0, GL_RGBA,
+                         GL_UNSIGNED_BYTE, nullptr);
+
+            glGenFramebuffers(1, &scene_fbo_);
+            glBindFramebuffer(GL_FRAMEBUFFER, scene_fbo_);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                                   scene_tex_, 0);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+            scene_width_ = VWIDTH;
+            scene_height_ = VHEIGHT;
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, scene_fbo_);
+        // The scene program maps its own coordinates onto whatever viewport is set, so the off-screen
+        // pass has to be told the scene's size rather than the view box it will eventually fill.
+        glViewport(0, 0, scene_width_, scene_height_);
+        glScissor(0, 0, scene_width_, scene_height_);
+
+        glUseProgram(shader_program_);
+        glBindTexture(GL_TEXTURE_2D, atlas_);
+
+        // There is no vertex array object backing either program, so the attribute pointers are
+        // global state that the filter pass left pointing at its own quad.
+        glBindBuffer(GL_ARRAY_BUFFER, VBO_);
+        glVertexAttribPointer(attribute_coord_,
+                              4,
+                              GL_SHORT,
+                              GL_FALSE,
+                              sizeof(Quad::Vertex),
+                              nullptr);
+        glVertexAttribPointer(attribute_color_,
+                              4,
+                              GL_FLOAT,
+                              GL_FALSE,
+                              sizeof(Quad::Vertex),
+                              (const void *) offsetof(Quad::Vertex, color));
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
+    void GraphicsGL::end_scene(int32_t box_x, int32_t box_y, int32_t box_width,
+                               int32_t box_height, int32_t surface_width,
+                               int32_t surface_height) {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        glDisable(GL_SCISSOR_TEST);
+        glViewport(0, 0, surface_width, surface_height);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glViewport(box_x, box_y, box_width, box_height);
+        glScissor(box_x, box_y, box_width, box_height);
+        glEnable(GL_SCISSOR_TEST);
+
+        // The scene is already blended into itself; blending it again over the black bars would
+        // only wash out whatever alpha the last sprite left behind.
+        glDisable(GL_BLEND);
+        glUseProgram(filter_program_);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, scene_tex_);
+        glUniform1i(filter_uniform_scene_, 0);
+
+        glBindBuffer(GL_ARRAY_BUFFER, filter_vbo_);
+        glEnableVertexAttribArray(filter_attribute_coord_);
+        glVertexAttribPointer(filter_attribute_coord_, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glDisableVertexAttribArray(filter_attribute_coord_);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glEnable(GL_BLEND);
+
+        // Bitmaps get packed into the atlas from Game::update(), which runs outside this frame, so
+        // leaving the scene texture bound would upload them into it instead.
+        glBindTexture(GL_TEXTURE_2D, atlas_);
     }
 
     void GraphicsGL::flush(float opacity) {
