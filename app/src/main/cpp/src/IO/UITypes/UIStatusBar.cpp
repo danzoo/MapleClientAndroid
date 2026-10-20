@@ -837,37 +837,31 @@ bool UIStatusBar::is_in_range(Point<int16_t> cursorpos) const {
         pos = Point<int16_t>(position_x_, position_y_);
         bounds = Rectangle<int16_t>(pos, pos + dimension_);
     } else {
-        uint8_t button_count;
-        int16_t pos_y_adj;
+        uint8_t button_count = 0;
 
         if (character_active_) {
             pos = character_pos_;
             button_count = 5;
-            pos_y_adj = 248;
         } else if (community_active_) {
             pos = community_pos_;
             button_count = 4;
-            pos_y_adj = 301;
         } else if (event_active_) {
             pos = event_pos_;
             button_count = 2;
-            pos_y_adj = 417;
         } else if (menu_active_) {
             pos = menu_pos_;
             button_count = 11;
-            pos_y_adj = -90;
         } else if (setting_active_) {
             pos = setting_pos_;
             button_count = 5;
-            pos_y_adj = 248;
         }
 
-        // Measured against the interface's own screen, whose height the author's 600 was a
-        // fraction of when the interface and the view were the same size.
-        pos_y_adj += UIHEIGHT_ - 480;
-
+        // The submenu is drawn at position_ + anchor + quickslot offset (see draw()), so the hit
+        // area has to use the same base. The old abs(anchor.y()) + magic-constant formula placed
+        // the box ~112px too low, leaving the top entries (stat/skill/info) outside it and dead
+        // to the touch.
         Point<int16_t> pos_adj = get_quickslot_pos();
-        pos = Point<int16_t>(pos.x(), std::abs(pos.y()) + pos_y_adj) + pos_adj;
+        pos = position_ + pos + pos_adj;
 
         uint16_t end_y = std::floor(28.2 * button_count);
 

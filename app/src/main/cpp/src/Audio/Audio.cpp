@@ -47,9 +47,9 @@ Sound::Sound(const nl::node &src) : id_(add_sound(src)) {}
 
 Sound::Sound() : id_(0) {}
 
-void Sound::play() const {
+void Sound::play(float volume) const {
     if (id_ > 0) {
-        play(id_);
+        play(id_, volume);
     }
 }
 
@@ -109,13 +109,18 @@ bool Sound::set_sfxvolume(uint8_t vol) {
     return BASS_SetConfig(BASS_CONFIG_GVOL_SAMPLE, vol * 100) == TRUE;
 }
 
-void Sound::play(size_t id) {
+void Sound::play(size_t id, float volume) {
     if (!samples_.count(id)) {
         return;
     }
 
     auto channel =
         BASS_SampleGetChannel(static_cast<HSAMPLE>(samples_.at(id)), false);
+
+    if (volume < 1.0f) {
+        BASS_ChannelSetAttribute(channel, BASS_ATTRIB_VOL, volume);
+    }
+
     BASS_ChannelPlay(channel, true);
 }
 

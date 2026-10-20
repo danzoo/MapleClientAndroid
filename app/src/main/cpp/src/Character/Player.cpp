@@ -390,7 +390,7 @@ void Player::change_level(uint16_t level) {
     uint16_t oldlevel = get_level();
 
     if (level > oldlevel) {
-        Sound(Sound::Name::LEVEL_UP).play();
+        Sound(Sound::Name::LEVEL_UP).play(0.5f);
         show_effect_id(CharEffect::Id::LEVEL_UP);
     }
 

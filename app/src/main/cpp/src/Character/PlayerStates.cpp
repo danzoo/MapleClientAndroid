@@ -173,20 +173,16 @@ void PlayerFallState::send_action(Player &player,
 }
 
 void PlayerFallState::update(Player &player) const {
-    auto &hspeed = player.get_phobj().hspeed;
-
-    if (player.is_key_down(KeyAction::Id::LEFT) && hspeed > 0.0) {
-        hspeed -= 0.025;
-
-        if (hspeed < 0.0) {
-            hspeed = 0.0;
-        }
-    } else if (player.is_key_down(KeyAction::Id::RIGHT) && hspeed < 0.0) {
-        hspeed += 0.025;
-
-        if (hspeed > 0.0) {
-            hspeed = 0.0;
-        }
+    // While airborne the horizontal force is discarded by move_normal, but on the landing frame the
+    // character is still in FALL when physics runs, so ground friction bleeds speed with no walk
+    // force to offset it. Over repeated jump-while-walking cycles that accumulates into a visible
+    // slowdown. Re-applying the walk force here cancels the friction on the touch-down frame, so
+    // jump-moving holds the same steady speed as walking.
+    if (!player.is_attacking()
+        && (player.is_key_down(KeyAction::Id::LEFT)
+            || player.is_key_down(KeyAction::Id::RIGHT))) {
+        player.get_phobj().hforce +=
+            player.getflip() ? player.get_walkforce() : -player.get_walkforce();
     }
 }
 

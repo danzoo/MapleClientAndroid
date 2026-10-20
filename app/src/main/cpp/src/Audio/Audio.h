@@ -62,7 +62,7 @@ public:
     Sound(const nl::node &src);
     Sound();
 
-    void play() const;
+    void play(float volume = 1.0f) const;
 
     static Error init();
     static void close();
@@ -71,7 +71,7 @@ public:
 private:
     size_t id_;
 
-    static void play(size_t id);
+    static void play(size_t id, float volume);
 
     static size_t add_sound(const nl::node &src);
     static void add_sound(Name name, const nl::node &src);
