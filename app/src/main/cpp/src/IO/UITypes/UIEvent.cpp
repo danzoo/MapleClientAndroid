@@ -178,6 +178,12 @@ void UIEvent::remove_cursor() {
     slider_.remove_cursor();
 }
 
+void UIEvent::send_scroll(double yoffset) {
+    if (slider_.isenabled()) {
+        slider_.send_scroll(yoffset);
+    }
+}
+
 Cursor::State UIEvent::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     Point<int16_t> cursoroffset = cursorpos - position_;
 

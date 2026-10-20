@@ -462,6 +462,12 @@ void UISkillBook::remove_cursor() {
     slider_.remove_cursor();
 }
 
+void UISkillBook::send_scroll(double yoffset) {
+    if (slider_.isenabled()) {
+        slider_.send_scroll(yoffset);
+    }
+}
+
 Cursor::State UISkillBook::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     Cursor::State dstate = UIDragElement::send_cursor(clicked, cursorpos);
 

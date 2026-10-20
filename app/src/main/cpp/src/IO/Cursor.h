@@ -15,11 +15,11 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
-#include "../Graphics/Animation.h"
-#include "../Template/EnumMap.h"
+#include "../Template/Point.h"
 
 namespace ms {
-// Class that represents the mouse cursor.
+// The mouse cursor. Only its position and state are kept: the interface is driven by touch on
+// this platform, so there is no pointer sprite to draw.
 class Cursor {
 public:
     // Maple-cursorstates, linked to the cursor's animation.
@@ -49,12 +49,6 @@ public:
 
     Cursor();
 
-    void init();
-
-    void draw(float alpha) const;
-
-    void update();
-
     void set_state(State state);
 
     void set_position(Point<int16_t> position);
@@ -64,12 +58,7 @@ public:
     Point<int16_t> get_position() const;
 
 private:
-    EnumMap<State, Animation> animations_;
-
     State state_;
     Point<int16_t> position_;
-    int32_t hide_counter_;
-
-    static constexpr int64_t HIDE_TIME = 15'000;
 };
 }  // namespace ms

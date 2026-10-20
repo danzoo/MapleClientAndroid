@@ -374,8 +374,16 @@ void UIItemInventory::doubleclick(Point<int16_t> cursorpos) {
         if (int32_t item_id = inventory_.get_item_id(tab_, slot)) {
             switch (tab_) {
                 case InventoryType::Id::EQUIP:
+                    // Double-tapping an equip either wears it or pops a "can't equip" dialog;
+                    // either way the hover preview that led here must go, or it hangs over the
+                    // result (and over the dialog). ignore_tooltip_ also swallows the one hover
+                    // the touch layer sends on release, so the preview can't pop straight back
+                    // when the item stays in its slot (the can't-equip case).
+                    clear_tooltip();
+                    ignore_tooltip_ = true;
                     if (can_wear_equip(slot)) {
                         fn_equip_item(slot, inventory_.find_equipslot(item_id));
+                        Sound(Sound::Name::DRAG_END).play();
                     }
                     break;
                 case InventoryType::Id::USE: fn_use_item(slot, item_id); break;
@@ -406,6 +414,12 @@ bool UIItemInventory::send_icon(const Icon &icon, Point<int16_t> cursorpos) {
     }
 
     return true;
+}
+
+void UIItemInventory::send_scroll(double yoffset) {
+    if (!full_enabled_ && slider_.isenabled()) {
+        slider_.send_scroll(yoffset);
+    }
 }
 
 Cursor::State UIItemInventory::send_cursor(bool pressed,

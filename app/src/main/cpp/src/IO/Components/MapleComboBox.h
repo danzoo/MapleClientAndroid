@@ -19,6 +19,7 @@
 #include <memory>
 
 #include "../Graphics/Geometry.h"
+#include "../Graphics/Texture.h"
 #include "Button.h"
 
 namespace ms {

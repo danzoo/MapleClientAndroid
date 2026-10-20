@@ -1585,6 +1585,12 @@ void UITermsOfService::draw(float inter) const {
     slider_.draw(position_);
 }
 
+void UITermsOfService::send_scroll(double yoffset) {
+    if (slider_.isenabled()) {
+        slider_.send_scroll(yoffset);
+    }
+}
+
 Cursor::State UITermsOfService::send_cursor(bool clicked,
                                             Point<int16_t> cursorpos) {
     Point<int16_t> cursoroffset = cursorpos - position_;

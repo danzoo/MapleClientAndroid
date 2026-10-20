@@ -56,7 +56,6 @@ namespace ms {
     }
 
     void UI::init() {
-        cursor_.init();
         change_state(State::LOGIN);
     }
 
@@ -67,14 +66,12 @@ namespace ms {
         GraphicsGL::get().begin_ui();
         state_->draw(alpha, cursor_.get_position());
         scrolling_notice_.draw(alpha);
-        cursor_.draw(alpha);
         GraphicsGL::get().end_ui();
     }
 
     void UI::update() {
         state_->update();
         scrolling_notice_.update();
-        cursor_.update();
     }
 
     void UI::enable() {
@@ -172,6 +169,18 @@ namespace ms {
 
     void UI::send_cursor(Point<int16_t> pos) {
         send_cursor(pos, cursor_.get_state());
+    }
+
+    Point<int16_t> UI::get_cursor_position() const {
+        return cursor_.get_position();
+    }
+
+    Cursor::State UI::get_cursor_state() const {
+        return cursor_.get_state();
+    }
+
+    bool UI::cursor_in_drag_area() {
+        return state_->cursor_in_drag_area(cursor_.get_position());
     }
 
     void UI::rightclick() {
@@ -430,6 +439,10 @@ namespace ms {
 
     void UI::clear_tooltip(Tooltip::Parent parent) {
         state_->clear_tooltip(parent);
+    }
+
+    void UI::clear_tooltip() {
+        state_->clear_tooltip();
     }
 
     void UI::show_equip(Tooltip::Parent parent, int16_t slot) {

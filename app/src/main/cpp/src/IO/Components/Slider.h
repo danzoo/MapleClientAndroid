@@ -17,6 +17,7 @@
 
 #include <functional>
 
+#include "../../Graphics/Texture.h"
 #include "TwoSpriteButton.h"
 
 namespace ms {

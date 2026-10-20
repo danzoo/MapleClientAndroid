@@ -349,15 +349,19 @@ namespace ms {
         if (!clicked) {
             dragged_ = nullptr;
 
-            if (auto *front = get_front(cursorpos)) {
-                UIElement::Type front_type = front->get_type();
+            auto *front = get_front(cursorpos);
+            UIElement::Type front_type =
+                    front ? front->get_type() : UIElement::Type::NONE;
 
-                if (tooltip_parent_ != UIElement::Type::NONE) {
-                    if (front_type != tooltip_parent_) {
-                        clear_tooltip(tooltip_parent_);
-                    }
-                }
+            // A tooltip must vanish as soon as the cursor is no longer over the window that
+            // owns it — including when the cursor moves out to empty map space (front == null),
+            // which is how a tap on the map dismisses an item preview.
+            if (tooltip_parent_ != UIElement::Type::NONE
+                && front_type != tooltip_parent_) {
+                clear_tooltip(tooltip_parent_);
+            }
 
+            if (front) {
                 remove_cursor(front_type);
                 return front->send_cursor(clicked, cursorpos);
             }
@@ -400,13 +404,18 @@ namespace ms {
         return Stage::get().send_cursor(clicked, cursorpos);
     }
 
-    void UIStateGame::send_scroll(double yoffset) {
-        for (auto &type: element_order_) {
-            auto &element = elements_[type];
+    bool UIStateGame::cursor_in_drag_area(Point<int16_t> pos) {
+        if (auto *front = get_front(pos)) {
+            return front->in_drag_range(pos);
+        }
 
-            if (element && element->is_active()) {
-                element->send_scroll(yoffset);
-            }
+        return false;
+    }
+
+    void UIStateGame::send_scroll(double yoffset) {
+        // A swipe belongs to the window under the finger, not to every open window at once.
+        if (auto *front = get_front(UI::get().get_cursor_position())) {
+            front->send_scroll(yoffset);
         }
     }
 
@@ -427,6 +436,10 @@ namespace ms {
             tooltip_ = {};
             tooltip_parent_ = Tooltip::Parent::NONE;
         }
+    }
+
+    void UIStateGame::clear_tooltip() {
+        clear_tooltip(tooltip_parent_);
     }
 
     void UIStateGame::show_equip(Tooltip::Parent parent, int16_t slot) {

@@ -60,6 +60,14 @@ namespace ms {
 
         void send_cursor(Point<int16_t> cursorpos, Cursor::State cursorstate);
 
+        Point<int16_t> get_cursor_position() const;
+
+        Cursor::State get_cursor_state() const;
+
+        // Whether the cursor sits on a window's title strip, i.e. a touch down here should move
+        // the window instead of clicking.
+        bool cursor_in_drag_area();
+
         void send_focus(bool focused);
 
         void send_scroll(double yoffset);
@@ -85,6 +93,9 @@ namespace ms {
         void add_keymapping(uint8_t no, uint8_t type, int32_t action);
 
         void clear_tooltip(Tooltip::Parent parent);
+
+        // Clear whichever tooltip is currently raised, whatever its parent.
+        void clear_tooltip();
 
         void show_equip(Tooltip::Parent parent, int16_t slot);
 

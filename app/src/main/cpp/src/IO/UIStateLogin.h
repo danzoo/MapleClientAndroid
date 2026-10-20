@@ -42,13 +42,17 @@ public:
 
     Cursor::State send_cursor(Cursor::State mst, Point<int16_t> pos) override;
 
-    void send_scroll(double) override {}
+    bool cursor_in_drag_area(Point<int16_t> pos) override;
+
+    void send_scroll(double yoffset) override;
 
     void send_close() override;
 
     void drag_icon(Icon *) override {}
 
     void clear_tooltip(Tooltip::Parent parent) override;
+
+    void clear_tooltip() override;
 
     void show_equip(Tooltip::Parent, int16_t) override {}
 
