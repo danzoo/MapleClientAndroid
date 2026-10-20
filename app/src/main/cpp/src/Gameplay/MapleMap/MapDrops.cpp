@@ -27,7 +27,7 @@
 #include "OptionalCreator.h"
 
 namespace ms {
-MapDrops::MapDrops() : loot_enabled_(false) {}
+MapDrops::MapDrops() : loot_enabled_(false), drop_sound_cooldown_(0) {}
 
 void MapDrops::init() {
     nl::node src = nl::nx::item["Special"]["0900.img"];
@@ -46,10 +46,16 @@ void MapDrops::draw(Layer::Id layer,
 }
 
 void MapDrops::update(const Physics &physics) {
-    // A mob's whole loot burst shares one delay, so every item elapses on the same frame. Playing
-    // the drop sound per item stacked them into a loud repeated clatter; one clatter per frame is
-    // what the burst should sound like.
-    bool played_drop_sound = false;
+    // A mob's loot burst does not always land on one frame: each item is its own packet, and the
+    // per-item server delay or the frame the packet arrives on can shift its countdown by a tick
+    // or two, so the items elapse across a few consecutive frames. Gating the clatter on a short
+    // cooldown instead of "once per frame" collapses the whole burst into a single sound, while a
+    // later, separate kill still clatters on its own.
+    constexpr int16_t DROP_SOUND_COOLDOWN = 15;
+
+    if (drop_sound_cooldown_ > 0) {
+        --drop_sound_cooldown_;
+    }
 
     for (size_t pending = spawns_.size(); pending > 0; --pending) {
         DropSpawn spawn = std::move(spawns_.front());
@@ -63,9 +69,9 @@ void MapDrops::update(const Physics &physics) {
             continue;
         }
 
-        if (spawn.plays_sound() && !played_drop_sound) {
+        if (spawn.plays_sound() && drop_sound_cooldown_ == 0) {
             Sound(Sound::Name::DROP).play();
-            played_drop_sound = true;
+            drop_sound_cooldown_ = DROP_SOUND_COOLDOWN;
         }
 
         int32_t oid = spawn.get_oid();

@@ -94,7 +94,9 @@ void Textfield::set_state(State st) {
         }
 
         if (state_ == State::FOCUSED) {
-            glfmSetKeyboardVisible(Window::get().get_display(), true);
+            // The soft keyboard is raised only from send_cursor, i.e. on an explicit tap of the
+            // field. Windows focus their fields programmatically on open and when tabbing between
+            // account/password, and doing so here made the Android keyboard pop up unprompted.
             UI::get().focus_textfield(this);
         }
     }
@@ -219,11 +221,13 @@ Cursor::State Textfield::send_cursor(Point<int16_t> cursorpos, bool clicked) {
         if (clicked) {
             if (state_ == State::NORMAL) {
                 set_state(State::FOCUSED);
-            } else {
-                // Dismissing the keyboard is a system gesture that leaves this field focused, so
-                // tapping it again never goes through set_state() and the keyboard stayed away.
-                glfmSetKeyboardVisible(Window::get().get_display(), true);
             }
+
+            // A tap is the only gesture that raises the soft keyboard. When the field is already
+            // focused - dismissing the keyboard is a system gesture that keeps the focus, so
+            // set_state() never runs again - this re-raises it on the next tap.
+            glfmSetKeyboardVisible(Window::get().get_display(), true);
+
             return Cursor::State::CLICKING;
         }
         return Cursor::State::CAN_CLICK;

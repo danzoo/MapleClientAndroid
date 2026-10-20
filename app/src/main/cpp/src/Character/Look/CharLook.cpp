@@ -489,6 +489,12 @@ namespace ms {
     }
 
     bool CharLook::update(uint16_t timestep) {
+        // The alerted (combat) timer runs on real time and has to tick every frame. It used to sit
+        // below the timestep==0 early-return, so a character hanging still on a rope or ladder -
+        // whose stance speed comes from vspeed and is zero there - never decremented it. The combat
+        // state, and the block it puts on changing equipment, then stayed on permanently.
+        alerted_.update();
+
         if (timestep == 0) {
             stance_.normalize();
             st_frame_.normalize();
@@ -496,8 +502,6 @@ namespace ms {
             exp_frame_.normalize();
             return false;
         }
-
-        alerted_.update();
 
         bool aniend = false;
 

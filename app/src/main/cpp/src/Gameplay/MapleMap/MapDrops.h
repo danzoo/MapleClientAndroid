@@ -61,6 +61,10 @@ private:
     std::array<Animation, MesoIcon::NUM_ICONS> meso_icons_;
     bool loot_enabled_;
 
+    // Counts down the window during which a further drop clatter is suppressed, so one mob's loot
+    // burst - whose items can elapse a few ticks apart - sounds once instead of once per item.
+    int16_t drop_sound_cooldown_;
+
     std::queue<DropSpawn> spawns_;
 };
 }  // namespace ms

@@ -96,6 +96,13 @@ bool Char::update(const Physics &physics, float speed) {
     invincible_.update();
     iron_body_.update();
 
+    // Hold the hit expression (the F1 face) for the whole invincibility window. CharLook reverts a
+    // non-default expression after one animation cycle, so re-applying it every frame keeps the
+    // face visible while the character flashes. Only the player sets invincible_, via show_damage.
+    if (invincible_) {
+        look_.set_expression(Expression::Id::HIT);
+    }
+
     for (auto &pet : pets_) {
         if (pet.get_itemid()) {
             switch (state_) {
