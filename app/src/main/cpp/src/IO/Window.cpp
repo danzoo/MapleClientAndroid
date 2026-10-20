@@ -102,38 +102,225 @@ namespace ms {
 
     bool sent = false;
 
+    // Touch is the only pointer this device has. A single finger swiping vertically scrolls the
+    // window under it, row by row; a finger put down on a window's title strip drags that window
+    // right away; holding still for ~500 ms picks up an icon or grabs the slider thumb, exactly as
+    // before. Scroll-vs-hold is decided by whichever threshold the finger crosses first.
+    int active_touches = 0;
+    int touch_mode = 0;  // 0 undecided, 1 hold-grab/click, 2 scroll, 3 window drag, 4 icon already grabbed
+    double touch_start_x = 0.0;
+    double touch_start_y = 0.0;
+    double scroll_last_y = 0.0;
+    double scroll_acc = 0.0;
+
+    // Surface pixels one finger travels per row scrolled. Rows are the smallest unit there is,
+    // so a swipe never leaves a list between two rows.
+    constexpr double SCROLL_ROW_PX = 60.0;
+
+    // Surface pixels of vertical travel that commit an undecided finger to scrolling instead of
+    // waiting out the hold-to-drag timeout.
+    constexpr double SCROLL_SLOP_PX = 12.0;
+
     void joystick_axis_callback(GLFMDisplay *display, double x, double y) {
         Gamepad::get().set_stick(x, y);
     }
 
     bool mousekey_callback(GLFMDisplay *display, int touch, GLFMTouchPhase phase,
                            double x, double y) {
-        Window::get().move_cursor(x, y);
+        // While a scroll gesture owns the finger the cursor is frozen where scrolling began.
+        // send_scroll routes to the window under the cursor, so freezing it keeps that same
+        // window scrolling no matter where the finger drifts, and skipping the hover pass stops
+        // new item previews from popping up as the finger travels over them.
+        if (touch_mode != 2) {
+            Window::get().move_cursor(x, y);
+        }
         switch (phase) {
             case GLFMTouchPhaseHover:
                 break;
             case GLFMTouchPhaseBegan: {
                 click_start_time = std::chrono::steady_clock::now();
-                UI::get().send_cursor(false);
-                break;
-            }
-            case GLFMTouchPhaseMoved: {
-                auto diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::steady_clock::now() - click_start_time).count();
-                if (diff_ms > 500) {
-                    if (!sent)
+                active_touches++;
+
+                if (active_touches == 1) {
+                    touch_start_x = x;
+                    touch_start_y = y;
+                    scroll_last_y = y;
+                    scroll_acc = 0.0;
+
+                    if (UI::get().get_cursor_state() == Cursor::State::GRABBING) {
+                        // An icon is already picked up from a previous gesture. This finger
+                        // drags it around; a single stationary tap on release drops it. Do not
+                        // press here — a press would drop the icon immediately.
+                        touch_mode = 4;
+                    } else if (UI::get().cursor_in_drag_area()) {
+                        touch_mode = 3;  // title strip: drag the window immediately
                         UI::get().send_cursor(true);
+                    } else {
+                        touch_mode = 0;  // wait to see if this is a tap, a swipe or a hold
+                        UI::get().send_cursor(false);
+                    }
                 } else {
+                    // Scrolling is single-finger only; a second finger cancels the gesture.
+                    touch_mode = 0;
                     UI::get().send_cursor(false);
                 }
                 break;
             }
-            case GLFMTouchPhaseEnded: {
-                if (sent)
-                    sent = false;
-                else {
-                    UI::get().send_cursor(true);
+            case GLFMTouchPhaseMoved: {
+                if (active_touches != 1) {
+                    break;
                 }
+
+                if (touch_mode == 3) {
+                    UI::get().send_cursor(true);
+                    break;
+                }
+
+                if (touch_mode == 4) {
+                    // Dragging an already-grabbed icon. move_cursor at the top of this event
+                    // re-sends the persisted GRABBING state, so the icon follows the finger.
+                    break;
+                }
+
+                if (touch_mode == 1) {
+                    // The grab was already sent once on the hold transition below. move_cursor at
+                    // the top of this event keeps the drag alive through the persisted cursor
+                    // state (GRABBING for an icon, VSCROLL_IDLE for the slider thumb), so sending
+                    // another press here would re-click and drop-then-regrab every frame.
+                    break;
+                }
+
+                if (touch_mode == 2) {
+                    scroll_acc += y - scroll_last_y;
+                    scroll_last_y = y;
+
+                    while (scroll_acc >= SCROLL_ROW_PX) {
+                        scroll_acc -= SCROLL_ROW_PX;
+                        UI::get().send_scroll(1.0);
+                    }
+
+                    while (scroll_acc <= -SCROLL_ROW_PX) {
+                        scroll_acc += SCROLL_ROW_PX;
+                        UI::get().send_scroll(-1.0);
+                    }
+                    break;
+                }
+
+                // touch_mode == 0: still undecided between a tap, a swipe and a hold.
+                double dx = x - touch_start_x;
+                double dy = y - touch_start_y;
+                double adx = dx < 0.0 ? -dx : dx;
+                double ady = dy < 0.0 ? -dy : dy;
+
+                if (ady > SCROLL_SLOP_PX && ady > adx) {
+                    touch_mode = 2;  // a vertical swipe scrolls
+                    scroll_last_y = y;
+                    scroll_acc = 0.0;
+                    // Committing to a scroll dismisses any item preview the hover pass raised on
+                    // the way here; the cursor is frozen from now on, so none reappears.
+                    UI::get().clear_tooltip();
+                    break;
+                }
+
+                auto diff_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - click_start_time).count();
+                if (diff_ms > 500) {
+                    touch_mode = 1;  // held still: pick up the icon / grab the slider thumb once
+                    UI::get().send_cursor(true);
+                    break;
+                }
+
+                UI::get().send_cursor(false);  // still hovering: keeps the item tooltip alive
+                break;
+            }
+            case GLFMTouchPhaseEnded:
+            case GLFMTouchPhaseCancelled: {
+                if (active_touches > 0) {
+                    active_touches--;
+                }
+
+                if (touch_mode == 2) {
+                    touch_mode = 0;
+                    break;  // a finger that was scrolling never taps on the way up
+                }
+
+                if (touch_mode == 3) {
+                    UI::get().send_cursor(false);
+                    touch_mode = 0;
+                    break;  // the drag already moved the window; no tap on top of it
+                }
+
+                bool cancelled = phase == GLFMTouchPhaseCancelled;
+
+                auto down_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - click_start_time).count();
+                double adx = std::fabs(x - touch_start_x);
+                double ady = std::fabs(y - touch_start_y);
+                bool stationary = (adx > ady ? adx : ady) <= SCROLL_SLOP_PX;
+
+                if (cancelled) {
+                    touch_mode = 0;
+                    break;  // a cancelled finger neither taps nor drops anything
+                }
+
+                if (touch_mode == 4) {
+                    // This finger went down on an already-grabbed icon.
+                    touch_mode = 0;
+                    if (stationary) {
+                        // A single tap while holding: drop the icon here.
+                        UI::get().send_cursor(true);
+                        UI::get().send_cursor(false);
+                    }
+                    // Otherwise it was a drag: the icon stays grabbed and follows the next finger.
+                    break;
+                }
+
+                if (touch_mode == 1) {
+                    // Grabbed during this gesture by holding past the timeout.
+                    touch_mode = 0;
+                    if (UI::get().get_cursor_state() == Cursor::State::GRABBING) {
+                        if (stationary) {
+                            // Held the item without dragging it: keep it grabbed (sticky). A
+                            // later single tap (touch_mode 4) drops it. Leaving the state
+                            // GRABBING is what makes the next Began see it as already picked up.
+                            break;
+                        }
+                        // Held AND dragged to a new spot: drop it here — the classic
+                        // grab-drag-release. send_cursor(true) toggles UIStateGame's
+                        // if(dragged_icon_) drop branch at the release position.
+                        UI::get().send_cursor(true);
+                        UI::get().send_cursor(false);
+                        break;
+                    }
+                    // A slider thumb or a plain held button: release it as before.
+                    UI::get().send_cursor(true);
+                } else {
+                    // touch_mode == 0: never committed to a scroll, a window drag or a hold-move.
+                    touch_mode = 0;
+
+                    if (stationary && down_ms > 500
+                        && UI::get().get_cursor_state() == Cursor::State::CAN_GRAB) {
+                        // A long press that never moved (no Moved events to trip the timeout
+                        // above): pick the item up now and keep holding it, same sticky grab.
+                        UI::get().send_cursor(true);
+                        break;
+                    }
+
+                    // A quick tap. Over an item it must only preview it — the tooltip is already
+                    // up from the hover phase — so skip the press that would grab the icon. Over
+                    // anything else (a button, say) the tap is a normal click.
+                    Cursor::State st = UI::get().get_cursor_state();
+                    bool over_item = st == Cursor::State::CAN_GRAB
+                                     || st == Cursor::State::GRABBING;
+
+                    if (!over_item) {
+                        if (sent)
+                            sent = false;
+                        else
+                            UI::get().send_cursor(true);
+                    }
+                }
+
                 auto diff_ms = ContinuousTimer::get().stop(start) / 1000;
                 start = ContinuousTimer::get().start();
 
@@ -143,8 +330,6 @@ namespace ms {
                 UI::get().send_cursor(false);
                 break;
             }
-            case GLFMTouchPhaseCancelled:
-                break;
         }
 
         return true;

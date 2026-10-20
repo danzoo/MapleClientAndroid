@@ -106,6 +106,20 @@ Cursor::State UIStateLogin::send_cursor(Cursor::State cursorstate,
     return Cursor::State::IDLE;
 }
 
+bool UIStateLogin::cursor_in_drag_area(Point<int16_t> pos) {
+    if (auto *front = get_front(pos)) {
+        return front->in_drag_range(pos);
+    }
+
+    return false;
+}
+
+void UIStateLogin::send_scroll(double yoffset) {
+    if (auto *front = get_front(UI::get().get_cursor_position())) {
+        front->send_scroll(yoffset);
+    }
+}
+
 void UIStateLogin::send_close() {
     auto logo = UI::get().get_element<UILogo>();
     auto login = UI::get().get_element<UILogin>();
@@ -125,6 +139,10 @@ void UIStateLogin::clear_tooltip(Tooltip::Parent parent) {
         tooltip_ = {};
         tooltip_parent_ = Tooltip::Parent::NONE;
     }
+}
+
+void UIStateLogin::clear_tooltip() {
+    clear_tooltip(tooltip_parent_);
 }
 
 void UIStateLogin::show_text(Tooltip::Parent parent, std::string text) {

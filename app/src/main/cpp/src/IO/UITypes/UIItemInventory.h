@@ -42,6 +42,8 @@ public:
 
     Cursor::State send_cursor(bool pressed, Point<int16_t> position) override;
 
+    void send_scroll(double yoffset) override;
+
     void send_key(int32_t keycode, bool pressed, bool escape) override;
 
     UIElement::Type get_type() const override;

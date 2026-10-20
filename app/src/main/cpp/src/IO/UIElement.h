@@ -104,6 +104,12 @@ public:
 
     virtual bool is_in_range(Point<int16_t> cursorpos) const;
 
+    // Whether a press at this spot grabs the window itself for moving, i.e. the title strip of a
+    // draggable window. Touch uses it to start dragging on finger-down instead of after a hold.
+    virtual bool in_drag_range(Point<int16_t> cursorpos) const {
+        return false;
+    }
+
     virtual void remove_cursor();
 
     virtual Cursor::State send_cursor(bool clicked, Point<int16_t> cursorpos);

@@ -15,57 +15,17 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Cursor.h"
 
-#include <nlnx/nx.hpp>
-
-#include "../Constants.h"
-
 namespace ms {
 Cursor::Cursor() {
     state_ = Cursor::State::IDLE;
-    hide_counter_ = 0;
-}
-
-void Cursor::init() {
-    nl::node src = nl::nx::ui["Basic.img"]["Cursor"];
-
-    for (auto iter : animations_) {
-        iter.second = src[iter.first];
-    }
-}
-
-void Cursor::draw(float alpha) const {
-    constexpr int64_t HIDE_AFTER = HIDE_TIME / Constants::TIMESTEP;
-
-    if (hide_counter_ < HIDE_AFTER) {
-        animations_[state_].draw(position_, alpha);
-    }
-}
-
-void Cursor::update() {
-    animations_[state_].update();
-
-    switch (state_) {
-        case Cursor::State::CAN_CLICK:
-        case Cursor::State::CAN_CLICK2:
-        case Cursor::State::CAN_GRAB:
-        case Cursor::State::CLICKING:
-        case Cursor::State::GRABBING: hide_counter_ = 0; break;
-        default: hide_counter_++; break;
-    }
 }
 
 void Cursor::set_state(State s) {
-    if (state_ != s) {
-        state_ = s;
-
-        animations_[state_].reset();
-        hide_counter_ = 0;
-    }
+    state_ = s;
 }
 
 void Cursor::set_position(Point<int16_t> pos) {
     position_ = pos;
-    hide_counter_ = 0;
 }
 
 Cursor::State Cursor::get_state() const {

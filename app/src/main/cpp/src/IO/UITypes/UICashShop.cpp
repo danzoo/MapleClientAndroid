@@ -415,6 +415,12 @@ Button::State UICashShop::button_pressed(uint16_t buttonid) {
     return Button::State::DISABLED;
 }
 
+void UICashShop::send_scroll(double yoffset) {
+    if (list_slider_.isenabled()) {
+        list_slider_.send_scroll(yoffset);
+    }
+}
+
 Cursor::State UICashShop::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     Point<int16_t> cursor_relative = cursorpos - position_;
 

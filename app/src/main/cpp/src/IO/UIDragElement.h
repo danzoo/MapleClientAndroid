@@ -34,6 +34,10 @@ public:
         }
     }
 
+    bool in_drag_range(Point<int16_t> cursorpos) const override {
+        return is_in_drag_range(cursorpos);
+    }
+
     Cursor::State send_cursor(bool clicked, Point<int16_t> cursorpos) override {
         if (clicked) {
             if (dragged_) {

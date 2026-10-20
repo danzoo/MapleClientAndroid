@@ -46,6 +46,11 @@ void MapDrops::draw(Layer::Id layer,
 }
 
 void MapDrops::update(const Physics &physics) {
+    // A mob's whole loot burst shares one delay, so every item elapses on the same frame. Playing
+    // the drop sound per item stacked them into a loud repeated clatter; one clatter per frame is
+    // what the burst should sound like.
+    bool played_drop_sound = false;
+
     for (size_t pending = spawns_.size(); pending > 0; --pending) {
         DropSpawn spawn = std::move(spawns_.front());
 
@@ -58,8 +63,9 @@ void MapDrops::update(const Physics &physics) {
             continue;
         }
 
-        if (spawn.plays_sound()) {
+        if (spawn.plays_sound() && !played_drop_sound) {
             Sound(Sound::Name::DROP).play();
+            played_drop_sound = true;
         }
 
         int32_t oid = spawn.get_oid();

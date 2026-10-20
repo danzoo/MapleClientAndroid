@@ -164,6 +164,13 @@ Point<int16_t> Slider::getthumbpos() const {
 }
 
 Cursor::State Slider::send_cursor(Point<int16_t> cursor, bool pressed) {
+    constexpr int16_t TOUCH_PAD = 6;
+    auto touch_hits = [&](const Rectangle<int16_t> &b) {
+        return Rectangle<int16_t>(b.get_left_top() - TOUCH_PAD,
+                                  b.get_right_bottom() + TOUCH_PAD)
+            .contains(cursor);
+    };
+
     Point<int16_t> relative = cursor - start_;
 
     if (scrolling_) {
@@ -184,7 +191,8 @@ Cursor::State Slider::send_cursor(Point<int16_t> cursor, bool pressed) {
 
         scrolling_ = false;
 
-    } else if (relative.x() < 0 || relative.y() < 0 || relative.x() > 8
+    } else if (relative.x() < -TOUCH_PAD || relative.y() < 0
+               || relative.x() > 8 + TOUCH_PAD
                || relative.y() > vertical_.second()) {
         thumb_.set_state(Button::State::NORMAL);
         next_.set_state(Button::State::NORMAL);
@@ -195,7 +203,7 @@ Cursor::State Slider::send_cursor(Point<int16_t> cursor, bool pressed) {
 
     Point<int16_t> thumbpos = getthumbpos();
 
-    if (thumb_.bounds(thumbpos).contains(cursor)) {
+    if (touch_hits(thumb_.bounds(thumbpos))) {
         if (pressed) {
             scrolling_ = true;
             thumb_.set_state(Button::State::PRESSED);
@@ -210,7 +218,7 @@ Cursor::State Slider::send_cursor(Point<int16_t> cursor, bool pressed) {
 
     thumb_.set_state(Button::State::NORMAL);
 
-    if (prev_.bounds(Point<int16_t>()).contains(cursor)) {
+    if (touch_hits(prev_.bounds(Point<int16_t>()))) {
         if (pressed) {
             if (row_ > 0) {
                 row_--;
@@ -229,7 +237,7 @@ Cursor::State Slider::send_cursor(Point<int16_t> cursor, bool pressed) {
 
     prev_.set_state(Button::State::NORMAL);
 
-    if (next_.bounds(Point<int16_t>()).contains(cursor)) {
+    if (touch_hits(next_.bounds(Point<int16_t>()))) {
         if (pressed) {
             if (row_ < row_max_) {
                 row_++;

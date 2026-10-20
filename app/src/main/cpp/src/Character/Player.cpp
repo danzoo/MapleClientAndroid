@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Player.h"
 
+#include "../Audio/Audio.h"
 #include "../Data/WeaponData.h"
 #include "../IO/UI.h"
 #include "../IO/UITypes/UIStatsInfo.h"
@@ -389,6 +390,7 @@ void Player::change_level(uint16_t level) {
     uint16_t oldlevel = get_level();
 
     if (level > oldlevel) {
+        Sound(Sound::Name::LEVEL_UP).play();
         show_effect_id(CharEffect::Id::LEVEL_UP);
     }
 

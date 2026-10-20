@@ -270,6 +270,12 @@ namespace ms {
         return Button::State::NORMAL;
     }
 
+    void UINpcTalk::send_scroll(double yoffset) {
+        if (show_slider_ && slider_.isenabled()) {
+            slider_.send_scroll(yoffset);
+        }
+    }
+
     Cursor::State UINpcTalk::send_cursor(bool clicked, Point<int16_t> cursorpos) {
         Point<int16_t> cursor_relative = cursorpos - position_;
 

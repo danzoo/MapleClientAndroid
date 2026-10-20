@@ -49,6 +49,10 @@ public:
     virtual Cursor::State send_cursor(Cursor::State mst,
                                       Point<int16_t> pos) = 0;
 
+    virtual bool cursor_in_drag_area(Point<int16_t> pos) {
+        return false;
+    }
+
     virtual void send_scroll(double yoffset) = 0;
 
     virtual void send_close() = 0;
@@ -56,6 +60,10 @@ public:
     virtual void drag_icon(Icon *icon) = 0;
 
     virtual void clear_tooltip(Tooltip::Parent parent) = 0;
+
+    // Clear whichever tooltip is currently raised, whatever its parent. Used by the touch layer
+    // when a scroll gesture begins and any item preview must vanish.
+    virtual void clear_tooltip() {}
 
     virtual void show_equip(Tooltip::Parent parent, int16_t slot) = 0;
 
