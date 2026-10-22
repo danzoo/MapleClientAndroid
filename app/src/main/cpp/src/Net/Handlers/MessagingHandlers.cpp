@@ -159,6 +159,13 @@ void ServerMessageHandler::handle(InPacket &recv) const {
         recv.read_bool();  // megaphone
     } else if (type == 4) {
         UI::get().set_scrollnotice(message + " msclient v0.4.0");
+    } else if (type == 6) {
+        recv.read_int();  // server appends an unused int(0) after lightblue notices
+
+        if (auto chatbar = UI::get().get_element<UIChatBar>()) {
+            chatbar->get().send_chatline("[Notice] " + message,
+                                         UIChatBar::LineType::BLUE);
+        }
     } else if (type == 7) {
         recv.read_int();  // npcid
     }
