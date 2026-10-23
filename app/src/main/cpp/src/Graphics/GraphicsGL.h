@@ -15,8 +15,6 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
-#include <ft2build.h>
-#include FT_FREETYPE_H
 #include "GLES3/gl32.h"
 #include <nlnx/bitmap.hpp>
 
@@ -29,6 +27,11 @@
 namespace ms {
 // Graphics engine which uses OpenGL
     class GraphicsGL : public Singleton<GraphicsGL> {
+        // The interface pass lives in its own module but shares this GL device (shader, atlas, VBO)
+        // and has to restore the scene framebuffer after it flushes, so it reaches the private
+        // device pieces through friendship rather than through a widened public surface.
+        friend class UIRenderer;
+
     public:
         GraphicsGL();
 
@@ -114,17 +117,14 @@ namespace ms {
         // end_scene(), once everything has been stretched onto the surface.
         void flush();
 
-        // Start collecting draws into the interface batch. Everything queued between this and
-        // end_ui is laid out on a screen UI_SCALE smaller than the view and magnified onto the
-        // frame, which is what makes the whole interface bigger without touching the world.
-        void begin_ui();
-
-        // Stop collecting draws into the interface batch.
-        void end_ui();
-
         // Adopt the resolution the game is set to. A transition that holds the scene frozen keeps
         // the coordinates it was drawn at, so the size only changes once the scene is live again.
         void sync_screen_size();
+
+        // Tell the text layer how many device pixels one logical pixel of interface covers. Glyphs
+        // are rasterised at exactly that density so they land one-to-one on the interface target and
+        // stay as sharp as the rest of the OS. A change throws the glyph cache away.
+        void set_text_scale(float scale);
 
         // Start the pass the scene is drawn into. Filtering has to happen after the picture is
         // composited: every bitmap sits in one atlas with nothing between them, so smoothing a
@@ -147,14 +147,6 @@ namespace ms {
         void clear_scene();
 
     private:
-        void clear_internal();
-
-        bool add_font(AAssetManager *assetManager,
-                      const char *name,
-                      Text::Font id,
-                      FT_UInt width,
-                      FT_UInt height);
-
         struct Offset {
             GLshort left;
             GLshort right;
@@ -169,9 +161,6 @@ namespace ms {
 
             Offset() : left(0), right(0), top(0), bottom(0) {}
         };
-
-        // Add a bitmap to the available resources.
-        const Offset &get_offset(const nl::bitmap &bmp);
 
         struct Leftover {
             GLshort left;
@@ -282,33 +271,86 @@ namespace ms {
             }
         };
 
-        struct Font {
-            struct Char {
-                GLshort ax;
-                GLshort ay;
-                GLshort bw;
-                GLshort bh;
-                GLshort bl;
-                GLshort bt;
-                Offset offset;
-            };
-
-            GLshort width;
-            GLshort height;
-            Char chars[256];
-
-            Font(GLshort w, GLshort h) : width(w), height(h) {}
-
-            Font() : width(0), height(0) {}
-
-            int16_t linespace() const {
-                return static_cast<int16_t>(height * 1.35 + 1);
-            }
+        // One glyph's metrics in logical pixels plus the rect of its native-resolution bitmap in
+        // whichever atlas it was packed into.
+        struct Glyph {
+            GLshort ax = 0;
+            GLshort ay = 0;
+            GLshort bw = 0;
+            GLshort bh = 0;
+            GLshort bl = 0;
+            GLshort bt = 0;
+            Offset offset;
         };
+
+        // The platform-rendered bitmap a Glyph's metrics were derived from, kept so the same raster
+        // can be packed into either atlas without going back over JNI.
+        struct GlyphRaster {
+            GLshort ax = 0;
+            GLshort bl = 0;
+            GLshort bt = 0;
+            GLshort bw = 0;
+            GLshort bh = 0;
+            int32_t nw = 0;
+            int32_t nh = 0;
+            std::vector<uint8_t> alpha;
+        };
+
+        // Everything one texture of the device needs: its GL name, the quadtree/shelf packer for
+        // sprites, and the strip plus cache for glyphs rasterised on demand. The scene and the
+        // interface each own one so they can be filtered, grown and evicted independently.
+        struct AtlasState {
+            GLuint texture = 0;
+
+            Point<GLshort> border;
+            Range<GLshort> y_range;
+            QuadTree<size_t, Leftover> leftovers;
+            size_t rlid = 1;
+            size_t wasted = 0;
+            std::unordered_map<size_t, Offset> offsets;
+
+            // Bottom of the glyph strip; sprites are packed strictly below it so the shader's
+            // fontregion test never mistakes one for the other.
+            int16_t glyph_region_bottom = 0;
+            int16_t glyph_x = 1;
+            int16_t glyph_y = 1;
+            int16_t glyph_row_h = 0;
+            std::unordered_map<uint64_t, Glyph> glyphs;
+        };
+
+        void clear_internal(AtlasState &atlas);
+
+        // Create (or leave) the texture and rewind both packers of one atlas.
+        void init_atlas(AtlasState &atlas, bool linear);
+
+        // Bind one atlas and tell the shader its size and where its glyph strip ends.
+        void bind_atlas(AtlasState &atlas);
+
+        void reset_glyph_region(AtlasState &atlas);
+
+        // The atlas the current draw call belongs to: the interface while its pass is open, the
+        // scene otherwise.
+        AtlasState &active_atlas();
+
+        const Offset &get_offset(AtlasState &atlas, const nl::bitmap &bmp);
+
+        // Metrics (and the raster behind them) for one code point in one face, independent of any
+        // atlas. Rasterises over JNI on first use.
+        const GlyphRaster &get_raster(uint32_t codepoint, Text::Font id);
+
+        // get_raster plus the glyph packed into the active atlas, ready to draw.
+        const Glyph &get_glyph(uint32_t codepoint, Text::Font id);
+
+        // Logical line height for a face.
+        int16_t font_linespace(Text::Font id) const;
+
+        // The logical pixel size and weight a Text::Font id stands for.
+        static void font_metrics(Text::Font id, float &px, bool &bold);
 
         class LayoutBuilder {
         public:
-            LayoutBuilder(const Font &font,
+            LayoutBuilder(GraphicsGL &graphics,
+                          Text::Font id,
                           Text::Alignment alignment,
                           int16_t maxwidth,
                           bool formatted,
@@ -331,7 +373,8 @@ namespace ms {
 
             void add_line();
 
-            const Font &font_;
+            GraphicsGL &graphics_;
+            Text::Font id_;
 
             Text::Alignment alignment_;
             Text::Font font_id_;
@@ -358,10 +401,12 @@ namespace ms {
         static const GLshort ATLASH = 8192;
         static const GLshort MINLOSIZE = 32;
 
-        bool locked_;
+        // Height of the strip at the top of each atlas reserved for glyphs the platform renderer
+        // rasterises on demand. Everything the shader sees at or above this row is treated as text;
+        // sprites are packed below it.
+        static const GLshort GLYPH_REGION_H = 512;
 
-        // True while draws are being collected for the interface rather than the scene.
-        bool ui_pass_ = false;
+        bool locked_;
 
         std::vector<Quad>& batch_quads();
 
@@ -373,11 +418,6 @@ namespace ms {
                          int16_t screen_width,
                          int16_t screen_height);
 
-        // Draw the interface into its own target at its own size. Keeping it apart from the scene
-        // is what lets the magnified interface be interpolated: the atlas it is drawn from has to
-        // stay nearest, or neighbouring bitmaps bleed into each other.
-        void flush_ui();
-
         // Leave the scene program, its atlas and its attribute pointers bound, as the next batch
         // submission and the bitmaps packed outside the frame both expect.
         void set_scene_attribs();
@@ -387,10 +427,7 @@ namespace ms {
 
         std::vector<Quad> quads_;
         std::vector<Circle> circles_;
-        std::vector<Quad> ui_quads_;
-        std::vector<Circle> ui_circles_;
         GLuint VBO_;
-        GLuint atlas_;
 
         GLint shader_program_;
         GLint attribute_coord_;
@@ -401,7 +438,6 @@ namespace ms {
         GLint uniform_yoffset;
         GLint uniform_font_region_;
 
-        std::unordered_map<size_t, Offset> offsets_;
         Offset null_offset_;
 
         // The scene is composited into this texture and only then stretched to the screen, so the
@@ -411,26 +447,21 @@ namespace ms {
         int16_t scene_width_;
         int16_t scene_height_;
 
-        // The same thing for the interface, which is laid out on a UI_SCALE smaller screen.
-        GLuint ui_fbo_;
-        GLuint ui_tex_;
-        int16_t ui_width_;
-        int16_t ui_height_;
-
         GLuint filter_vbo_;
         GLint filter_program_;
         GLint filter_attribute_coord_;
         GLint filter_uniform_scene_;
 
-        QuadTree<size_t, Leftover> leftovers_;
-        size_t rlid_;
-        size_t wasted_;
-        Point<GLshort> border_;
-        Range<GLshort> y_range_;
+        // The scene and the interface each pack their sprites and glyphs into their own texture, so
+        // the two passes never share a filter setting or evict each other's bitmaps.
+        AtlasState scene_atlas_;
+        AtlasState ui_atlas_;
 
-        FT_Library ft_library_;
-        Font fonts_[Text::Font::NUM_FONTS];
-        Point<GLshort> font_border;
-        GLshort font_ymax;
+        // Platform-rendered glyph bitmaps, shared by both atlases: metrics are density independent
+        // and the raster is packed into whichever atlas asks for it.
+        std::unordered_map<uint64_t, GlyphRaster> rasters_;
+
+        // Device pixels per logical interface pixel; glyphs are rasterised at exactly this density.
+        float text_scale_;
     };
 }  // namespace ms

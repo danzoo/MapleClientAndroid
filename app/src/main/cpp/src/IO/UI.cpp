@@ -21,6 +21,7 @@
 #include "../Constants.h"
 #include "../Gameplay/Stage.h"
 #include "../Graphics/GraphicsGL.h"
+#include "../Graphics/UIRenderer.h"
 #include "../../Audio/Audio.h"
 #include "../../Configuration.h"
 #include "Cursor.h"
@@ -63,10 +64,10 @@ namespace ms {
         // Everything queued from here on belongs to the interface, so it is drawn against a screen
         // UI_SCALE smaller than the view and magnified onto the frame. That is what makes the
         // windows, buttons and text bigger without the map changing size.
-        GraphicsGL::get().begin_ui();
+        UIRenderer::get().begin();
         state_->draw(alpha, cursor_.get_position());
         scrolling_notice_.draw(alpha);
-        GraphicsGL::get().end_ui();
+        UIRenderer::get().end();
     }
 
     void UI::update() {

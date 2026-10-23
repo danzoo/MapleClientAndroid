@@ -175,10 +175,12 @@ add_library(OpenMapleClient SHARED
         src/Gameplay/Physics/FootholdTree.cpp
         src/Gameplay/Physics/Physics.cpp
         src/Graphics/Animation.cpp
+        src/Graphics/AndroidText.cpp
         src/Graphics/Color.cpp
         src/Graphics/EffectLayer.cpp
         src/Graphics/Geometry.cpp
         src/Graphics/GraphicsGL.cpp
+        src/Graphics/UIRenderer.cpp
         src/Graphics/RecurringEffect.cpp
         src/Graphics/Sprite.cpp
         src/Graphics/Text.cpp
@@ -245,4 +247,4 @@ target_include_directories(OpenMapleClient
         ${CMAKE_SOURCE_DIR}/thirdparty/glfm/include
         )
 # add lib dependencies
-target_link_libraries(OpenMapleClient glfm android log GLESv3 freetype NoLifeNx ${CMAKE_SOURCE_DIR}/thirdparty/bass/libs/arm64-v8a/libbass.so)
+target_link_libraries(OpenMapleClient glfm android log jnigraphics GLESv3 freetype NoLifeNx ${CMAKE_SOURCE_DIR}/thirdparty/bass/libs/arm64-v8a/libbass.so)
