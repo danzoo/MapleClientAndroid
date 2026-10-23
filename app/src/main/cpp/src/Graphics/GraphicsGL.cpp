@@ -15,9 +15,14 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "GraphicsGL.h"
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 
+#include <android/log.h>
+
 #include "../Configuration.h"
+#include "AndroidText.h"
+#include "UIRenderer.h"
 #include "Window.h"
 
 namespace ms {
@@ -31,10 +36,7 @@ namespace ms {
         scene_width_ = 0;
         scene_height_ = 0;
 
-        ui_fbo_ = 0;
-        ui_tex_ = 0;
-        ui_width_ = 0;
-        ui_height_ = 0;
+        text_scale_ = Constants::UI_SCALE;
     }
 
     Error GraphicsGL::init(GLFMDisplay *pApp) {
@@ -94,19 +96,6 @@ namespace ms {
         GLchar infoLog[bufSize];
 
         std::cout << "Using OpenGL " << glGetString(GL_VERSION) << std::endl;
-
-        if (FT_Init_FreeType(&ft_library_)) {
-            return Error::Code::FREETYPE;
-        }
-
-        FT_Int ftmajor;
-        FT_Int ftminor;
-        FT_Int ftpatch;
-
-        FT_Library_Version(ft_library_, &ftmajor, &ftminor, &ftpatch);
-
-        std::cout << "Using FreeType " << ftmajor << "." << ftminor << "."
-                  << ftpatch << std::endl;
 
         // Build and compile our shader program
         // ------------------------------------
@@ -264,11 +253,30 @@ namespace ms {
         // Vertex Buffer Object
         glGenBuffers(1, &VBO_);
 
-        glGenTextures(1, &atlas_);
-        glBindTexture(GL_TEXTURE_2D, atlas_);
+        // One atlas per pass. The scene keeps nearest sampling because its art is pixel work that
+        // must not blur; the interface is laid out on a smaller screen and magnified, so it
+        // interpolates instead of showing stair-steps.
+        init_atlas(scene_atlas_, false);
+        init_atlas(ui_atlas_, true);
+
+        if (!AndroidText::init(pApp)) {
+            __android_log_print(ANDROID_LOG_ERROR, "NativeText", "bridge init failed");
+        }
+
+        return Error::Code::NONE;
+    }
+
+    void GraphicsGL::init_atlas(AtlasState &atlas, bool linear) {
+        if (atlas.texture == 0) {
+            glGenTextures(1, &atlas.texture);
+        }
+
+        glBindTexture(GL_TEXTURE_2D, atlas.texture);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, linear ? GL_LINEAR : GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, linear ? GL_LINEAR : GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexImage2D(GL_TEXTURE_2D,
                      0,
                      GL_RGBA,
@@ -279,32 +287,20 @@ namespace ms {
                      GL_UNSIGNED_BYTE,
                      nullptr);
 
-        font_border.set_y(1);
+        atlas.glyph_region_bottom = GLYPH_REGION_H;
+        atlas.glyphs.clear();
+        reset_glyph_region(atlas);
+        clear_internal(atlas);
+    }
 
-        const std::string FONT_NORMAL = Setting<FontPathNormal>().get().load();
-        const std::string FONT_BOLD = Setting<FontPathBold>().get().load();
-
-        if (FONT_NORMAL.empty() || FONT_BOLD.empty()) {
-            return Error::Code::FONT_PATH;
-        }
-
-        const char *FONT_NORMAL_STR = FONT_NORMAL.c_str();
-        const char *FONT_BOLD_STR = FONT_BOLD.c_str();
-        AAssetManager *assetManager = ((ANativeActivity *) glfmGetAndroidActivity(
-                pApp))->assetManager;
-
-        add_font(assetManager, FONT_NORMAL_STR, Text::Font::A11M, 0, 11);
-        add_font(assetManager, FONT_BOLD_STR, Text::Font::A11B, 0, 11);
-        add_font(assetManager, FONT_NORMAL_STR, Text::Font::A12M, 0, 12);
-        add_font(assetManager, FONT_BOLD_STR, Text::Font::A12B, 0, 12);
-        add_font(assetManager, FONT_NORMAL_STR, Text::Font::A13M, 0, 13);
-        add_font(assetManager, FONT_BOLD_STR, Text::Font::A13B, 0, 13);
-        add_font(assetManager, FONT_BOLD_STR, Text::Font::A15B, 0, 15);
-        add_font(assetManager, FONT_NORMAL_STR, Text::Font::A18M, 0, 18);
-
-        font_ymax += font_border.y();
-
-        leftovers_ = QuadTree<size_t, Leftover>(
+    void GraphicsGL::clear_internal(AtlasState &atlas) {
+        // Sprites are packed from the first row under the glyph strip. It has to be strictly below
+        // the fontregion the shader compares against, or the top sprite row would be sampled as a
+        // glyph (white times its red channel) instead of as a picture.
+        atlas.border = Point<GLshort>(0, static_cast<GLshort>(atlas.glyph_region_bottom + 1));
+        atlas.y_range = Range<GLshort>();
+        atlas.offsets.clear();
+        atlas.leftovers = QuadTree<size_t, Leftover>(
                 [](const Leftover &first, const Leftover &second) {
                     bool width_comparison = first.width() >= second.width();
                     bool height_comparison = first.height() >= second.height();
@@ -320,128 +316,195 @@ namespace ms {
                     }
                     return QuadTree<size_t, Leftover>::Direction::LEFT;
                 });
-
-        return Error::Code::NONE;
+        atlas.rlid = 1;
+        atlas.wasted = 0;
     }
 
-    bool GraphicsGL::add_font(AAssetManager *assetManager,
-                              const char *name,
-                              Text::Font id,
-                              FT_UInt pixelw,
-                              FT_UInt pixelh) {
-        FT_Face face;
-        AAsset *fontFile = AAssetManager_open(assetManager, name, AASSET_MODE_BUFFER);
-        off_t fontDataSize = AAsset_getLength(fontFile);
+    void GraphicsGL::reset_glyph_region(AtlasState &atlas) {
+        atlas.glyph_x = 1;
+        atlas.glyph_y = 1;
+        atlas.glyph_row_h = 0;
+    }
 
-        FT_Byte *fontData = new FT_Byte[fontDataSize];
-        AAsset_read(fontFile, fontData, (size_t) fontDataSize);
-        AAsset_close(fontFile);
+    void GraphicsGL::bind_atlas(AtlasState &atlas) {
+        glUseProgram(shader_program_);
+        glBindTexture(GL_TEXTURE_2D, atlas.texture);
+        glUniform2f(uniform_atlas_size_, ATLASW, ATLASH);
+        glUniform1i(uniform_font_region_, atlas.glyph_region_bottom);
+    }
 
-        if (FT_New_Memory_Face(ft_library_, (const FT_Byte *) fontData, (FT_Long) fontDataSize, 0,
-                               &face)) {
-            std::cerr << "Error: Failed to create new face." << std::endl;
-            return false;
+    GraphicsGL::AtlasState &GraphicsGL::active_atlas() {
+        return UIRenderer::get().active() ? ui_atlas_ : scene_atlas_;
+    }
+
+    void GraphicsGL::set_text_scale(float scale) {
+        if (scale <= 0.0f) {
+            return;
         }
 
-        if (FT_Set_Pixel_Sizes(face, pixelw, pixelh)) {
-            std::cerr << "Error: Failed to set pixel sizes." << std::endl;
-            return false;
-        }
+        if (std::abs(scale - text_scale_) > 0.01f) {
+            text_scale_ = scale;
 
-        FT_GlyphSlot g = face->glyph;
+            // Logical metrics are density independent, so layouts already built stay valid; only the
+            // bitmaps were rasterised at the old density and have to be redone in both atlases.
+            rasters_.clear();
 
-        GLshort width = 0;
-        GLshort height = 0;
-
-        for (uint32_t c = 32; c < 256; c++) {
-            if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
-                std::cerr << "Error: Failed to load a glyph into the glyph slot of "
-                             "a face object."
-                          << std::endl;
-                continue;
-            }
-
-            auto w = static_cast<GLshort>(g->bitmap.width);
-            auto h = static_cast<GLshort>(g->bitmap.rows);
-
-            width += w;
-
-            if (h > height) {
-                height = h;
+            for (AtlasState *atlas : {&scene_atlas_, &ui_atlas_}) {
+                atlas->glyphs.clear();
+                reset_glyph_region(*atlas);
             }
         }
+    }
 
-        if (font_border.x() + width > ATLASW) {
-            font_border.set_x(0);
-            font_border.set_y(font_ymax);
-            font_ymax = 0;
+    void GraphicsGL::font_metrics(Text::Font id, float &px, bool &bold) {
+        switch (id) {
+            case Text::Font::A11B:
+                px = 11.0f;
+                bold = true;
+                break;
+            case Text::Font::A12M:
+                px = 12.0f;
+                bold = false;
+                break;
+            case Text::Font::A12B:
+                px = 12.0f;
+                bold = true;
+                break;
+            case Text::Font::A13M:
+                px = 13.0f;
+                bold = false;
+                break;
+            case Text::Font::A13B:
+                px = 13.0f;
+                bold = true;
+                break;
+            case Text::Font::A15B:
+                px = 15.0f;
+                bold = true;
+                break;
+            case Text::Font::A18M:
+                px = 18.0f;
+                bold = false;
+                break;
+            case Text::Font::A11M:
+            default:
+                px = 11.0f;
+                bold = false;
+                break;
+        }
+    }
+
+    int16_t GraphicsGL::font_linespace(Text::Font id) const {
+        float px;
+        bool bold;
+        font_metrics(id, px, bold);
+
+        return static_cast<int16_t>(px * 1.35 + 1);
+    }
+
+    const GraphicsGL::GlyphRaster &GraphicsGL::get_raster(uint32_t codepoint, Text::Font id) {
+        uint64_t key = (static_cast<uint64_t>(id) << 32) | codepoint;
+
+        auto cached = rasters_.find(key);
+
+        if (cached != rasters_.end()) {
+            return cached->second;
         }
 
-        GLshort x = font_border.x();
-        GLshort y = font_border.y();
+        float px;
+        bool bold;
+        font_metrics(id, px, bold);
 
-        font_border.shift_x(width);
+        GlyphBitmap bmp;
+        AndroidText::rasterize(codepoint, px * text_scale_, bold, bmp);
 
-        if (height > font_ymax) {
-            font_ymax = height;
+        GlyphRaster raster;
+
+        // Advance is always meaningful, even for blank glyphs (a space has no ink but still moves
+        // the pen). Convert back to logical pixels so layout stays density independent.
+        raster.ax = static_cast<GLshort>(std::lround(bmp.advance / text_scale_));
+
+        if (bmp.width > 0 && bmp.height > 0) {
+            raster.bl = static_cast<GLshort>(std::lround(bmp.bearing_x / text_scale_));
+            raster.bt = static_cast<GLshort>(std::lround(bmp.bearing_y / text_scale_));
+            raster.bw = static_cast<GLshort>(std::lround(static_cast<float>(bmp.width) / text_scale_));
+            raster.bh = static_cast<GLshort>(std::lround(static_cast<float>(bmp.height) / text_scale_));
+            raster.nw = bmp.width;
+            raster.nh = bmp.height;
+            raster.alpha = std::move(bmp.alpha);
         }
 
-        fonts_[id] = Font(width, height);
+        return rasters_.emplace(key, std::move(raster)).first->second;
+    }
 
-        GLshort ox = x;
-        GLshort oy = y;
+    const GraphicsGL::Glyph &GraphicsGL::get_glyph(uint32_t codepoint, Text::Font id) {
+        const GlyphRaster &raster = get_raster(codepoint, id);
+        uint64_t key = (static_cast<uint64_t>(id) << 32) | codepoint;
+        AtlasState &atlas = active_atlas();
 
-        for (uint32_t c = 32; c < 256; c++) {
-            if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
-                std::cerr << "Error: Failed to load a glyph into the glyph slot of "
-                             "a face object."
-                          << std::endl;
-                continue;
+        auto cached = atlas.glyphs.find(key);
+
+        if (cached != atlas.glyphs.end()) {
+            return cached->second;
+        }
+
+        Glyph glyph;
+        glyph.ax = raster.ax;
+        glyph.bl = raster.bl;
+        glyph.bt = raster.bt;
+        glyph.bw = raster.bw;
+        glyph.bh = raster.bh;
+
+        if (raster.nw > 0 && raster.nh > 0) {
+            GLshort w = static_cast<GLshort>(raster.nw);
+            GLshort h = static_cast<GLshort>(raster.nh);
+
+            // Shelf-pack into this atlas's glyph strip. A glyph too wide for the rest of the row
+            // starts a new row; running off the bottom throws the strip away and starts over, which
+            // is cheap because the raster is already cached and only the upload is redone.
+            if (atlas.glyph_x + w + 1 > ATLASW) {
+                atlas.glyph_y = static_cast<int16_t>(atlas.glyph_y + atlas.glyph_row_h + 1);
+                atlas.glyph_x = 1;
+                atlas.glyph_row_h = 0;
             }
 
-            auto g = face->glyph;
-
-            // Render the glyph in 8-bit grayscale mode
-            FT_Render_Glyph(g, FT_RENDER_MODE_NORMAL);
-
-            // Convert grayscale to BGRA
-            FT_Byte *bgraBuffer = new FT_Byte[g->bitmap.rows * g->bitmap.width * 4];
-            for (int i = 0; i < g->bitmap.rows * g->bitmap.width; ++i) {
-                // Grayscale value
-                auto intensity = g->bitmap.buffer[i];
-
-                // Set BGRA components
-                bgraBuffer[i * 4] = intensity;          // Blue channel
-                bgraBuffer[i * 4 + 1] = intensity;      // Green channel
-                bgraBuffer[i * 4 + 2] = intensity;      // Red channel
-                bgraBuffer[i * 4 + 3] = 255;            // Alpha channel (fully opaque)
+            if (atlas.glyph_y + h + 1 > atlas.glyph_region_bottom) {
+                atlas.glyphs.clear();
+                reset_glyph_region(atlas);
             }
 
-            auto ax = static_cast<GLshort>(g->advance.x >> 6);
-            auto ay = static_cast<GLshort>(g->advance.y >> 6);
-            auto l = static_cast<GLshort>(g->bitmap_left);
-            auto t = static_cast<GLshort>(g->bitmap_top);
-            auto w = static_cast<GLshort>(g->bitmap.width);
-            auto h = static_cast<GLshort>(g->bitmap.rows);
+            std::vector<uint8_t> rgba(static_cast<size_t>(w) * h * 4);
 
+            for (size_t i = 0; i < static_cast<size_t>(w) * h; i++) {
+                uint8_t coverage = raster.alpha[i];
+                rgba[i * 4 + 0] = coverage;
+                rgba[i * 4 + 1] = coverage;
+                rgba[i * 4 + 2] = coverage;
+                rgba[i * 4 + 3] = 255;
+            }
+
+            glBindTexture(GL_TEXTURE_2D, atlas.texture);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
             glTexSubImage2D(GL_TEXTURE_2D,
                             0,
-                            ox,
-                            oy,
+                            atlas.glyph_x,
+                            atlas.glyph_y,
                             w,
                             h,
                             GL_RGBA,
                             GL_UNSIGNED_BYTE,
-                            bgraBuffer);
-            delete[] bgraBuffer;
+                            rgba.data());
 
-            Offset offset = Offset(ox, oy, w, h);
-            fonts_[id].chars[c] = {ax, ay, w, h, l, t, offset};
+            glyph.offset = Offset(atlas.glyph_x, atlas.glyph_y, w, h);
 
-            ox += w;
+            atlas.glyph_x = static_cast<int16_t>(atlas.glyph_x + w + 1);
+
+            if (h > atlas.glyph_row_h) {
+                atlas.glyph_row_h = h;
+            }
         }
 
-        return true;
+        return atlas.glyphs.emplace(key, glyph).first->second;
     }
 
     void GraphicsGL::reinit() {
@@ -456,8 +519,6 @@ namespace ms {
 
         glUseProgram(shader_program_);
 
-        glUniform1i(uniform_font_region_, font_ymax);
-        glUniform2f(uniform_atlas_size_, ATLASW, ATLASH);
         glUniform2f(uniform_screen_size_, VWIDTH, VHEIGHT);
 
         glBindBuffer(GL_ARRAY_BUFFER, VBO_);
@@ -477,42 +538,32 @@ namespace ms {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        glBindTexture(GL_TEXTURE_2D, atlas_);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        clear_internal(scene_atlas_);
+        clear_internal(ui_atlas_);
 
-        clear_internal();
-    }
-
-    void GraphicsGL::clear_internal() {
-        border_ = Point<GLshort>(0, font_ymax);
-        y_range_ = Range<GLshort>();
-
-        offsets_.clear();
-        leftovers_.clear();
-        rlid_ = 1;
-        wasted_ = 0;
+        bind_atlas(scene_atlas_);
     }
 
     void GraphicsGL::clear() {
-        size_t used = ATLASW * border_.y() + border_.x() * y_range_.second();
-        double usedpercent = static_cast<double>(used) / (ATLASW * ATLASH);
+        for (AtlasState *atlas : {&scene_atlas_, &ui_atlas_}) {
+            size_t used = ATLASW * atlas->border.y() + atlas->border.x() * atlas->y_range.second();
+            double usedpercent = static_cast<double>(used) / (ATLASW * ATLASH);
 
-        if (usedpercent > 80.0) {
-            clear_internal();
+            if (usedpercent > 80.0) {
+                clear_internal(*atlas);
+            }
         }
     }
 
     void GraphicsGL::add_bitmap(const nl::bitmap &bmp) {
-        get_offset(bmp);
+        get_offset(scene_atlas_, bmp);
     }
 
-    const GraphicsGL::Offset &GraphicsGL::get_offset(const nl::bitmap &bmp) {
+    const GraphicsGL::Offset &GraphicsGL::get_offset(AtlasState &atlas, const nl::bitmap &bmp) {
         size_t id = bmp.id();
-        auto offiter = offsets_.find(id);
+        auto offiter = atlas.offsets.find(id);
 
-        if (offiter != offsets_.end()) {
+        if (offiter != atlas.offsets.end()) {
             return offiter->second;
         }
 
@@ -527,14 +578,14 @@ namespace ms {
 
         Leftover value = Leftover(x, y, width, height);
 
-        size_t lid = leftovers_.findnode(
+        size_t lid = atlas.leftovers.findnode(
                 value,
                 [](const Leftover &val, const Leftover &leaf) {
                     return val.width() <= leaf.width() && val.height() <= leaf.height();
                 });
 
         if (lid > 0) {
-            const Leftover &leftover = leftovers_[lid];
+            const Leftover &leftover = atlas.leftovers[lid];
 
             x = leftover.left;
             y = leftover.top;
@@ -542,91 +593,85 @@ namespace ms {
             GLshort width_delta = leftover.width() - width;
             GLshort height_delta = leftover.height() - height;
 
-            leftovers_.erase(lid);
+            atlas.leftovers.erase(lid);
 
-            wasted_ -= width * height;
+            atlas.wasted -= width * height;
 
             if (width_delta >= MINLOSIZE && height_delta >= MINLOSIZE) {
-                leftovers_.add(
-                        rlid_,
+                atlas.leftovers.add(
+                        atlas.rlid,
                         Leftover(x + width, y + height, width_delta, height_delta));
-                rlid_++;
+                atlas.rlid++;
 
                 if (width >= MINLOSIZE) {
-                    leftovers_.add(rlid_,
-                                   Leftover(x, y + height, width, height_delta));
-                    rlid_++;
+                    atlas.leftovers.add(atlas.rlid,
+                                        Leftover(x, y + height, width, height_delta));
+                    atlas.rlid++;
                 }
 
                 if (height >= MINLOSIZE) {
-                    leftovers_.add(rlid_,
-                                   Leftover(x + width, y, width_delta, height));
-                    rlid_++;
+                    atlas.leftovers.add(atlas.rlid,
+                                        Leftover(x + width, y, width_delta, height));
+                    atlas.rlid++;
                 }
             } else if (width_delta >= MINLOSIZE) {
-                leftovers_.add(
-                        rlid_,
+                atlas.leftovers.add(
+                        atlas.rlid,
                         Leftover(x + width, y, width_delta, height + height_delta));
-                rlid_++;
+                atlas.rlid++;
             } else if (height_delta >= MINLOSIZE) {
-                leftovers_.add(
-                        rlid_,
+                atlas.leftovers.add(
+                        atlas.rlid,
                         Leftover(x, y + height, width + width_delta, height_delta));
-                rlid_++;
+                atlas.rlid++;
             }
         } else {
-            if (border_.x() + width > ATLASW) {
-                border_.set_x(0);
-                border_.shift_y(y_range_.second());
+            if (atlas.border.x() + width > ATLASW) {
+                atlas.border.set_x(0);
+                atlas.border.shift_y(atlas.y_range.second());
 
-                if (border_.y() + height > ATLASH) {
-                    clear_internal();
+                if (atlas.border.y() + height > ATLASH) {
+                    clear_internal(atlas);
                 } else {
-                    y_range_ = Range<GLshort>();
+                    atlas.y_range = Range<GLshort>();
                 }
             }
 
-            x = border_.x();
-            y = border_.y();
+            x = atlas.border.x();
+            y = atlas.border.y();
 
-            border_.shift_x(width);
+            atlas.border.shift_x(width);
 
-            if (height > y_range_.second()) {
-                if (x >= MINLOSIZE && height - y_range_.second() >= MINLOSIZE) {
-                    leftovers_.add(rlid_,
-                                   Leftover(0,
-                                            y_range_.first(),
-                                            x,
-                                            height - y_range_.second()));
-                    rlid_++;
+            if (height > atlas.y_range.second()) {
+                if (x >= MINLOSIZE && height - atlas.y_range.second() >= MINLOSIZE) {
+                    atlas.leftovers.add(atlas.rlid,
+                                        Leftover(0,
+                                                 atlas.y_range.first(),
+                                                 x,
+                                                 height - atlas.y_range.second()));
+                    atlas.rlid++;
                 }
 
-                wasted_ += x * (height - y_range_.second());
+                atlas.wasted += x * (height - atlas.y_range.second());
 
-                y_range_ = Range<int16_t>(y + height, height);
-            } else if (height < y_range_.first() - y) {
+                atlas.y_range = Range<int16_t>(y + height, height);
+            } else if (height < atlas.y_range.first() - y) {
                 if (width >= MINLOSIZE
-                    && y_range_.first() - y - height >= MINLOSIZE) {
-                    leftovers_.add(rlid_,
-                                   Leftover(x,
-                                            y + height,
-                                            width,
-                                            y_range_.first() - y - height));
-                    rlid_++;
+                    && atlas.y_range.first() - y - height >= MINLOSIZE) {
+                    atlas.leftovers.add(atlas.rlid,
+                                        Leftover(x,
+                                                 y + height,
+                                                 width,
+                                                 atlas.y_range.first() - y - height));
+                    atlas.rlid++;
                 }
 
-                wasted_ += width * (y_range_.first() - y - height);
+                atlas.wasted += width * (atlas.y_range.first() - y - height);
             }
         }
 
-        // size_t used = ATLASW * border.y() + border.x() * yrange.second();
-        //
-        // double usedpercent = static_cast<double>(used) / (ATLASW * ATLASH);
-        // double wastedpercent = static_cast<double>(wasted) / used;
-        //
-        // std::cout << "Used: [" << usedpercent << "] Wasted: [" << wastedpercent
-        // << "]" << std::endl;
-
+        glBindTexture(GL_TEXTURE_2D, atlas.texture);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexSubImage2D(GL_TEXTURE_2D,
                         0,
                         x,
@@ -637,7 +682,7 @@ namespace ms {
                         GL_UNSIGNED_BYTE,
                         bmp.data());
 
-        return offsets_
+        return atlas.offsets
                 .emplace(std::piecewise_construct,
                          std::forward_as_tuple(id),
                          std::forward_as_tuple(x, y, width, height))
@@ -664,7 +709,7 @@ namespace ms {
                                    rect.right(),
                                    rect.top(),
                                    rect.bottom(),
-                                   get_offset(bmp),
+                                   get_offset(active_atlas(), bmp),
                                    color,
                                    angle);
     }
@@ -716,7 +761,7 @@ namespace ms {
             return Text::Layout();
         }
 
-        LayoutBuilder builder(fonts_[id], alignment, maxwidth, formatted, line_adj);
+        LayoutBuilder builder(*this, id, alignment, maxwidth, formatted, line_adj);
 
         const auto *p_text = text_as_values.data();
 
@@ -825,7 +870,7 @@ namespace ms {
                     continue;
                 }
 
-                wordwidth += font_.chars[c].ax;
+                wordwidth += graphics_.get_raster(c, id_).ax;
 
                 if (wordwidth > max_width_) {
                     if (last - first == 1) {
@@ -850,7 +895,7 @@ namespace ms {
 
             endy_ = ay_;
             ax_ = 0;
-            ay_ += font_.linespace();
+            ay_ += graphics_.font_linespace(id_);
 
             if (!lines_.empty()) {
                 ay_ -= line_adj_;
@@ -859,7 +904,7 @@ namespace ms {
 
         for (size_t pos = first; pos < last; pos++) {
             auto c = text[pos];
-            const Font::Char &ch = font_.chars[c];
+            const GlyphRaster &ch = graphics_.get_raster(c, id_);
 
             advances_.push_back(ax_);
 
@@ -885,12 +930,14 @@ namespace ms {
         return prev;
     }
 
-    GraphicsGL::LayoutBuilder::LayoutBuilder(const Font &f,
+    GraphicsGL::LayoutBuilder::LayoutBuilder(GraphicsGL &graphics,
+                                             Text::Font id,
                                              Text::Alignment a,
                                              int16_t mw,
                                              bool fm,
                                              int16_t la) :
-            font_(f),
+            graphics_(graphics),
+            id_(id),
             alignment_(a),
             max_width_(mw),
             formatted_(fm),
@@ -898,7 +945,7 @@ namespace ms {
             font_id_(Text::Font::NUM_FONTS),
             color_(Color::Name::NUM_COLORS),
             ax_(0),
-            ay_(font_.linespace()),
+            ay_(graphics.font_linespace(id)),
             width_(0),
             endy_(0) {
         if (max_width_ == 0) {
@@ -1194,8 +1241,6 @@ namespace ms {
             return;
         }
 
-        const Font &font = fonts_[id];
-
         GLshort x = args.get_pos().x();
         GLshort y = args.get_pos().y();
         GLshort w = layout.width();
@@ -1210,7 +1255,7 @@ namespace ms {
                 for (const Text::Layout::Line &line: layout) {
                     GLshort left = x + line.position.x() - 1;
                     GLshort right = left + w + 3;
-                    GLshort top = y + line.position.y() - font.linespace() + 6;
+                    GLshort top = y + line.position.y() - font_linespace(id) + 6;
                     GLshort bottom = top + h - 2;
                     Color ntcolor = Color(0.0f, 0.0f, 0.0f, 0.6f);
 
@@ -1260,7 +1305,7 @@ namespace ms {
 
                 for (size_t pos = word.first; pos < word.last; ++pos) {
                     auto c = text[pos];
-                    const Font::Char &ch = font.chars[c];
+                    const Glyph &ch = get_glyph(c, id);
 
                     GLshort char_x = x + ax + ch.bl;
                     GLshort char_y = y + ay - ch.bt;
@@ -1416,8 +1461,7 @@ namespace ms {
     }
 
     void GraphicsGL::set_scene_attribs() {
-        glUseProgram(shader_program_);
-        glBindTexture(GL_TEXTURE_2D, atlas_);
+        bind_atlas(scene_atlas_);
 
         // There is no vertex array object backing either program, so the attribute pointers are
         // global state that the filter pass left pointing at its own quad.
@@ -1457,7 +1501,7 @@ namespace ms {
         draw_filter(scene_tex_);
         glEnable(GL_BLEND);
 
-        if (!ui_quads_.empty() || !ui_circles_.empty()) {
+        if (!UIRenderer::get().empty()) {
             // The interface goes onto the surface through the same single stretch the scene just
             // went through, never into the scene texture first - being resampled twice is what
             // made the buttons softer than the picture behind them. Unlike the scene blit this one
@@ -1466,7 +1510,7 @@ namespace ms {
             // multiplied by its own alpha. Blending it as if it weren't would multiply twice and
             // leave a grey line along every hard edge the interface draws.
             glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-            draw_filter(ui_tex_);
+            draw_filter(UIRenderer::get().texture());
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         }
 
@@ -1492,7 +1536,7 @@ namespace ms {
 
         // Bitmaps get packed into the atlas from Game::update(), which runs outside this frame, so
         // leaving a texture bound here would upload them into it instead.
-        glBindTexture(GL_TEXTURE_2D, atlas_);
+        glBindTexture(GL_TEXTURE_2D, scene_atlas_.texture);
     }
 
     void GraphicsGL::draw_filter(GLuint source) {
@@ -1510,19 +1554,11 @@ namespace ms {
     }
 
     std::vector<GraphicsGL::Quad> &GraphicsGL::batch_quads() {
-        return ui_pass_ ? ui_quads_ : quads_;
+        return UIRenderer::get().active() ? UIRenderer::get().quads() : quads_;
     }
 
     std::vector<GraphicsGL::Circle> &GraphicsGL::batch_circles() {
-        return ui_pass_ ? ui_circles_ : circles_;
-    }
-
-    void GraphicsGL::begin_ui() {
-        ui_pass_ = true;
-    }
-
-    void GraphicsGL::end_ui() {
-        ui_pass_ = false;
+        return UIRenderer::get().active() ? UIRenderer::get().circles() : circles_;
     }
 
     void GraphicsGL::flush_batch(const std::vector<Quad> &quads,
@@ -1584,75 +1620,15 @@ namespace ms {
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        bind_atlas(scene_atlas_);
         flush_batch(quads_, circles_, VWIDTH, VHEIGHT);
-        flush_ui();
+        UIRenderer::get().flush();
     }
-
-    void GraphicsGL::flush_ui() {
-        if (ui_quads_.empty() && ui_circles_.empty()) {
-            return;
-        }
-
-        // The interface is laid out on a screen UI_SCALE smaller than the scene. Taking that size
-        // from the scene the picture is actually being drawn at, instead of from the live
-        // resolution, is what keeps a held transition frame mapped the way it was drawn: reading
-        // the live size while the scene is frozen squeezed the picture into the left of the view.
-        const int16_t ui_width = static_cast<int16_t>(std::ceil(VWIDTH / Constants::UI_SCALE));
-        const int16_t ui_height = static_cast<int16_t>(std::ceil(VHEIGHT / Constants::UI_SCALE));
-
-        if (ui_width_ != ui_width || ui_height_ != ui_height) {
-            if (ui_fbo_) {
-                glDeleteFramebuffers(1, &ui_fbo_);
-                glDeleteTextures(1, &ui_tex_);
-            }
-
-            glGenTextures(1, &ui_tex_);
-            glBindTexture(GL_TEXTURE_2D, ui_tex_);
-            // The interface is magnified by a non-integer factor when it is stretched back over
-            // the scene, so this is the pass that has to interpolate. The atlas itself stays
-            // nearest: it holds bitmaps with nothing between them, so smoothing a sprite as it is
-            // drawn would pull in its neighbour's edge.
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ui_width, ui_height, 0, GL_RGBA,
-                         GL_UNSIGNED_BYTE, nullptr);
-
-            glGenFramebuffers(1, &ui_fbo_);
-            glBindFramebuffer(GL_FRAMEBUFFER, ui_fbo_);
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                                   ui_tex_, 0);
-
-            ui_width_ = ui_width;
-            ui_height_ = ui_height;
-        }
-
-        // Drawn one-to-one into its own target, so every atlas texel lands on exactly one texel
-        // of it and the only magnification left is the one end_scene() applies to the surface.
-        glBindFramebuffer(GL_FRAMEBUFFER, ui_fbo_);
-        glViewport(0, 0, ui_width_, ui_height_);
-        glScissor(0, 0, ui_width_, ui_height_);
-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        flush_batch(ui_quads_, ui_circles_, ui_width_, ui_height_);
-
-        // Nothing else is expected to read this target while the frame is still open, so hand the
-        // scene pass back the state it left.
-        glBindFramebuffer(GL_FRAMEBUFFER, scene_fbo_);
-        glViewport(0, 0, scene_width_, scene_height_);
-        glScissor(0, 0, scene_width_, scene_height_);
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        set_scene_attribs();
-    }
-
     void GraphicsGL::clear_scene() {
         if (!locked_) {
             quads_.clear();
             circles_.clear();
-            ui_quads_.clear();
-            ui_circles_.clear();
+            UIRenderer::get().clear();
         }
     }
 }  // namespace ms

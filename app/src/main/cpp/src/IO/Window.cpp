@@ -17,6 +17,7 @@
 #include "../Configuration.h"
 #include "../Constants.h"
 #include "../Graphics/GraphicsGL.h"
+#include "../Graphics/UIRenderer.h"
 #include "../Timer.h"
 #include "UI.h"
 #include "stb/stb_image.h"
@@ -527,6 +528,10 @@ namespace ms {
         box_height_ = box_height;
         surface_width_ = surface_width;
         surface_height_ = surface_height;
+
+        // The interface is rasterised straight into a target this size, so it comes out at native
+        // pixel density instead of being drawn small and stretched over the box afterwards.
+        UIRenderer::get().set_native_size(box_width, box_height);
 
         glViewport(offset_x_, offset_y_, box_width, box_height);
         // Keeps the bars black, since the view itself is cleared over its own box.
