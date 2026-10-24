@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UITermsOfService.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 #include <utility>
 
 #include "../Components/MapleButton.h"

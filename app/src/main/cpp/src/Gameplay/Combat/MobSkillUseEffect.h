@@ -17,7 +17,7 @@
 
 #include <cstdint>
 #include <functional>
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 #include <vector>
 
 #include "../../Graphics/Animation.h"

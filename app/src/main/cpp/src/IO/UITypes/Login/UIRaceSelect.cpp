@@ -16,7 +16,7 @@
 #include "UIRaceSelect.h"
 
 #include <cctype>
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 #include "../Audio/Audio.h"
 #include "../Components/AreaButton.h"

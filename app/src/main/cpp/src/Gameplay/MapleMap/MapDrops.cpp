@@ -15,8 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "MapDrops.h"
 
-#include <nlnx/node.hpp>
-#include <nlnx/nx.hpp>
+#include <imgwz/node.hpp>
+#include <imgwz/nx.hpp>
 
 #include "../Audio/Audio.h"
 #include "../Constants.h"

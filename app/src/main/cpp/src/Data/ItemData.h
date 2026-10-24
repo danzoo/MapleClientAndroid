@@ -51,10 +51,10 @@ public:
     // Returns the item's gender based on item id.
     int8_t get_gender() const;
 
-    // Returns the item's name loaded from the String.nx file.
+    // Returns the item's name loaded from the String resources.
     const std::string &get_name() const;
 
-    // Returns the item's description loaded from the String.nx file.
+    // Returns the item's description loaded from the String resources.
     const std::string &get_desc() const;
 
     // Return the item category (also the node name).
@@ -68,7 +68,7 @@ private:
     // Allow the cache to use the constructor
     friend Cache<ItemData>;
 
-    // Creates an item from the game's Item.nx with the specified id.
+    // Creates an item from the game's Item tree with the specified id.
     ItemData(int32_t itemid);
 
     std::string get_eqcategory(int32_t itemid) const;

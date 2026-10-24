@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "BulletData.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 namespace ms {
 BulletData::BulletData(int32_t itemid) : item_data_(ItemData::get(itemid)) {

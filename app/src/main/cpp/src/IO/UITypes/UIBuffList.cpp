@@ -15,8 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIBuffList.h"
 
-#include <nlnx/node.hpp>
-#include <nlnx/nx.hpp>
+#include <imgwz/node.hpp>
+#include <imgwz/nx.hpp>
 
 #include "../Data/ItemData.h"
 #include "StringHandling.h"

@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIShop.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 #include <string>
 
 #include "../Audio/Audio.h"

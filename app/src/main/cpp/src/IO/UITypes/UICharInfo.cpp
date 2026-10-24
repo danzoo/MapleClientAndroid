@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UICharInfo.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 #include "../../Gameplay/Stage.h"
 #include "../../Net/Packets/PlayerInteractionPackets.h"

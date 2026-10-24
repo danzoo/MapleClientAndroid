@@ -15,7 +15,7 @@
 //	along with MSClient.  If not, see <https://www.gnu.org/licenses/>.
 #include "UINotification.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 #include "../Components/MapleButton.h"
 #include "../Constants.h"

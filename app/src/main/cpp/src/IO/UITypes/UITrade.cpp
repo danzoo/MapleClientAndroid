@@ -15,7 +15,7 @@
 //	along with MSClient.  If not, see <https://www.gnu.org/licenses/>.
 #include "UITrade.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 #include "../Components/MapleButton.h"
 #include "../Net/Packets/PlayerInteractionPackets.h"

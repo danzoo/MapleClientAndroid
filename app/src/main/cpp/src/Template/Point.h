@@ -16,7 +16,7 @@
 #pragma once
 
 #include <cmath>
-#include <nlnx/node.hpp>
+#include <imgwz/node.hpp>
 
 namespace ms {
 template<class T>

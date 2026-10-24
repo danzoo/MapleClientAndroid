@@ -13,29 +13,13 @@
 //
 //	You should have received a copy of the GNU Affero General Public License
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#include "NxFiles.h"
+#pragma once
 
-#include <fstream>
-#include <nlnx/node.hpp>
-#include <nlnx/nx.hpp>
+#include "../Error.h"
+#include "glfm.h"
 
-namespace ms::NxFiles {
-Error init(GLFMDisplay *pApp) {
-    try {
-        nl::nx::load_all(pApp);
-    } catch (const std::exception &ex) {
-        static const std::string message = ex.what();
-        return Error(Error::Code::NLNX, message.c_str());
-    }
-
-    constexpr const char *POSTCHAOS_BITMAP =
-        "Login.img/WorldSelect/BtChannel/layer:bg";
-
-    if (nl::nx::ui.resolve(POSTCHAOS_BITMAP).data_type()
-        != nl::node::type::bitmap) {
-        return Error::Code::WRONG_UI_FILE;
-    }
-
-    return Error::Code::NONE;
-}
-}  // namespace ms::NxFiles
+namespace ms::ImgFiles {
+// Points the resource reader at the Data directory of loose .img files and checks
+// that it is a UI tree the rest of the client can use.
+Error init(GLFMDisplay *pApp);
+}  // namespace ms::ImgFiles

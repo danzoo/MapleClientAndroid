@@ -16,7 +16,7 @@
 #include "Face.h"
 
 #include <iostream>
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 namespace ms {
 Expression::Id Expression::byaction(size_t action) {

@@ -16,7 +16,7 @@
 #include "GameInfo.h"
 #include "StringHandling.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 namespace ms::NxHelper::Map {
 MapInfo get_map_info_by_id(int32_t mapid) {

@@ -17,7 +17,7 @@
 
 #include <array>
 #include <iostream>
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 #include <string>
 
 namespace ms {

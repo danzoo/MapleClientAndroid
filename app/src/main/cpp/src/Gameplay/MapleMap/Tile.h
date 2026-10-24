@@ -16,7 +16,7 @@
 #pragma once
 
 #include <cstdint>
-#include <nlnx/node.hpp>
+#include <imgwz/node.hpp>
 #include <string>
 
 #include "../Graphics/Texture.h"

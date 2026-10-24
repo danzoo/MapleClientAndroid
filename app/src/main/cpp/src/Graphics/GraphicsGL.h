@@ -16,7 +16,7 @@
 #pragma once
 
 #include "GLES3/gl32.h"
-#include <nlnx/bitmap.hpp>
+#include <imgwz/bitmap.hpp>
 
 #include "../Constants.h"
 #include "../Error.h"
