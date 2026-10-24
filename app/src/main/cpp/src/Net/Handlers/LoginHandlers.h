@@ -23,6 +23,13 @@ class LoginResultHandler : public PacketHandler {
     void handle(InPacket &recv) const override;
 };
 
+// Handler for a packet that rejects an attempt to move past the login screen, which
+// carries the same reason codes as LoginResult but arrives after the account is already
+// authenticated - on the world select, the character select, or the channel handshake.
+class AfterLoginHandler : public PacketHandler {
+    void handle(InPacket &recv) const override;
+};
+
 // Handler for a packet that contains the status of the requested world
 class ServerStatusHandler : public PacketHandler {
     void handle(InPacket &recv) const override;

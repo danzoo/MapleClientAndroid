@@ -72,10 +72,6 @@ namespace ms {
         static constexpr std::chrono::milliseconds ATTACK_REPEAT{250};
         static constexpr std::chrono::milliseconds PICKUP_REPEAT{100};
         static constexpr std::chrono::milliseconds TALK_REPEAT{500};
-        // Loot has to be right at the feet. Counted to the nearest edge of the item's picture rather
-        // than to the point it is stored at, which is what made the reach differ by side.
-        static constexpr int16_t PICKUP_RANGE = 24;
-        static constexpr int16_t TALK_RANGE = 350;
 
         enum Direction : uint8_t { NONE = 0, LEFT = 1, RIGHT = 2, UP = 4, DOWN = 8 };
 

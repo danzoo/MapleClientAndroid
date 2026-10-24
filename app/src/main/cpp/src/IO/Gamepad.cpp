@@ -19,6 +19,7 @@
 #include <cmath>
 #include <optional>
 
+#include "../GameAttributes.h"
 #include "KeyType.h"
 #include "Stage.h"
 #include "UI.h"
@@ -132,13 +133,14 @@ namespace ms {
             case Button::X:
                 if (in_game) {
                     Stage::get().get_npcs().talk_to_nearest(
-                            Stage::get().get_player().get_position(), TALK_RANGE);
+                            Stage::get().get_player().get_position(),
+                            GameAttributes::TALK_RANGE);
                     talk_repeat_ = now;
                 }
                 break;
             case Button::Y:
                 if (in_game) {
-                    Stage::get().pick_up_near(PICKUP_RANGE);
+                    Stage::get().pick_up_near(GameAttributes::PICKUP_RANGE);
                     pickup_repeat_ = now;
                 }
                 break;
@@ -229,13 +231,14 @@ namespace ms {
         }
 
         if ((state_ & bit(Button::Y)) && now - pickup_repeat_ >= PICKUP_REPEAT) {
-            Stage::get().pick_up_near(PICKUP_RANGE);
+            Stage::get().pick_up_near(GameAttributes::PICKUP_RANGE);
             pickup_repeat_ = now;
         }
 
         if ((state_ & bit(Button::X)) && now - talk_repeat_ >= TALK_REPEAT) {
             Stage::get().get_npcs().talk_to_nearest(
-                    Stage::get().get_player().get_position(), TALK_RANGE);
+                    Stage::get().get_player().get_position(),
+                    GameAttributes::TALK_RANGE);
             talk_repeat_ = now;
         }
     }

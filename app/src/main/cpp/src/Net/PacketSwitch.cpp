@@ -344,6 +344,7 @@ enum Opcode : uint16_t {
     /// Login 1
     LOGIN_RESULT = 0,
     SERVER_STATUS = 3,
+    AFTER_LOGIN_ERROR = 9,
     SERVER_LIST = 10,
     CHAR_LIST = 11,
     SERVER_IP = 12,
@@ -450,6 +451,7 @@ PacketSwitch::PacketSwitch() {
 
     // Login handlers
     emplace<LOGIN_RESULT, LoginResultHandler>();
+    emplace<AFTER_LOGIN_ERROR, AfterLoginHandler>();
     emplace<SERVER_STATUS, ServerStatusHandler>();
     emplace<SERVER_LIST, ServerlistHandler>();
     emplace<CHAR_LIST, CharlistHandler>();

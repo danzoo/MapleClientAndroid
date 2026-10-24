@@ -15,6 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "LoginHandlers.h"
 
+#include <optional>
+
 #include "../../IO/UI.h"
 #include "../../IO/UITypes/Login/UICharSelect.h"
 #include "../../IO/UITypes/Login/UIGender.h"
@@ -35,20 +37,31 @@ auto fn_server_req = []<typename... T>(T && ...args) {
 auto fn_player_login = []<typename... T>(T && ...args) {
     PlayerLoginPacket(std::forward<T>(args)...).dispatch();
 };
+
+// Every reply to a login step arrives while the waiting box is up, and the box is the only
+// place the handlers left to return to. Taking it down here keeps the two rejection paths from
+// disagreeing about what they clear.
+std::optional<std::function<void()>> take_login_wait() {
+    auto loginwait = UI::get().get_element<UILoginWait>();
+
+    if (!loginwait || !loginwait->get().is_active()) {
+        return std::nullopt;
+    }
+
+    std::function<void()> okhandler = loginwait->get().get_handler();
+
+    // Remove previous UIs
+    UI::get().remove(UIElement::Type::LOGIN_NOTICE);
+    UI::get().remove(UIElement::Type::LOGIN_WAIT);
+    UI::get().remove(UIElement::Type::TOS);
+    UI::get().remove(UIElement::Type::GENDER);
+
+    return okhandler;
+}
 }  // namespace
 
 void LoginResultHandler::handle(InPacket &recv) const {
-    auto loginwait = UI::get().get_element<UILoginWait>();
-
-    if (loginwait && loginwait->get().is_active()) {
-        std::function<void()> okhandler = loginwait->get().get_handler();
-
-        // Remove previous UIs
-        UI::get().remove(UIElement::Type::LOGIN_NOTICE);
-        UI::get().remove(UIElement::Type::LOGIN_WAIT);
-        UI::get().remove(UIElement::Type::TOS);
-        UI::get().remove(UIElement::Type::GENDER);
-
+    if (auto okhandler = take_login_wait()) {
         // The packet should contain a 'reason' integer which can signify
         // various things
         if (int32_t reason = recv.read_int()) {
@@ -58,30 +71,33 @@ void LoginResultHandler::handle(InPacket &recv) const {
                 case 2:
                     UI::get().emplace<UILoginNotice>(
                         UILoginNotice::Message::BLOCKED_ID,
-                        okhandler);
+                        *okhandler);
                     break;
                 case 5:
                     UI::get().emplace<UILoginNotice>(
                         UILoginNotice::Message::NOT_REGISTERED,
-                        okhandler);
+                        *okhandler);
                     break;
                 case 7:
                     UI::get().emplace<UILoginNotice>(
                         UILoginNotice::Message::ALREADY_LOGGED_IN,
-                        okhandler);
+                        *okhandler);
                     break;
                 case 13:
                     UI::get().emplace<UILoginNotice>(
                         UILoginNotice::Message::UNABLE_TO_LOGIN_WITH_IP,
-                        okhandler);
+                        *okhandler);
                     break;
-                case 23: UI::get().emplace<UITermsOfService>(okhandler); break;
+                case 23:
+                    UI::get().emplace<UITermsOfService>(*okhandler);
+                    break;
                 default:
                     // Other reasons
                     if (reason > 0) {
                         auto reasonbyte = static_cast<int8_t>(reason - 1);
 
-                        UI::get().emplace<UILoginNotice>(reasonbyte, okhandler);
+                        UI::get().emplace<UILoginNotice>(reasonbyte,
+                                                         *okhandler);
                     }
 
                     break;
@@ -95,7 +111,7 @@ void LoginResultHandler::handle(InPacket &recv) const {
             Configuration::get().set_admin(account.admin);
 
             if (account.female == 10) {
-                UI::get().emplace<UIGender>(okhandler);
+                UI::get().emplace<UIGender>(*okhandler);
             } else {
                 // Save the "Login ID" if the box for it on the login screen is
                 // checked
@@ -108,6 +124,48 @@ void LoginResultHandler::handle(InPacket &recv) const {
                 // Request the list of worlds and channels online.
                 fn_server_req();
             }
+        }
+    }
+}
+
+void AfterLoginHandler::handle(InPacket &recv) const {
+    if (auto okhandler = take_login_wait()) {
+        if (int32_t reason = recv.read_short()) {
+            // The server uses the same reason numbers as the login result, but
+            // a handful of them only appear this side of authentication.
+            uint16_t message;
+
+            switch (reason) {
+                case 2:
+                case 3: message = UILoginNotice::Message::BLOCKED_ID; break;
+                case 4: message = UILoginNotice::Message::WRONG_PASSWORD; break;
+                case 5: message = UILoginNotice::Message::NOT_REGISTERED; break;
+                case 7:
+                    message = UILoginNotice::Message::ALREADY_LOGGED_IN;
+                    break;
+                case 11:
+                    message = UILoginNotice::Message::MATURE_CHANNEL;
+                    break;
+                case 13:
+                    message = UILoginNotice::Message::UNABLE_TO_LOGIN_WITH_IP;
+                    break;
+                case 14:
+                case 17:
+                    message = UILoginNotice::Message::WRONG_GATEWAY;
+                    break;
+                case 16:
+                case 21:
+                    message = UILoginNotice::Message::VERIFY_EMAIL;
+                    break;
+                case 23:
+                    UI::get().emplace<UITermsOfService>(*okhandler);
+                    return;
+                default:
+                    message = UILoginNotice::Message::UNKNOWN_ERROR;
+                    break;
+            }
+
+            UI::get().emplace<UILoginNotice>(message, *okhandler);
         }
     }
 }

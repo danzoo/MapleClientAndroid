@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "../Constants.h"
+#include "../GameAttributes.h"
 #include "../Gameplay/Stage.h"
 #include "../Graphics/GraphicsGL.h"
 #include "../Graphics/UIRenderer.h"
@@ -43,12 +44,6 @@
 #include "Window.h"
 
 namespace ms {
-    namespace {
-        // The size the login and character selection screens are designed around.
-        constexpr int16_t LOGIN_WIDTH = 800;
-        constexpr int16_t LOGIN_HEIGHT = 600;
-    }
-
     UI::UI() :
             state_(std::make_unique<UIStateNull>()),
             enabled_(true),
@@ -92,9 +87,11 @@ namespace ms {
                 // magnified by UI_SCALE on the way to the frame - so the view it fills has to be
                 // that much bigger than the art, or the screens would hang off the bottom right.
                 Constants::Constants::get().set_viewwidth(
-                        static_cast<int16_t>(LOGIN_WIDTH * Constants::UI_SCALE));
+                        static_cast<int16_t>(GameAttributes::LOGIN_WIDTH *
+                                             Constants::UI_SCALE));
                 Constants::Constants::get().set_viewheight(
-                        static_cast<int16_t>(LOGIN_HEIGHT * Constants::UI_SCALE));
+                        static_cast<int16_t>(GameAttributes::LOGIN_HEIGHT *
+                                             Constants::UI_SCALE));
                 state_ = std::make_unique<UIStateLogin>();
                 break;
             case State::GAME:

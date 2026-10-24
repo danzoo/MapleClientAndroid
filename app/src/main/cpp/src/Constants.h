@@ -68,7 +68,7 @@ constexpr Point<int16_t> to_view_space(const Point<int16_t> &uipos) {
 
 class Constants : public Singleton<Constants> {
 public:
-    Constants() : VIEWWIDTH(1366), VIEWHEIGHT(768) {}
+    Constants() : VIEWWIDTH(1280), VIEWHEIGHT(720) {}
 
     ~Constants() override = default;
 
