@@ -681,20 +681,26 @@ namespace ms {
             }
         }
 
-        std::vector<uint8_t> padded(static_cast<size_t>(pw) * ph * 4);
+        // The border is built in one reusable scratch buffer. A per-bitmap vector would have to be
+        // mmapped, zeroed and munmapped again for every sprite, and the login animation frames are
+        // large enough for that to dominate the time spent painting the logo.
+        atlas_scratch_.resize(static_cast<size_t>(pw) * ph * 4);
+        uint8_t *dst = atlas_scratch_.data();
+
         const uint8_t *src = static_cast<const uint8_t *>(bmp.data());
+        const size_t src_stride = static_cast<size_t>(width) * 4;
+        const size_t dst_stride = static_cast<size_t>(pw) * 4;
+
         for (GLshort row = 0; row < ph; row++) {
-            GLshort srow = std::min<GLshort>(std::max<GLshort>(row - 1, 0),
-                                             static_cast<GLshort>(height - 1));
-            const uint8_t *srowp = src + static_cast<size_t>(srow) * width * 4;
-            uint8_t *drowp = padded.data() + static_cast<size_t>(row) * pw * 4;
-            for (GLshort col = 0; col < pw; col++) {
-                GLshort scol = std::min<GLshort>(std::max<GLshort>(col - 1, 0),
-                                                 static_cast<GLshort>(width - 1));
-                std::memcpy(drowp + static_cast<size_t>(col) * 4,
-                            srowp + static_cast<size_t>(scol) * 4,
-                            4);
-            }
+            // Row 0 repeats the first source row and row ph-1 the last; the outer columns repeat
+            // the first and last pixel of their row.
+            const GLshort srow = std::min<GLshort>(std::max<GLshort>(row - 1, 0), height - 1);
+            const uint8_t *srowp = src + static_cast<size_t>(srow) * src_stride;
+            uint8_t *drowp = dst + static_cast<size_t>(row) * dst_stride;
+
+            std::memcpy(drowp + 4, srowp, src_stride);
+            std::memcpy(drowp, srowp, 4);
+            std::memcpy(drowp + 4 + src_stride, srowp + src_stride - 4, 4);
         }
 
         glBindTexture(GL_TEXTURE_2D, atlas.texture);
@@ -707,7 +713,7 @@ namespace ms {
                         ph,
                         GL_RGBA,
                         GL_UNSIGNED_BYTE,
-                        padded.data());
+                        dst);
 
         return atlas.offsets
                 .emplace(std::piecewise_construct,
@@ -1254,6 +1260,42 @@ namespace ms {
 //     }
 // }
 
+    Text::VerticalInk GraphicsGL::measure_ink_vertical(const std::vector<uint32_t> &text,
+                                                       const Text::Layout &layout,
+                                                       Text::Font id) {
+        Text::VerticalInk ink{0, 0};
+        bool found = false;
+
+        for (const Text::Layout::Line &line: layout) {
+            // The layout stores each line's baseline offset from the draw origin.
+            const int16_t baseline = line.position.y();
+
+            for (const Text::Layout::Word &word: line.words) {
+                for (size_t pos = word.first; pos < word.last; ++pos) {
+                    const Glyph &ch = get_glyph(text[pos], id);
+
+                    if (ch.bw <= 0 || ch.bh <= 0) {
+                        continue;
+                    }
+
+                    const int16_t glyph_top = baseline - ch.bt;
+                    const int16_t glyph_bottom = glyph_top + ch.bh;
+
+                    if (found) {
+                        ink.top = std::min(ink.top, glyph_top);
+                        ink.bottom = std::max(ink.bottom, glyph_bottom);
+                    } else {
+                        ink.top = glyph_top;
+                        ink.bottom = glyph_bottom;
+                        found = true;
+                    }
+                }
+            }
+        }
+
+        return ink;
+    }
+
     void GraphicsGL::draw_text(const DrawArgument &args,
                                const Range<int16_t> &vertical,
                                const std::vector<uint32_t> &text,
@@ -1280,39 +1322,92 @@ namespace ms {
                 vertical.second() > 0 ? vertical.second() : SCREEN.bottom();
 
         switch (background) {
-            case Text::Background::NAMETAG:
+            case Text::Background::NAMETAG: {
                 // If ever changing code in here confirm placements with map 10000
+                // The plate has to follow the real ink box. Deriving it from the font's synthetic
+                // line spacing only happened to look centred for the bundled latin faces, whose ink
+                // reaches as high as the x-height; a CJK glyph's tight box fills nearly the whole
+                // ascent and then sits flush against the top edge with the spare band below it.
+                // Horizontally the advance box has the same problem: alignment centres it around the
+                // draw position, but a glyph's left side bearing is not its right one, so the ink
+                // sits off-centre inside it and the plate drifts away from the text.
+                const Text::VerticalInk ink = measure_ink_vertical(text, layout, id);
+                int16_t ink_top = y + ink.top;
+                int16_t ink_bottom = y + ink.bottom;
+
+                static constexpr int16_t NAMETAG_PAD = 2;
+
+                if (ink.top == ink.bottom) {
+                    // Nothing to measure - a run of blanks still gets the old band.
+                    ink_top = y + 6;
+                    ink_bottom = ink_top + h - 2;
+                } else {
+                    ink_top -= NAMETAG_PAD;
+                    ink_bottom += NAMETAG_PAD;
+                }
+
                 for (const Text::Layout::Line &line: layout) {
-                    GLshort left = x + line.position.x() - 1;
-                    GLshort right = left + w + 3;
-                    GLshort top = y + line.position.y() - font_linespace(id) + 6;
-                    GLshort bottom = top + h - 2;
+                    int16_t ink_left = 0;
+                    int16_t ink_right = 0;
+                    bool found = false;
+
+                    for (const Text::Layout::Word &word: line.words) {
+                        for (size_t pos = word.first; pos < word.last; ++pos) {
+                            const Glyph &ch = get_glyph(text[pos], id);
+
+                            if (ch.bw <= 0 || ch.bh <= 0) {
+                                continue;
+                            }
+
+                            const int16_t glyph_left = x + line.position.x()
+                                                       + layout.advance(pos) + ch.bl;
+                            const int16_t glyph_right = glyph_left + ch.bw;
+
+                            if (found) {
+                                ink_left = std::min(ink_left, glyph_left);
+                                ink_right = std::max(ink_right, glyph_right);
+                            } else {
+                                ink_left = glyph_left;
+                                ink_right = glyph_right;
+                                found = true;
+                            }
+                        }
+                    }
+
+                    if (!found) {
+                        ink_left = x + line.position.x();
+                        ink_right = ink_left + w;
+                    }
+
+                    GLshort left = ink_left - NAMETAG_PAD;
+                    GLshort right = ink_right + NAMETAG_PAD;
                     Color ntcolor = Color(0.0f, 0.0f, 0.0f, 0.6f);
 
                     batch_quads().emplace_back(left,
                                                right,
-                                               top,
-                                               bottom,
+                                               ink_top,
+                                               ink_bottom,
                                                null_offset_,
                                                ntcolor,
                                                0.0f);
                     batch_quads().emplace_back(left - 1,
                                                left,
-                                               top + 1,
-                                               bottom - 1,
+                                               ink_top + 1,
+                                               ink_bottom - 1,
                                                null_offset_,
                                                ntcolor,
                                                0.0f);
                     batch_quads().emplace_back(right,
                                                right + 1,
-                                               top + 1,
-                                               bottom - 1,
+                                               ink_top + 1,
+                                               ink_bottom - 1,
                                                null_offset_,
                                                ntcolor,
                                                0.0f);
                 }
 
                 break;
+            }
         }
 
         for (const Text::Layout::Line &line: layout) {

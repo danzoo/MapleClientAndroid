@@ -85,6 +85,12 @@ namespace ms {
                        Color::Name colorid,
                        Text::Background background);
 
+        // Vertical extent of the real glyph ink in a laid-out string, relative to the y that would
+        // be handed to draw_text. {0, 0} means the run carries no ink at all.
+        Text::VerticalInk measure_ink_vertical(const std::vector<uint32_t> &text,
+                                               const Text::Layout &layout,
+                                               Text::Font id);
+
         // Draw a rectangle filled with the specified color.
         void draw_rectangle(int16_t x,
                             int16_t y,
@@ -456,6 +462,10 @@ namespace ms {
         // the two passes never share a filter setting or evict each other's bitmaps.
         AtlasState scene_atlas_;
         AtlasState ui_atlas_;
+
+        // Scratch for the one-texel replicated border, kept at the size of the largest sprite so
+        // that packing a picture never has to allocate and zero a fresh buffer for it.
+        std::vector<uint8_t> atlas_scratch_;
 
         // Platform-rendered glyph bitmaps, shared by both atlases: metrics are density independent
         // and the raster is packed into whichever atlas asks for it.
