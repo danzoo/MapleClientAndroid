@@ -55,6 +55,11 @@ namespace ms {
 
         void toggle_fullscreen();
 
+        // Ends the application for good. glfm owns the render loop on its own thread, so unlike
+        // the desktop build there is no loop condition to return from: the activity is asked to
+        // remove its task and the process is terminated here.
+        void terminate();
+
         void move_cursor(double x, double y);
 
         // Translate a touch position in surface pixels from the top left into the space the

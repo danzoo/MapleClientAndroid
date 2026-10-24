@@ -16,6 +16,7 @@
 #include "Window.h"
 #include "../Configuration.h"
 #include "../Constants.h"
+#include "../Audio/Audio.h"
 #include "../Graphics/GraphicsGL.h"
 #include "../Graphics/UIRenderer.h"
 #include "../Timer.h"
@@ -32,6 +33,8 @@
 #include <cmath>
 #include <utility>
 #include <android/log.h>
+#include <android/native_activity.h>
+#include <jni.h>
 
 #include "Gamepad.h"
 
@@ -551,5 +554,42 @@ namespace ms {
 
     GLFMDisplay *Window::get_display() {
         return display;
+    }
+
+    void Window::terminate() {
+        // BASS runs its own threads and holds the audio device, so releasing it first is what stops
+        // the music being cut off mid-buffer and leaves the device free for whatever starts next.
+        Sound::close();
+
+        auto *activity = static_cast<ANativeActivity *>(glfmGetAndroidActivity(display));
+
+        if (activity != nullptr && activity->vm != nullptr) {
+            // ANativeActivity_finish only queues a message on the Java main thread, which this
+            // process is about to stop having, so the request to close the window has to be made
+            // synchronously here. finishAndRemoveTask is what takes the task out of recents rather
+            // than leaving a dead entry behind.
+            JNIEnv *env = nullptr;
+
+            if (activity->vm->AttachCurrentThread(&env, nullptr) == JNI_OK && env != nullptr) {
+                const jclass clazz = env->GetObjectClass(activity->clazz);
+                const jmethodID finish = env->GetMethodID(clazz, "finishAndRemoveTask", "()V");
+
+                if (finish != nullptr) {
+                    env->CallVoidMethod(activity->clazz, finish);
+                }
+
+                if (env->ExceptionCheck()) {
+                    env->ExceptionClear();
+                }
+
+                env->DeleteLocalRef(clazz);
+            }
+        }
+
+        // glfm's frame loop is what this callback was called from, so there is no way back out of
+        // it, and running the static destructors would race with the network thread that is still
+        // alive. Ending the process directly is the clean exit; the socket goes with it, which is
+        // how the server learns the client is gone.
+        _exit(0);
     }
 }  // namespace ms
