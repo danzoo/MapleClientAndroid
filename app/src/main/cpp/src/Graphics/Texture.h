@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
-#include <nlnx/bitmap.hpp>
+#include <imgwz/bitmap.hpp>
 
 #include "DrawArgument.h"
 

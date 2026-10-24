@@ -26,7 +26,7 @@ public:
     enum Code {
         NONE,
         CONNECTION,
-        NLNX,
+        IMGWZ,
         MISSING_FILE,
         WRONG_UI_FILE,
         GLFW,
@@ -68,9 +68,9 @@ private:
     static constexpr const char* msgs_[Code::LENGTH] = {
         "",
         "Cannot connect to server.",
-        "Could not initialize NLNX.",
+        "Could not load the game files.",
         "Missing a game file: ",
-        "UI.nx has wrong version.",
+        "The UI resources have the wrong version.",
         "Could not initialize GLFW.",
         "Could not initialize GLEW.",
         "Could not initialize FreeType.",

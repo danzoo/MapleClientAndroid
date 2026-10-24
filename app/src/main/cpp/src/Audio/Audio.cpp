@@ -17,8 +17,8 @@
 
 #include <bass.h>
 
-#include <nlnx/audio.hpp>
-#include <nlnx/nx.hpp>
+#include <imgwz/audio.hpp>
+#include <imgwz/nx.hpp>
 #include <utility>
 
 #include "../Configuration.h"

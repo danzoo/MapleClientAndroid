@@ -16,7 +16,7 @@
 #include "Body.h"
 
 #include <array>
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 #include <string>
 
 #include "StringHandling.h"

@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIUserList.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 #include "../IO/Components/MapleButton.h"
 #include "../IO/Components/TwoSpriteButton.h"

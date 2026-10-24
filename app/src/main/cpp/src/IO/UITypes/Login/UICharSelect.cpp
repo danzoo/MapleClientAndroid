@@ -32,7 +32,7 @@
 #include <windows.h>
 #endif
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 #include <utility>
 
 namespace ms {

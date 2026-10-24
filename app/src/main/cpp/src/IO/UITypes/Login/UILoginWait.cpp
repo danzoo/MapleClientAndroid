@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UILoginWait.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 #include <utility>
 #define _SILENCE_CXX17_RESULT_OF_DEPRECATION_WARNING
 #include "../../Net/PacketProcessor.h"

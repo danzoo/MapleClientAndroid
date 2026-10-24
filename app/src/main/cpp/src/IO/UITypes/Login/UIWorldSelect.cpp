@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIWorldSelect.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 #include "../../Audio/Audio.h"
 #include "../../Net/Packets/LoginPackets.h"

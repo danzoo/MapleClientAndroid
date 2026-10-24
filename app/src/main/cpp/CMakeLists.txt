@@ -210,7 +210,7 @@ add_library(OpenMapleClient SHARED
         src/Net/Handlers/Helpers/LoginParser.cpp
         src/Net/Handlers/Helpers/MovementParser.cpp
         src/Util/GameInfo.cpp
-        src/Util/NxFiles.cpp
+        src/Util/ImgFiles.cpp
         src/Util/StringHandling.cpp
         ${CMAKE_SOURCE_DIR}/thirdparty/stb/deprecated/stb_image.c
         )
@@ -247,4 +247,4 @@ target_include_directories(OpenMapleClient
         ${CMAKE_SOURCE_DIR}/thirdparty/glfm/include
         )
 # add lib dependencies
-target_link_libraries(OpenMapleClient glfm android log jnigraphics GLESv3 freetype NoLifeNx ${CMAKE_SOURCE_DIR}/thirdparty/bass/libs/arm64-v8a/libbass.so)
+target_link_libraries(OpenMapleClient glfm android log jnigraphics GLESv3 freetype imgwz ${CMAKE_SOURCE_DIR}/thirdparty/bass/libs/arm64-v8a/libbass.so)

@@ -25,7 +25,7 @@
 #include "Timer.h"
 #include "Constants.h"
 #include "Util/HardwareInfo.h"
-#include "Util/NxFiles.h"
+#include "Util/ImgFiles.h"
 #include "ScreenResolution.h"
 #include "Singleton.h"
 
@@ -40,10 +40,10 @@ Error Game::init(GLFMDisplay *pApp) {
         return error;
     }
     std::cout << "Session init success." << std::endl;
-    if (Error error = NxFiles::init(pApp)) {
+    if (Error error = ImgFiles::init(pApp)) {
         return error;
     }
-    std::cout << "NxFiles init success." << std::endl;
+    std::cout << "ImgFiles init success." << std::endl;
 
     if (Error error = Window::get().init(pApp)) {
         return error;

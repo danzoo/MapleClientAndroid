@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "ChatBalloon.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 #include "../Constants.h"
 

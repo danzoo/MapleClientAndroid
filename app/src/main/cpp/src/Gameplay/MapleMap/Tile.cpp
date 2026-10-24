@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Tile.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 namespace ms {
 Tile::Tile(const nl::node &src, const std::string &ts) {

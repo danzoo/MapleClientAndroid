@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIChannel.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 #include "../../Gameplay/Stage.h"
 #include "../Audio/Audio.h"

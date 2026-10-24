@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "WeaponData.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 namespace ms {
 WeaponData::WeaponData(int32_t equipid) : equip_data_(EquipData::get(equipid)) {

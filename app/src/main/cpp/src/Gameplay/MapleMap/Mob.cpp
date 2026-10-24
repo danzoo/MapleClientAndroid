@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Mob.h"
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 #include "../../Net/Packets/GameplayPackets.h"
 #include "../Stage.h"

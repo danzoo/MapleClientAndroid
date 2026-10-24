@@ -16,7 +16,7 @@
 #include "MapleFrame.h"
 
 #include <algorithm>
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 namespace ms {
 MapleFrame::MapleFrame(const nl::node &src) {

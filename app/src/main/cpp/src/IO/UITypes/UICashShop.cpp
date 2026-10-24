@@ -27,7 +27,7 @@
 #include <windows.h>
 #endif
 
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 
 namespace ms {
 namespace {

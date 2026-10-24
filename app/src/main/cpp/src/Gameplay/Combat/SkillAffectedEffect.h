@@ -17,7 +17,7 @@
 
 #include "../../Template/BoolPair.h"
 #include "../Character/Char.h"
-#include "nlnx/nx.hpp"
+#include "imgwz/nx.hpp"
 
 namespace ms {
 // Interface for affected effects

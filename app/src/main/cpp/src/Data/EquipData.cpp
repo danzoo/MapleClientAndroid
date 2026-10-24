@@ -16,7 +16,7 @@
 #include "EquipData.h"
 
 #include <array>
-#include <nlnx/nx.hpp>
+#include <imgwz/nx.hpp>
 #include <string>
 
 namespace ms {
