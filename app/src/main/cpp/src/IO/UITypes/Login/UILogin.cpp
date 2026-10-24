@@ -20,6 +20,7 @@
 #include "../../Net/Packets/LoginPackets.h"
 #include "../Components/MapleButton.h"
 #include "../UI.h"
+#include "../Window.h"
 #include "UILoginNotice.h"
 #include "UILoginWait.h"
 
@@ -246,7 +247,7 @@ Button::State UILogin::button_pressed(uint16_t id) {
             Setting<SaveLogin>::get().save(saveid_);
 
             return Button::State::MOUSEOVER;
-        case Buttons::BT_QUIT: UI::get().quit(); return Button::State::PRESSED;
+        case Buttons::BT_QUIT: Window::get().terminate(); return Button::State::PRESSED;
         default: return Button::State::NORMAL;
     }
 }

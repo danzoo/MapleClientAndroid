@@ -21,6 +21,7 @@
 #include "../Audio/Audio.h"
 #include "../Components/MapleButton.h"
 #include "../UI.h"
+#include "../Window.h"
 #include "KeyAction.h"
 
 namespace ms {
@@ -126,8 +127,7 @@ void UIQuitConfirm::send_key(int32_t keycode, bool pressed, bool escape) {
         if (escape) {
             deactivate();
         } else if (keycode == KeyAction::RETURN) {
-            UI::get().quit();
-            deactivate();
+            Window::get().terminate();
         }
     }
 }
@@ -138,7 +138,7 @@ UIElement::Type UIQuitConfirm::get_type() const {
 
 Button::State UIQuitConfirm::button_pressed(uint16_t buttonid) {
     if (buttonid == BT_OK) {
-        UI::get().quit();
+        Window::get().terminate();
     }
 
     deactivate();

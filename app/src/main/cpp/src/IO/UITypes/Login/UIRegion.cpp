@@ -19,6 +19,7 @@
 
 #include "../Components/MapleButton.h"
 #include "../UI.h"
+#include "../Window.h"
 #include "UIWorldSelect.h"
 
 namespace ms {
@@ -90,7 +91,7 @@ Button::State UIRegion::button_pressed(uint16_t buttonid) {
 
             break;
         }
-        case Buttons::EXIT: UI::get().quit(); break;
+        case Buttons::EXIT: Window::get().terminate(); break;
         default: break;
     }
 
