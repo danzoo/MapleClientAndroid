@@ -131,6 +131,12 @@ protected:
 
     void draw_buttons(float alpha) const;
 
+    // Id of the active button that a press at pos belongs to, or false when nothing does. The
+    // rectangle is grown by TOUCH_PAD so a thumb tap still counts; an exact hit always wins over
+    // a padded one. Overrides of send_cursor that walk buttons_ themselves have to call this,
+    // otherwise their hit areas are the raw sprite and stay un-tappable on a phone.
+    bool button_at(Point<int16_t> pos, uint16_t &buttonid) const;
+
     std::map<uint16_t, std::unique_ptr<Button>> buttons_;
     std::vector<Sprite> sprites_;
     Point<int16_t> position_;

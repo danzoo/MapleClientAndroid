@@ -70,8 +70,14 @@ void const* bitmap::data() const
         img_report_error("canvas", "unsupported pixel format");
         return nullptr;
     }
-    if (expected + 0x20 > bitmap_raw.size()) {
-        bitmap_raw.resize(expected + 0x20);
+    // Some editors (WvSMaps) save each canvas with a second all-zero layer appended
+    // behind the real pixels, so the stream can legitimately be twice as long.
+    // Inflate into room for that case plus headroom, so zlib always gets space to
+    // reach the end-of-stream marker instead of stopping on a exactly-full buffer.
+    auto const capacity = expected * 2;
+    auto const room = capacity + 0x20;
+    if (room > bitmap_raw.size()) {
+        bitmap_raw.resize(room);
     }
 
     z_stream stream;
@@ -82,19 +88,31 @@ void const* bitmap::data() const
     stream.next_in = const_cast<Bytef*>(canvas.payload + 2);
     stream.avail_in = canvas.csize > 2 ? static_cast<uInt>(canvas.csize - 2) : 0;
     stream.next_out = reinterpret_cast<Bytef*>(bitmap_raw.data());
-    stream.avail_out = static_cast<uInt>(expected);
+    stream.avail_out = static_cast<uInt>(room);
     int code = Z_OK;
     while (code == Z_OK) {
         code = ::inflate(&stream, Z_NO_FLUSH);
-        // No room left and the stream did not end means the payload does not match the
-        // stated size, so stop rather than spin on an empty output buffer.
-        if (code == Z_OK && stream.avail_out == 0) {
-            break;
-        }
     }
     auto const produced = static_cast<std::size_t>(stream.total_out);
+    auto const left_in = static_cast<std::size_t>(stream.avail_in);
     ::inflateEnd(&stream);
-    if (code != Z_STREAM_END || produced != expected) {
+    // Editors do not always close the deflate stream with a final block, so "input
+    // ran out" is accepted as complete. Z_DATA_ERROR still means a broken payload.
+    bool const decoded = code == Z_STREAM_END || (code == Z_BUF_ERROR && left_in == 0);
+    if (!decoded) {
+        img_report_error("canvas", "payload did not decode");
+        return nullptr;
+    }
+    if (produced == capacity) {
+        auto const second = reinterpret_cast<std::uint8_t const*>(bitmap_raw.data()) + expected;
+        for (std::size_t i = 0; i < expected; ++i) {
+            if (second[i] != 0) {
+                img_report_error("canvas", "double-layer payload is not empty");
+                return nullptr;
+            }
+        }
+    } else if (produced != expected) {
+        img_report_error("canvas", "payload size mismatch");
         return nullptr;
     }
 
