@@ -51,17 +51,39 @@ void MapleFrame::draw(Point<int16_t> position,
     north_west_.draw(DrawArgument(left, top));
     south_west_.draw(DrawArgument(left, bottom));
 
-    for (int y = top; y < bottom; y += ytile_) {
-        west_.draw(DrawArgument(left, y));
-        east_.draw(DrawArgument(right, y));
+    // A one-pixel-thick edge is art meant to be stretched, not repeated: tiling it emits one
+    // degenerate quad per pixel and, because the interface is magnified by a fractional UI_SCALE
+    // on its way to the native-resolution target, those quads stop abutting and the border reads as
+    // a comb. Wider tiles really are repeated, so they keep the loop.
+    if (ytile_ == 1) {
+        west_.draw(
+            DrawArgument(Point<int16_t>(left, top),
+                         Point<int16_t>(west_.width(), height)));
+        east_.draw(
+            DrawArgument(Point<int16_t>(right, top),
+                         Point<int16_t>(east_.width(), height)));
+    } else {
+        for (int y = top; y < bottom; y += ytile_) {
+            west_.draw(DrawArgument(left, y));
+            east_.draw(DrawArgument(right, y));
+        }
     }
 
     center_.draw(
         DrawArgument(Point<int16_t>(left, top), Point<int16_t>(width, height)));
 
-    for (int x = left; x < right; x += xtile_) {
-        north_.draw(DrawArgument(x, top));
-        south_.draw(DrawArgument(x, bottom));
+    if (xtile_ == 1) {
+        north_.draw(
+            DrawArgument(Point<int16_t>(left, top),
+                         Point<int16_t>(width, north_.height())));
+        south_.draw(
+            DrawArgument(Point<int16_t>(left, bottom),
+                         Point<int16_t>(width, south_.height())));
+    } else {
+        for (int x = left; x < right; x += xtile_) {
+            north_.draw(DrawArgument(x, top));
+            south_.draw(DrawArgument(x, bottom));
+        }
     }
 
     north_east_.draw(DrawArgument(right, top));

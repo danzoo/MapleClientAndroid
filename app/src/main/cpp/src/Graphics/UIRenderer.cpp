@@ -78,6 +78,15 @@ void UIRenderer::flush() {
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
+    // This target is composited as premultiplied alpha, so the accumulation inside it has to keep
+    // rgb and alpha consistent: plain SRC_ALPHA blending would multiply the alpha channel by itself
+    // (a*a instead of a), and the composite would then let the picture behind show through every
+    // translucent panel far more than the art intends.
+    glBlendFuncSeparate(GL_SRC_ALPHA,
+                        GL_ONE_MINUS_SRC_ALPHA,
+                        GL_ONE,
+                        GL_ONE_MINUS_SRC_ALPHA);
+
     // Coordinates are divided by the layout size to land in clip space, while the viewport is the
     // native target: that ratio is what magnifies every window, button and glyph up to native pixel
     // density in a single rasterisation, rather than drawing small and stretching afterwards.
@@ -87,6 +96,7 @@ void UIRenderer::flush() {
 
     // Nothing else is expected to read this target while the frame is still open, so hand the scene
     // pass back the state it left.
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glBindFramebuffer(GL_FRAMEBUFFER, graphics.scene_fbo_);
     glViewport(0, 0, graphics.scene_width_, graphics.scene_height_);
     glScissor(0, 0, graphics.scene_width_, graphics.scene_height_);

@@ -16,7 +16,9 @@
 #include "GraphicsGL.h"
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <iostream>
+#include <vector>
 
 #include <android/log.h>
 
@@ -576,7 +578,16 @@ namespace ms {
             return null_offset_;
         }
 
-        Leftover value = Leftover(x, y, width, height);
+        // Bitmaps are stored with a one-texel border of replicated edge pixels. Texture
+        // coordinates address texel corners, so a filtered sample taken exactly on a sprite's
+        // edge would otherwise blend with whichever sprite happens to be packed next to it in
+        // the atlas; the replicated border makes those edge samples resolve to the sprite's
+        // own edge colour. This is what keeps a stretched one-pixel fill (tooltip bodies) and
+        // abutting nine-slice pieces (window borders) free of foreign-colour fringes.
+        const GLshort pw = static_cast<GLshort>(width + 2);
+        const GLshort ph = static_cast<GLshort>(height + 2);
+
+        Leftover value = Leftover(x, y, pw, ph);
 
         size_t lid = atlas.leftovers.findnode(
                 value,
@@ -590,47 +601,47 @@ namespace ms {
             x = leftover.left;
             y = leftover.top;
 
-            GLshort width_delta = leftover.width() - width;
-            GLshort height_delta = leftover.height() - height;
+            GLshort width_delta = leftover.width() - pw;
+            GLshort height_delta = leftover.height() - ph;
 
             atlas.leftovers.erase(lid);
 
-            atlas.wasted -= width * height;
+            atlas.wasted -= pw * ph;
 
             if (width_delta >= MINLOSIZE && height_delta >= MINLOSIZE) {
                 atlas.leftovers.add(
                         atlas.rlid,
-                        Leftover(x + width, y + height, width_delta, height_delta));
+                        Leftover(x + pw, y + ph, width_delta, height_delta));
                 atlas.rlid++;
 
-                if (width >= MINLOSIZE) {
+                if (pw >= MINLOSIZE) {
                     atlas.leftovers.add(atlas.rlid,
-                                        Leftover(x, y + height, width, height_delta));
+                                        Leftover(x, y + ph, pw, height_delta));
                     atlas.rlid++;
                 }
 
-                if (height >= MINLOSIZE) {
+                if (ph >= MINLOSIZE) {
                     atlas.leftovers.add(atlas.rlid,
-                                        Leftover(x + width, y, width_delta, height));
+                                        Leftover(x + pw, y, width_delta, ph));
                     atlas.rlid++;
                 }
             } else if (width_delta >= MINLOSIZE) {
                 atlas.leftovers.add(
                         atlas.rlid,
-                        Leftover(x + width, y, width_delta, height + height_delta));
+                        Leftover(x + pw, y, width_delta, ph + height_delta));
                 atlas.rlid++;
             } else if (height_delta >= MINLOSIZE) {
                 atlas.leftovers.add(
                         atlas.rlid,
-                        Leftover(x, y + height, width + width_delta, height_delta));
+                        Leftover(x, y + ph, pw + width_delta, height_delta));
                 atlas.rlid++;
             }
         } else {
-            if (atlas.border.x() + width > ATLASW) {
+            if (atlas.border.x() + pw > ATLASW) {
                 atlas.border.set_x(0);
                 atlas.border.shift_y(atlas.y_range.second());
 
-                if (atlas.border.y() + height > ATLASH) {
+                if (atlas.border.y() + ph > ATLASH) {
                     clear_internal(atlas);
                 } else {
                     atlas.y_range = Range<GLshort>();
@@ -640,33 +651,49 @@ namespace ms {
             x = atlas.border.x();
             y = atlas.border.y();
 
-            atlas.border.shift_x(width);
+            atlas.border.shift_x(pw);
 
-            if (height > atlas.y_range.second()) {
-                if (x >= MINLOSIZE && height - atlas.y_range.second() >= MINLOSIZE) {
+            if (ph > atlas.y_range.second()) {
+                if (x >= MINLOSIZE && ph - atlas.y_range.second() >= MINLOSIZE) {
                     atlas.leftovers.add(atlas.rlid,
                                         Leftover(0,
                                                  atlas.y_range.first(),
                                                  x,
-                                                 height - atlas.y_range.second()));
+                                                 ph - atlas.y_range.second()));
                     atlas.rlid++;
                 }
 
-                atlas.wasted += x * (height - atlas.y_range.second());
+                atlas.wasted += x * (ph - atlas.y_range.second());
 
-                atlas.y_range = Range<int16_t>(y + height, height);
-            } else if (height < atlas.y_range.first() - y) {
-                if (width >= MINLOSIZE
-                    && atlas.y_range.first() - y - height >= MINLOSIZE) {
+                atlas.y_range = Range<int16_t>(y + ph, ph);
+            } else if (ph < atlas.y_range.first() - y) {
+                if (pw >= MINLOSIZE
+                    && atlas.y_range.first() - y - ph >= MINLOSIZE) {
                     atlas.leftovers.add(atlas.rlid,
                                         Leftover(x,
-                                                 y + height,
-                                                 width,
-                                                 atlas.y_range.first() - y - height));
+                                                 y + ph,
+                                                 pw,
+                                                 atlas.y_range.first() - y - ph));
                     atlas.rlid++;
                 }
 
-                atlas.wasted += width * (atlas.y_range.first() - y - height);
+                atlas.wasted += pw * (atlas.y_range.first() - y - ph);
+            }
+        }
+
+        std::vector<uint8_t> padded(static_cast<size_t>(pw) * ph * 4);
+        const uint8_t *src = static_cast<const uint8_t *>(bmp.data());
+        for (GLshort row = 0; row < ph; row++) {
+            GLshort srow = std::min<GLshort>(std::max<GLshort>(row - 1, 0),
+                                             static_cast<GLshort>(height - 1));
+            const uint8_t *srowp = src + static_cast<size_t>(srow) * width * 4;
+            uint8_t *drowp = padded.data() + static_cast<size_t>(row) * pw * 4;
+            for (GLshort col = 0; col < pw; col++) {
+                GLshort scol = std::min<GLshort>(std::max<GLshort>(col - 1, 0),
+                                                 static_cast<GLshort>(width - 1));
+                std::memcpy(drowp + static_cast<size_t>(col) * 4,
+                            srowp + static_cast<size_t>(scol) * 4,
+                            4);
             }
         }
 
@@ -676,16 +703,19 @@ namespace ms {
                         0,
                         x,
                         y,
-                        width,
-                        height,
+                        pw,
+                        ph,
                         GL_RGBA,
                         GL_UNSIGNED_BYTE,
-                        bmp.data());
+                        padded.data());
 
         return atlas.offsets
                 .emplace(std::piecewise_construct,
                          std::forward_as_tuple(id),
-                         std::forward_as_tuple(x, y, width, height))
+                         std::forward_as_tuple(static_cast<GLshort>(x + 1),
+                                               static_cast<GLshort>(y + 1),
+                                               width,
+                                               height))
                 .first->second;
     }
 
