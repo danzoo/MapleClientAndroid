@@ -20,6 +20,8 @@
 #define _SILENCE_CXX17_RESULT_OF_DEPRECATION_WARNING
 #include "../../Net/PacketProcessor.h"
 #include "../Components/MapleButton.h"
+#include "../UI.h"
+#include "UILoginNotice.h"
 
 namespace ms {
 UILoginWait::UILoginWait() : UILoginWait([]() {}) {}
@@ -42,6 +44,20 @@ UILoginWait::UILoginWait(std::function<void()> okhandler) :
 
 UIElement::Type UILoginWait::get_type() const {
     return TYPE;
+}
+
+void UILoginWait::update() {
+    UIElement::update();
+
+    if (++elapsed_ < TIMEOUT_TICKS) {
+        return;
+    }
+
+    deactivate();
+
+    UI::get().remove(UIElement::Type::LOGIN_NOTICE);
+    UI::get().emplace<UILoginNotice>(
+        UILoginNotice::Message::UNABLE_TO_CONNECT, okhandler_);
 }
 
 void UILoginWait::close() {

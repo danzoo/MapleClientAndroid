@@ -288,12 +288,12 @@ struct Fullscreen : public Configuration::BoolEntry {
 
 // The width of the screen
 struct Width : public Configuration::ShortEntry {
-    Width() : ShortEntry("Width", "1366") {}
+    Width() : ShortEntry("Width", "1280") {}
 };
 
 // The height of the screen
 struct Height : public Configuration::ShortEntry {
-    Height() : ShortEntry("Height", "768") {}
+    Height() : ShortEntry("Height", "720") {}
 };
 
 // Whether to use VSync

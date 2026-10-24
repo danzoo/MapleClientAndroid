@@ -30,6 +30,8 @@ public:
 
     UIElement::Type get_type() const override;
 
+    void update() override;
+
     void close();
 
     std::function<void()> get_handler();
@@ -40,6 +42,11 @@ protected:
 private:
     enum Buttons : uint16_t { CANCEL };
 
+    // Nothing on the server side promises an answer, and the connection itself can die without the
+    // login loop ever noticing. Without this the box would sit over the login screen forever.
+    static constexpr uint32_t TIMEOUT_TICKS = 3750;  // 30s at the 8ms timestep
+
     std::function<void()> okhandler_;
+    uint32_t elapsed_ = 0;
 };
 }  // namespace ms
