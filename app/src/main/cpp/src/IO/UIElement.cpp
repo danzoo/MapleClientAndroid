@@ -95,13 +95,12 @@ void UIElement::remove_cursor() {
     }
 }
 
-Cursor::State UIElement::send_cursor(bool down, Point<int16_t> pos) {
-    Cursor::State ret = down ? Cursor::State::CLICKING : Cursor::State::IDLE;
-
+bool UIElement::button_at(Point<int16_t> pos, uint16_t &buttonid) const {
     constexpr int16_t TOUCH_PAD = 6;
 
-    uint16_t matched = 0;
-    bool found = false;
+    buttonid = 0;
+    bool exact = false;
+
     for (auto &btit : buttons_) {
         auto *button = btit.second.get();
         if (!button->is_active()) {
@@ -110,19 +109,30 @@ Cursor::State UIElement::send_cursor(bool down, Point<int16_t> pos) {
 
         Rectangle<int16_t> b = button->bounds(position_);
         if (b.contains(pos)) {
-            matched = btit.first;
-            found = true;
+            buttonid = btit.first;
+            exact = true;
             break;
         }
 
-        if (!found) {
-            Rectangle<int16_t> padded(b.get_left_top() - TOUCH_PAD,
-                                      b.get_right_bottom() + TOUCH_PAD);
-            if (padded.contains(pos)) {
-                matched = btit.first;
+        Rectangle<int16_t> padded(b.get_left_top() - TOUCH_PAD,
+                                  b.get_right_bottom() + TOUCH_PAD);
+        if (padded.contains(pos)) {
+            // Remembered, not returned: a later button that the press lands on exactly still
+            // wins, because overlapping sprites should prefer the one actually under the finger.
+            if (buttonid == 0) {
+                buttonid = btit.first;
             }
         }
     }
+
+    return exact || buttonid != 0;
+}
+
+Cursor::State UIElement::send_cursor(bool down, Point<int16_t> pos) {
+    Cursor::State ret = down ? Cursor::State::CLICKING : Cursor::State::IDLE;
+
+    uint16_t matched = 0;
+    bool found = button_at(pos, matched);
 
     for (auto &btit : buttons_) {
         auto *button = btit.second.get();

@@ -551,7 +551,11 @@ namespace ms {
             size_t used = ATLASW * atlas->border.y() + atlas->border.x() * atlas->y_range.second();
             double usedpercent = static_cast<double>(used) / (ATLASW * ATLASH);
 
-            if (usedpercent > 80.0) {
+            // usedpercent is a 0..1 fraction, so the threshold has to be one too. Comparing it
+            // against 80.0 kept this reclaim dead, which left the mid-frame overflow inside
+            // get_offset as the only way to free the atlas, and that one invalidates the offsets
+            // of quads already batched for the frame being drawn.
+            if (usedpercent > 0.80) {
                 clear_internal(*atlas);
             }
         }
@@ -576,6 +580,18 @@ namespace ms {
 
         if (width <= 0 || height <= 0) {
             return null_offset_;
+        }
+
+        // Decode before reserving any atlas area. A canvas with no payload (a blank animation
+        // frame) has nothing to upload, and packing it first burned atlas space on every attempt
+        // while caching nothing, so the atlas filled up and was wiped over and over.
+        const uint8_t *src = static_cast<const uint8_t *>(bmp.data());
+
+        if (!src) {
+            // A canvas whose payload cannot be decoded stays unpainted instead of taking the
+            // whole frame down with it. Caching the empty offset also stops the decode from
+            // being retried on every frame; it is dropped with the rest of the cache on clear.
+            return atlas.offsets.emplace(id, null_offset_).first->second;
         }
 
         // Bitmaps are stored with a one-texel border of replicated edge pixels. Texture
@@ -687,7 +703,6 @@ namespace ms {
         atlas_scratch_.resize(static_cast<size_t>(pw) * ph * 4);
         uint8_t *dst = atlas_scratch_.data();
 
-        const uint8_t *src = static_cast<const uint8_t *>(bmp.data());
         const size_t src_stride = static_cast<size_t>(width) * 4;
         const size_t dst_stride = static_cast<size_t>(pw) * 4;
 

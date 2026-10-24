@@ -403,11 +403,20 @@ void UICharSelect::update() {
 
 void UICharSelect::doubleclick(Point<int16_t> cursorpos) {
     uint16_t button_index = selected_character_ + Buttons::CHARACTER_SLOT0;
-    auto &btit = buttons_[button_index];
 
-    if (btit->is_active() && btit->bounds(position_).contains(cursorpos)
-        && btit->get_state() == Button::State::NORMAL
-        && button_index >= Buttons::CHARACTER_SLOT0) {
+    // selected_character_ is restored from the DefaultCharacter setting and can be stale from a
+    // different world, so this slot may not exist at all. Indexing the map would insert a null
+    // unique_ptr and dereference it.
+    auto btit = buttons_.find(button_index);
+
+    if (btit == buttons_.end()) {
+        return;
+    }
+
+    auto &button = btit->second;
+
+    if (button->is_active() && button->bounds(position_).contains(cursorpos)
+        && button->get_state() == Button::State::NORMAL) {
         button_pressed(Buttons::CHARACTER_SELECT);
     }
 }
@@ -427,9 +436,11 @@ Cursor::State UICharSelect::send_cursor(bool clicked,
 
     Cursor::State ret = clicked ? Cursor::State::CLICKING : Cursor::State::IDLE;
 
+    uint16_t matched = 0;
+    bool found = button_at(cursorpos, matched);
+
     for (auto &[btnid, button] : buttons_) {
-        if (button->is_active()
-            && button->bounds(position_).contains(cursorpos)) {
+        if (found && btnid == matched) {
             if (button->get_state() == Button::State::NORMAL) {
                 Sound(Sound::Name::BUTTON_OVER).play();
 
