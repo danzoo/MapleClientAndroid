@@ -119,7 +119,15 @@ namespace ms {
 
         speaker_.draw(DrawArgument(center_pos, true));
         nametag_.draw(speaker_pos);
-        name_.draw(center_pos + Point<int16_t>(0, -4));
+
+        // The bar is art with a fixed height, so the name has to be placed by where its ink
+        // actually lands. The layout box's synthetic line spacing puts CJK ink several pixels
+        // higher than latin ink, which a single hand-tuned offset can't centre for both.
+        const Text::VerticalInk name_ink = name_.ink_vertical();
+        const int16_t bar_mid = speaker_pos.y() + nametag_.height() / 2;
+        const int16_t name_y = bar_mid - (name_ink.top + name_ink.bottom) / 2;
+
+        name_.draw(Point<int16_t>(center_pos.x(), name_y));
 
         if (show_slider_) {
             int16_t text_min_height = position_.y() + top_.height() - 1;

@@ -139,6 +139,10 @@ Point<int16_t> Text::end_offset() const {
     return layout_.get_endoffset();
 }
 
+Text::VerticalInk Text::ink_vertical() const {
+    return GraphicsGL::get().measure_ink_vertical(text_as_values_, layout_, font_);
+}
+
 const std::string &Text::get_text() const {
     return text_;
 }

@@ -75,6 +75,11 @@ public:
         Point<int16_t> end_offset_;
     };
 
+    struct VerticalInk {
+        int16_t top;
+        int16_t bottom;
+    };
+
     Text(Font font,
          Alignment alignment,
          Color::Name color,
@@ -119,6 +124,10 @@ public:
     Point<int16_t> dimensions() const;
 
     Point<int16_t> end_offset() const;
+
+    // Vertical extent of the actual glyph ink, relative to the y passed to draw().
+    // Returns {0, 0} when the text has no ink at all.
+    VerticalInk ink_vertical() const;
 
     const std::string &get_text() const;
 
