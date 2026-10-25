@@ -30,7 +30,7 @@ const double SWIMFRICTION = 0.08;
 // pixels down, so platform-height drops and jumps fall exactly as they always have.
 const double MAXFALLSPEED = 6.0;
 
-Physics::Physics(const nl::node &src) {
+Physics::Physics(const img::node &src) {
     fh_tree_ = src;
 }
 

@@ -22,7 +22,7 @@ namespace ms {
 // object movement
 class Physics {
 public:
-    Physics(const nl::node &src);
+    Physics(const img::node &src);
 
     Physics();
 

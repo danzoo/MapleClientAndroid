@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIKeyConfig.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 #include <string>
 
 #include "../../Data/ItemData.h"
@@ -42,12 +42,12 @@ namespace ms {
         keyboard_ = &UI::get().get_keyboard();
         staged_mappings_ = keyboard_->get_maplekeys();
 
-        nl::node KeyConfig = nl::nx::ui["StatusBar3.img"]["KeyConfig"];
+        img::node KeyConfig = img::wz::ui["StatusBar3.img"]["KeyConfig"];
 
         icon_ = KeyConfig["icon"];
         key_ = KeyConfig["key"];
 
-        nl::node backgrnd = KeyConfig["backgrnd"];
+        img::node backgrnd = KeyConfig["backgrnd"];
         Texture bg = backgrnd;
         Point<int16_t> bg_dimensions = bg.get_dimensions();
 
@@ -55,7 +55,7 @@ namespace ms {
         sprites_.emplace_back(KeyConfig["backgrnd2"]);
         sprites_.emplace_back(KeyConfig["backgrnd3"]);
 
-        nl::node BtClose3 = nl::nx::ui["Basic.img"]["BtClose3"];
+        img::node BtClose3 = img::wz::ui["Basic.img"]["BtClose3"];
         buttons_[Buttons::CLOSE] = std::make_unique<MapleButton>(
                 BtClose3,
                 Point<int16_t>(bg_dimensions.x() - 18, 3));

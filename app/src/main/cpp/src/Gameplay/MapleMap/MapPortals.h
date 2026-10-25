@@ -27,7 +27,7 @@ class MapPortals {
 public:
     static void init();
 
-    MapPortals(const nl::node &source, int32_t mapid);
+    MapPortals(const img::node &source, int32_t mapid);
 
     MapPortals();
 

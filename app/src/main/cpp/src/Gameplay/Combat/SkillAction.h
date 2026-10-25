@@ -38,7 +38,7 @@ public:
 
 class SingleAction : public SkillAction {
 public:
-    SingleAction(const nl::node &src);
+    SingleAction(const img::node &src);
 
     void apply(Char &target, Attack::Type atype) const override;
 
@@ -48,7 +48,7 @@ private:
 
 class TwoHandedAction : public SkillAction {
 public:
-    TwoHandedAction(const nl::node &src);
+    TwoHandedAction(const img::node &src);
 
     void apply(Char &target, Attack::Type atype) const override;
 
@@ -58,7 +58,7 @@ private:
 
 class ByLevelAction : public SkillAction {
 public:
-    ByLevelAction(const nl::node &src, int32_t skillid);
+    ByLevelAction(const img::node &src, int32_t skillid);
 
     void apply(Char &target, Attack::Type atype) const override;
 

@@ -16,12 +16,12 @@
 #include "GameInfo.h"
 #include "StringHandling.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 namespace ms::NxHelper::Map {
 MapInfo get_map_info_by_id(int32_t mapid) {
     std::string map_category = get_map_category(mapid);
-    nl::node map_info = nl::nx::string["Map.img"][map_category][mapid];
+    img::node map_info = img::wz::string["Map.img"][map_category][mapid];
 
     return { map_info["mapDesc"],
              map_info["mapName"],
@@ -89,19 +89,19 @@ std::unordered_map<int64_t, std::pair<std::string, std::string>>
 get_life_on_map(int32_t mapid) {
     std::unordered_map<int64_t, std::pair<std::string, std::string>> map_life;
 
-    nl::node portal = get_map_node_name(mapid);
+    img::node portal = get_map_node_name(mapid);
 
-    for (const nl::node &life : portal["life"]) {
+    for (const img::node &life : portal["life"]) {
         int64_t life_id = life["id"];
         std::string life_type = life["type"];
 
         if (life_type == "m") {
             // Mob
-            nl::node life_name = nl::nx::string["Mob.img"][life_id]["name"];
+            img::node life_name = img::wz::string["Mob.img"][life_id]["name"];
 
             std::string life_id_str = string_format::extend_id(life_id, 7);
-            nl::node life_level =
-                nl::nx::mob[life_id_str + ".img"]["info"]["level"];
+            img::node life_level =
+                img::wz::mob[life_id_str + ".img"]["info"]["level"];
 
             if (life_name && life_level) {
                 map_life[life_id] = { life_type,
@@ -109,8 +109,8 @@ get_life_on_map(int32_t mapid) {
             }
         } else if (life_type == "n") {
             // NPC
-            if (nl::node life_name =
-                    nl::nx::string["Npc.img"][life_id]["name"]) {
+            if (img::node life_name =
+                    img::wz::string["Npc.img"][life_id]["name"]) {
                 map_life[life_id] = { life_type, life_name };
             }
         }
@@ -119,10 +119,10 @@ get_life_on_map(int32_t mapid) {
     return map_life;
 }
 
-nl::node get_map_node_name(int32_t mapid) {
+img::node get_map_node_name(int32_t mapid) {
     std::string prefix = std::to_string(mapid / 100000000);
     std::string mapid_str = string_format::extend_id(mapid, 9);
 
-    return nl::nx::map["Map"]["Map" + prefix][mapid_str + ".img"];
+    return img::wz::map["Map"]["Map" + prefix][mapid_str + ".img"];
 }
 }  // namespace ms::NxHelper::Map

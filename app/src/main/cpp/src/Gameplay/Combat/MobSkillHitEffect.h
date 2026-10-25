@@ -18,7 +18,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 #include <vector>
 
 #include "../../Graphics/Animation.h"
@@ -37,7 +37,7 @@ public:
 protected:
     class Effect {
     public:
-        Effect(const nl::node &src) {
+        Effect(const img::node &src) {
             animation_ = src;
             pos_ = src["pos"];
             z_ = src["z"];
@@ -64,7 +64,7 @@ public:
 // A single animation
 class MobSingleHitEffect : public MobSkillHitEffect {
 public:
-    MobSingleHitEffect(const nl::node &src);
+    MobSingleHitEffect(const img::node &src);
 
     void apply(Mob &mob) const override;
 
@@ -75,7 +75,7 @@ private:
 // The animation changes with the skill level
 class MobBySkillLevelHitEffect : public MobSkillHitEffect {
 public:
-    MobBySkillLevelHitEffect(const nl::node &src);
+    MobBySkillLevelHitEffect(const img::node &src);
 
     void apply(Mob &mob) const override;
 

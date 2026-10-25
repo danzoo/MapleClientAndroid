@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIUserList.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../IO/Components/MapleButton.h"
 #include "../IO/Components/TwoSpriteButton.h"
@@ -24,17 +24,17 @@ namespace ms {
 UIUserList::UIUserList(uint16_t t) :
     UIDragElement<PosUSERLIST>(Point<int16_t>(260, 20)),
     tab_(t) {
-    nl::node close = nl::nx::ui["Basic.img"]["BtClose3"];
-    user_list_ = nl::nx::ui["UIWindow2.img"]["UserList"];
-    nl::node Main = user_list_["Main"];
+    img::node close = img::wz::ui["Basic.img"]["BtClose3"];
+    user_list_ = img::wz::ui["UIWindow2.img"]["UserList"];
+    img::node Main = user_list_["Main"];
 
     sprites_.emplace_back(Main["backgrnd"]);
 
     buttons_[Buttons::BT_CLOSE] =
         std::make_unique<MapleButton>(close, Point<int16_t>(244, 7));
 
-    nl::node taben = Main["Tab"]["enabled"];
-    nl::node tabdis = Main["Tab"]["disabled"];
+    img::node taben = Main["Tab"]["enabled"];
+    img::node tabdis = Main["Tab"]["disabled"];
 
     buttons_[Buttons::BT_TAB_FRIEND] =
         std::make_unique<TwoSpriteButton>(tabdis["0"], taben["0"]);
@@ -46,8 +46,8 @@ UIUserList::UIUserList(uint16_t t) :
         std::make_unique<TwoSpriteButton>(tabdis["3"], taben["3"]);
 
     // Party Tab
-    nl::node Party = Main["Party"];
-    nl::node PartySearch = Party["PartySearch"];
+    img::node Party = Main["Party"];
+    img::node PartySearch = Party["PartySearch"];
 
     party_tab_ = Tab::PARTY_MINE;
     party_title_ = Party["title"];
@@ -62,8 +62,8 @@ UIUserList::UIUserList(uint16_t t) :
                             "none",
                             0);
 
-    nl::node party_taben = Party["Tab"]["enabled"];
-    nl::node party_tabdis = Party["Tab"]["disabled"];
+    img::node party_taben = Party["Tab"]["enabled"];
+    img::node party_tabdis = Party["Tab"]["disabled"];
 
     buttons_[Buttons::BT_PARTY_CREATE] =
         std::make_unique<MapleButton>(Party["BtPartyMake"]);
@@ -106,7 +106,7 @@ UIUserList::UIUserList(uint16_t t) :
                            [](bool) {});
 
     // Buddy Tab
-    nl::node Friend = Main["Friend"];
+    img::node Friend = Main["Friend"];
 
     friend_tab_ = Tab::FRIEND_ALL;
     friend_sprites_.emplace_back(Friend["title"]);
@@ -178,7 +178,7 @@ UIUserList::UIUserList(uint16_t t) :
                              [](bool) {});
 
     // Boss tab
-    nl::node Boss = Main["Boss"];
+    img::node Boss = Main["Boss"];
 
     boss_sprites_.emplace_back(Boss["base"]);
     boss_sprites_.emplace_back(Boss["base3"]);
@@ -221,7 +221,7 @@ UIUserList::UIUserList(uint16_t t) :
     buttons_[Buttons::BT_BOSS_GO]->set_active(false);
 
     // Blacklist tab
-    nl::node Blacklist = Main["Blacklist"];
+    img::node Blacklist = Main["Blacklist"];
 
     blacklist_title_ = Blacklist["base"];
 
@@ -235,8 +235,8 @@ UIUserList::UIUserList(uint16_t t) :
                            "none",
                            0);
 
-    nl::node blacklist_taben = Blacklist["Tab"]["enabled"];
-    nl::node blacklist_tabdis = Blacklist["Tab"]["disabled"];
+    img::node blacklist_taben = Blacklist["Tab"]["enabled"];
+    img::node blacklist_tabdis = Blacklist["Tab"]["disabled"];
 
     buttons_[Buttons::BT_BLACKLIST_ADD] =
         std::make_unique<MapleButton>(Blacklist["BtAdd"]);

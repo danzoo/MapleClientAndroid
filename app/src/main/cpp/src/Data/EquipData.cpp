@@ -16,14 +16,14 @@
 #include "EquipData.h"
 
 #include <array>
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 #include <string>
 
 namespace ms {
 EquipData::EquipData(int32_t id) : item_data_(ItemData::get(id)) {
     std::string strid = "0" + std::to_string(id);
     std::string category = item_data_.get_category();
-    nl::node src = nl::nx::character[category][strid + ".img"]["info"];
+    img::node src = img::wz::character[category][strid + ".img"]["info"];
 
     cash_ = src["cash"].get_bool();
     trade_block_ = src["tradeBlock"].get_bool();

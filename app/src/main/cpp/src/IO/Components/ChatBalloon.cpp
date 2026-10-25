@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "ChatBalloon.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../Constants.h"
 
@@ -31,7 +31,7 @@ ChatBalloon::ChatBalloon(int8_t type) {
         typestr = std::to_string(type);
     }
 
-    nl::node src = nl::nx::ui["ChatBalloon.img"][typestr];
+    img::node src = img::wz::ui["ChatBalloon.img"][typestr];
 
     arrow_ = src["arrow"];
     frame_ = src;
@@ -79,7 +79,7 @@ void ChatBalloon::expire() {
 }
 
 ChatBalloonHorizontal::ChatBalloonHorizontal() {
-    nl::node Balloon = nl::nx::ui["Login.img"]["WorldNotice"]["Balloon"];
+    img::node Balloon = img::wz::ui["Login.img"]["WorldNotice"]["Balloon"];
 
     arrow_ = Balloon["arrow"];
     center_ = Balloon["c"];

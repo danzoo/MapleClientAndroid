@@ -15,7 +15,7 @@
 //	along with MSClient.  If not, see <https://www.gnu.org/licenses/>.
 #include "UINotification.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../Components/MapleButton.h"
 #include "../Constants.h"
@@ -32,7 +32,7 @@ UINotification::UINotification(std::string message) :
     // The parts below are placed against the dialog's own top-left, so only that is brought onto
     // the screen the interface is laid out on; the gaps between them are the art's and stay.
     UIElement(Constants::to_ui_space(Point<int16_t>(500, 400)), { 200, 100 }) {
-    nl::node src = nl::nx::ui["UIWindow2.img"]["FadeYesNo"];
+    img::node src = img::wz::ui["UIWindow2.img"]["FadeYesNo"];
 
     sprites_.emplace_back(src["backgrnd"],
                           Point<int16_t>(0, 0));

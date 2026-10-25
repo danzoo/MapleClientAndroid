@@ -25,7 +25,7 @@ namespace ms {
 // A single frame within an animation.
 class Frame {
 public:
-    Frame(const nl::node &src);
+    Frame(const img::node &src);
 
     Frame();
 
@@ -61,7 +61,7 @@ private:
 // Class which consists of multiple textures to make an Animation.
 class Animation {
 public:
-    Animation(const nl::node &source);
+    Animation(const img::node &source);
 
     Animation();
 

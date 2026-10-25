@@ -18,21 +18,21 @@
 #include "StringHandling.h"
 
 namespace ms {
-SingleHitEffect::SingleHitEffect(const nl::node &src) :
+SingleHitEffect::SingleHitEffect(const img::node &src) :
     effect_(src["hit"]["0"]) {}
 
 void SingleHitEffect::apply(const AttackUser &user, Mob &target) const {
     effect_.apply(target, user.flip);
 }
 
-TwoHandedHitEffect::TwoHandedHitEffect(const nl::node &src) :
+TwoHandedHitEffect::TwoHandedHitEffect(const img::node &src) :
     effects_(src["hit"]["0"], src["hit"]["1"]) {}
 
 void TwoHandedHitEffect::apply(const AttackUser &user, Mob &target) const {
     effects_[user.second_weapon].apply(target, user.flip);
 }
 
-ByLevelHitEffect::ByLevelHitEffect(const nl::node &src) {
+ByLevelHitEffect::ByLevelHitEffect(const img::node &src) {
     for (const auto &sub : src["CharLevel"]) {
         uint16_t level = string_conversion::or_zero<uint16_t>(sub.name());
         effects_.emplace(level, sub["hit"]["0"]);
@@ -55,7 +55,7 @@ void ByLevelHitEffect::apply(const AttackUser &user, Mob &target) const {
     iter->second.apply(target, user.flip);
 }
 
-ByLevelTwoHandedHitEffect::ByLevelTwoHandedHitEffect(const nl::node &src) {
+ByLevelTwoHandedHitEffect::ByLevelTwoHandedHitEffect(const img::node &src) {
     for (const auto &sub : src["CharLevel"]) {
         auto level = string_conversion::or_zero<uint16_t>(sub.name());
 
@@ -83,7 +83,7 @@ void ByLevelTwoHandedHitEffect::apply(const AttackUser &user,
     iter->second[user.second_weapon].apply(target, user.flip);
 }
 
-BySkillLevelHitEffect::BySkillLevelHitEffect(const nl::node &src) {
+BySkillLevelHitEffect::BySkillLevelHitEffect(const img::node &src) {
     for (const auto &sub : src["level"]) {
         auto level = string_conversion::or_zero<int32_t>(sub.name());
         effects_.emplace(level, sub["hit"]["0"]);

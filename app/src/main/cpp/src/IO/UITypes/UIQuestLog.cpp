@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIQuestLog.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../Components/MapleButton.h"
 
@@ -25,11 +25,11 @@ UIQuestLog::UIQuestLog(const QuestLog &ql) :
     questlog_(ql) {
     tab_ = Buttons::TAB0;
 
-    nl::node close = nl::nx::ui["Basic.img"]["BtClose3"];
-    nl::node quest = nl::nx::ui["UIWindow2.img"]["Quest"];
-    nl::node list = quest["list"];
+    img::node close = img::wz::ui["Basic.img"]["BtClose3"];
+    img::node quest = img::wz::ui["UIWindow2.img"]["Quest"];
+    img::node list = quest["list"];
 
-    nl::node backgrnd = list["backgrnd"];
+    img::node backgrnd = list["backgrnd"];
 
     sprites_.emplace_back(backgrnd);
     sprites_.emplace_back(list["backgrnd2"]);
@@ -38,8 +38,8 @@ UIQuestLog::UIQuestLog(const QuestLog &ql) :
     notice_sprites_.emplace_back(list["notice1"]);
     notice_sprites_.emplace_back(list["notice2"]);
 
-    nl::node taben = list["Tab"]["enabled"];
-    nl::node tabdis = list["Tab"]["disabled"];
+    img::node taben = list["Tab"]["enabled"];
+    img::node tabdis = list["Tab"]["disabled"];
 
     buttons_[Buttons::TAB0] =
         std::make_unique<TwoSpriteButton>(tabdis["0"], taben["0"]);

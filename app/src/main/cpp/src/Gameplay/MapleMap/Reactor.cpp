@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Reactor.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "StringHandling.h"
 
@@ -25,7 +25,7 @@ Reactor::Reactor(int32_t o, int32_t r, int8_t s, Point<int16_t> p) :
     rid_(r),
     state_(s) {
     std::string strid = string_format::extend_id(rid_, 7);
-    src_ = nl::nx::reactor[strid + ".img"];
+    src_ = img::wz::reactor[strid + ".img"];
 
     normal_ = src_[0];
     animation_ended_ = true;

@@ -15,11 +15,11 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "SkillSound.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 namespace ms {
 SingleSkillSound::SingleSkillSound(const std::string &strid) {
-    nl::node soundsrc = nl::nx::sound["Skill.img"][strid];
+    img::node soundsrc = img::wz::sound["Skill.img"][strid];
 
     use_sound_ = soundsrc["Use"];
     hit_sound_ = soundsrc["Hit"];

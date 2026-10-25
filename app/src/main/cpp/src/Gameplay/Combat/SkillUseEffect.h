@@ -28,7 +28,7 @@ public:
 protected:
     class Effect {
     public:
-        Effect(const nl::node &src) {
+        Effect(const img::node &src) {
             animation_ = src;
             z_ = src["z"];
         }
@@ -52,7 +52,7 @@ public:
 // An effect which displays an animation over the character's position
 class SingleUseEffect : public SkillUseEffect {
 public:
-    SingleUseEffect(const nl::node &src);
+    SingleUseEffect(const img::node &src);
 
     void apply(Char &target) const override;
 
@@ -64,7 +64,7 @@ private:
 // The effect changes based on whether the character uses a two-handed weapon
 class TwoHandedUseEffect : public SkillUseEffect {
 public:
-    TwoHandedUseEffect(const nl::node &src);
+    TwoHandedUseEffect(const img::node &src);
 
     void apply(Char &target) const override;
 
@@ -75,7 +75,7 @@ private:
 // An effect which displays multiple animations over the character's position
 class MultiUseEffect : public SkillUseEffect {
 public:
-    MultiUseEffect(const nl::node &src);
+    MultiUseEffect(const img::node &src);
 
     void apply(Char &target) const override;
 
@@ -86,7 +86,7 @@ private:
 // The animation changes with the character level
 class ByLevelUseEffect : public SkillUseEffect {
 public:
-    ByLevelUseEffect(const nl::node &src);
+    ByLevelUseEffect(const img::node &src);
 
     void apply(Char &target) const override;
 

@@ -25,7 +25,7 @@
 namespace ms {
 class Seat {
 public:
-    Seat(const nl::node &source);
+    Seat(const img::node &source);
 
     bool inrange(Point<int16_t> position) const;
 
@@ -37,7 +37,7 @@ private:
 
 class Ladder {
 public:
-    Ladder(const nl::node &source);
+    Ladder(const img::node &source);
 
     bool is_ladder() const;
 
@@ -56,7 +56,7 @@ private:
 
 class MapInfo {
 public:
-    MapInfo(const nl::node &src, Range<int16_t> walls, Range<int16_t> borders);
+    MapInfo(const img::node &src, Range<int16_t> walls, Range<int16_t> borders);
 
     MapInfo();
 

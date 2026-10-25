@@ -7,7 +7,7 @@
 #include <array>
 #include <cstring>
 
-namespace nl
+namespace img
 {
 namespace
 {
@@ -190,4 +190,4 @@ cipher const& cipher::get()
     static cipher instance;
     return instance;
 }
-} // namespace nl
+} // namespace img

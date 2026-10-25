@@ -16,7 +16,7 @@
 #include "MapDrops.h"
 
 #include <imgwz/node.hpp>
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../Audio/Audio.h"
 #include "../Constants.h"
@@ -30,7 +30,7 @@ namespace ms {
 MapDrops::MapDrops() : loot_enabled_(false), drop_sound_cooldown_(0) {}
 
 void MapDrops::init() {
-    nl::node src = nl::nx::item["Special"]["0900.img"];
+    img::node src = img::wz::item["Special"]["0900.img"];
 
     meso_icons_[MesoIcon::BRONZE] = src["09000000"]["iconRaw"];
     meso_icons_[MesoIcon::GOLD] = src["09000001"]["iconRaw"];

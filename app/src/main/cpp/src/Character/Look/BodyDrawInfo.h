@@ -27,7 +27,7 @@ namespace ms {
 // This simply redirects to a different stance and frame to use
 class BodyAction {
 public:
-    BodyAction(const nl::node &src) {
+    BodyAction(const img::node &src) {
         stance_ = Stance::by_string(src["action"]);
         frame_ = src["frame"];
         move_ = src["move"];

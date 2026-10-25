@@ -15,19 +15,19 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "EquipTooltip.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../../Data/WeaponData.h"
 #include "../../Gameplay/Stage.h"
 
 namespace ms {
 EquipTooltip::EquipTooltip() {
-    nl::node Item = nl::nx::ui["UIToolTip.img"]["Item"];
-    nl::node Frame = Item["Frame"];
-    nl::node ItemIcon = Item["ItemIcon"];
-    nl::node Equip = Item["Equip"];
-    nl::node EquipCan = Equip["Can"];
-    nl::node EquipCannot = Equip["Cannot"];
+    img::node Item = img::wz::ui["UIToolTip.img"]["Item"];
+    img::node Frame = Item["Frame"];
+    img::node ItemIcon = Item["ItemIcon"];
+    img::node Equip = Item["Equip"];
+    img::node EquipCan = Equip["Can"];
+    img::node EquipCannot = Equip["Cannot"];
 
     top_ = Frame["top"];
     mid_ = Frame["line"];

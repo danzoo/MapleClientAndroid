@@ -50,7 +50,7 @@ private:
     // int32_t questid;
     // bool activates_by_touch;
 
-    nl::node src_;
+    img::node src_;
     std::map<int8_t, Animation> animations_;
     bool animation_ended_;
 

@@ -21,7 +21,7 @@
 #include "StringHandling.h"
 
 namespace ms {
-Frame::Frame(const nl::node &src) {
+Frame::Frame(const img::node &src) {
     texture_ = src;
     bounds_ = src;
     head_ = src["head"];
@@ -31,8 +31,8 @@ Frame::Frame(const nl::node &src) {
         delay_ = 100;
     }
 
-    bool hasa0 = src["a0"].data_type() == nl::node::type::integer;
-    bool hasa1 = src["a1"].data_type() == nl::node::type::integer;
+    bool hasa0 = src["a0"].data_type() == img::node::type::integer;
+    bool hasa1 = src["a1"].data_type() == img::node::type::integer;
 
     if (hasa0 && hasa1) {
         opacities_ = { src["a0"], src["a1"] };
@@ -46,8 +46,8 @@ Frame::Frame(const nl::node &src) {
         opacities_ = { 255, 255 };
     }
 
-    bool hasz0 = src["z0"].data_type() == nl::node::type::integer;
-    bool hasz1 = src["z1"].data_type() == nl::node::type::integer;
+    bool hasz0 = src["z0"].data_type() == img::node::type::integer;
+    bool hasz1 = src["z1"].data_type() == img::node::type::integer;
 
     if (hasz0 && hasz1) {
         scales_ = { src["z0"], src["z1"] };
@@ -104,8 +104,8 @@ float Frame::scalestep(uint16_t timestep) const {
            / delay_;
 }
 
-Animation::Animation(const nl::node &src) {
-    bool istexture = src.data_type() == nl::node::type::bitmap;
+Animation::Animation(const img::node &src) {
+    bool istexture = src.data_type() == img::node::type::bitmap;
 
     if (istexture) {
         frames_.emplace_back(src);
@@ -113,7 +113,7 @@ Animation::Animation(const nl::node &src) {
         std::set<int16_t> frameids;
 
         for (const auto &sub : src) {
-            if (sub.data_type() == nl::node::type::bitmap) {
+            if (sub.data_type() == img::node::type::bitmap) {
                 auto fid =
                     string_conversion::or_default<int16_t>(sub.name(), -1);
 

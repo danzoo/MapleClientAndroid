@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "WeaponData.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 namespace ms {
 WeaponData::WeaponData(int32_t equipid) : equip_data_(EquipData::get(equipid)) {
@@ -25,15 +25,15 @@ WeaponData::WeaponData(int32_t equipid) : equip_data_(EquipData::get(equipid)) {
                   || (prefix >= Weapon::SWORD_2H && prefix <= Weapon::POLEARM)
                   || (prefix == Weapon::CROSSBOW);
 
-    nl::node src = nl::nx::character["Weapon"]["0" + std::to_string(equipid)
+    img::node src = img::wz::character["Weapon"]["0" + std::to_string(equipid)
                                                + ".img"]["info"];
 
     attack_speed_ = static_cast<uint8_t>(src["attackSpeed"]);
     attack_ = static_cast<uint8_t>(src["attack"]);
 
-    nl::node soundsrc = nl::nx::sound["Weapon.img"][src["sfx"]];
+    img::node soundsrc = img::wz::sound["Weapon.img"][src["sfx"]];
 
-    bool twosounds = soundsrc["Attack2"].data_type() == nl::node::type::audio;
+    bool twosounds = soundsrc["Attack2"].data_type() == img::node::type::audio;
 
     if (twosounds) {
         use_sounds_[false] = soundsrc["Attack"];

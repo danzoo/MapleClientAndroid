@@ -125,9 +125,9 @@ private:
     Texture charslot_;
     Texture pagebase_;
     Charset pagenumber_;
-    nl::node pagenumber_pos_;
+    img::node pagenumber_pos_;
     std::array<Texture, 3> sign_post_;
-    nl::node nametag_;
+    img::node nametag_;
     Charset level_set_;
     OutlinedText name_label_;
     std::vector<CharLook> char_looks_;

@@ -15,13 +15,13 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "MapPortals.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../../Constants.h"
 #include "StringHandling.h"
 
 namespace ms {
-MapPortals::MapPortals(const nl::node &src, int32_t mapid) {
+MapPortals::MapPortals(const img::node &src, int32_t mapid) {
     for (const auto &sub : src) {
         int8_t portal_id =
             string_conversion::or_default<int8_t>(sub.name(), -1);
@@ -120,7 +120,7 @@ Portal::WarpInfo MapPortals::find_warp_at(Point<int16_t> playerpos) {
 }
 
 void MapPortals::init() {
-    nl::node src = nl::nx::map["MapHelper.img"]["portal"]["game"];
+    img::node src = img::wz::map["MapHelper.img"]["portal"]["game"];
 
     animations_[Portal::HIDDEN] = src["ph"]["default"]["portalContinue"];
     animations_[Portal::REGULAR] = src["pv"];

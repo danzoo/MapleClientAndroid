@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Slider.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 #include <utility>
 
 namespace ms {
@@ -32,11 +32,11 @@ Slider::Slider(int32_t t,
     start_ = Point<int16_t>(x_, vertical_.first());
     end_ = Point<int16_t>(x_, vertical_.second());
 
-    nl::node src;
+    img::node src;
     std::string base_str = "base";
 
     if (type_ == Type::CHAT_BAR) {
-        src = nl::nx::ui["StatusBar3.img"]["chat"]["common"]["scroll"];
+        src = img::wz::ui["StatusBar3.img"]["chat"]["common"]["scroll"];
         base_str += "_c";
     } else {
         std::string VScr = "VScr";
@@ -45,17 +45,17 @@ Slider::Slider(int32_t t,
             VScr += std::to_string(type_);
         }
 
-        src = nl::nx::ui["Basic.img"][VScr];
+        src = img::wz::ui["Basic.img"][VScr];
     }
 
-    nl::node dsrc = src["disabled"];
+    img::node dsrc = src["disabled"];
 
     dbase_ = dsrc[base_str];
 
     dprev_ = dsrc["prev"];
     dnext_ = dsrc["next"];
 
-    nl::node esrc = src["enabled"];
+    img::node esrc = src["enabled"];
 
     base_ = esrc[base_str];
 

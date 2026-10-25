@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "MobSpecialAttack.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "StringHandling.h"
 #include "../MapleMap/Mob.h"
@@ -31,8 +31,8 @@ MobSpecialAttack::MobSpecialAttack(int32_t mob_id, int32_t move_id) :
         strid = std::to_string(mob_id);
     }
 
-    nl::node src =
-        nl::nx::mob[strid + ".img"]["attack" + std::to_string(move_id)]["info"];
+    img::node src =
+        img::wz::mob[strid + ".img"]["attack" + std::to_string(move_id)]["info"];
 
     // sound_ = std::make_unique<SingleSkillSound>(strid);
 

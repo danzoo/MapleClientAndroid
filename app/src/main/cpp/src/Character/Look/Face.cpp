@@ -16,7 +16,7 @@
 #include "Face.h"
 
 #include <iostream>
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 namespace ms {
 Expression::Id Expression::byaction(size_t action) {
@@ -41,7 +41,7 @@ const EnumMap<Expression::Id, std::string> Expression::names_ = {
 
 Face::Face(int32_t faceid) {
     std::string strid = "000" + std::to_string(faceid);
-    nl::node facenode = nl::nx::character["Face"][strid + ".img"];
+    img::node facenode = img::wz::character["Face"][strid + ".img"];
 
     for (auto iter : Expression::names_) {
         Expression::Id exp = iter.first;
@@ -51,16 +51,16 @@ Face::Face(int32_t faceid) {
                                                           facenode["default"]);
         } else {
             const std::string &expname = iter.second;
-            nl::node expnode = facenode[expname];
+            img::node expnode = facenode[expname];
 
-            for (int frame = 0; nl::node framenode = expnode[frame]; ++frame) {
+            for (int frame = 0; img::node framenode = expnode[frame]; ++frame) {
                 expressions_[exp].emplace(frame, framenode);
             }
         }
     }
 
     // TODO: (rich) fix
-    name_ = std::string(nl::nx::string["Eqp.img"]["Eqp"]["Face"]
+    name_ = std::string(img::wz::string["Eqp.img"]["Eqp"]["Face"]
                                       [std::to_string(faceid)]["name"]);
 }
 

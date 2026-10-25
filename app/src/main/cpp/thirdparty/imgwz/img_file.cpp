@@ -1,5 +1,5 @@
 //  The container half of imgwz: mapping one .img, walking its property tree lazily,
-//  and listing the directories that stand in for the old nx archive roots.
+//  and listing the directories that stand in for the old archive roots.
 //
 //  The record layout mirrored here is the one F:/nxfiles/tools/imgdec/img2wz.py reads,
 //  which is the layout Assets/nx2img.py writes: a file is a single image block
@@ -27,7 +27,7 @@
 #    include <android/log.h>
 #endif
 
-namespace nl
+namespace img
 {
 namespace
 {
@@ -75,7 +75,7 @@ double f64le(std::uint8_t const* b)
     return d;
 }
 
-//! Appends one UTF-16 code point to a UTF-8 string, the way the nx node names were.
+//! Appends one UTF-16 code point to a UTF-8 string, the way the archive node names were.
 void utf16_append(std::string& out, std::uint32_t cp)
 {
     if (cp < 0x80) {
@@ -1006,4 +1006,4 @@ void img_report_error(char const* file, char const* message)
 #endif
     }
 }
-} // namespace nl
+} // namespace img

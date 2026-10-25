@@ -22,7 +22,7 @@
 namespace ms {
 class MapleFrame {
 public:
-    MapleFrame(const nl::node &src);
+    MapleFrame(const img::node &src);
 
     MapleFrame();
 

@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIRegion.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../Components/MapleButton.h"
 #include "../UI.h"
@@ -25,10 +25,10 @@
 namespace ms {
 UIRegion::UIRegion() :
     UIElement(Point<int16_t>(0, 0), Point<int16_t>(800, 600)) {
-    nl::node Common = nl::nx::ui["Login.img"]["Common"];
-    nl::node Gateway = nl::nx::ui["Gateway.img"]["WorldSelect"];
-    nl::node na = Gateway["BtButton0"];
-    nl::node eu = Gateway["BtButton1"];
+    img::node Common = img::wz::ui["Login.img"]["Common"];
+    img::node Gateway = img::wz::ui["Gateway.img"]["WorldSelect"];
+    img::node na = Gateway["BtButton0"];
+    img::node eu = Gateway["BtButton1"];
 
     sprites_.emplace_back(Gateway["backgrnd2"]);
     sprites_.emplace_back(Common["frame"], Point<int16_t>(400, 300));

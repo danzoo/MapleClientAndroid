@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Stage.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 #include <utility>
 
 #include "../Configuration.h"
@@ -105,9 +105,9 @@ void Stage::load_map(int32_t mapid) {
     std::string strid = string_format::extend_id(mapid, 9);
     std::string prefix = std::to_string(mapid / 100000000);
 
-    nl::node src = mapid == -1
-                       ? nl::nx::ui["CashShopPreview.img"]
-                       : nl::nx::map["Map"]["Map" + prefix][strid + ".img"];
+    img::node src = mapid == -1
+                       ? img::wz::ui["CashShopPreview.img"]
+                       : img::wz::map["Map"]["Map" + prefix][strid + ".img"];
 
     tiles_objs_ = MapTilesObjs(src);
     backgrounds_ = MapBackgrounds(src["back"]);

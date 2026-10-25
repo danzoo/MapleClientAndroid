@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIGaugeBoss.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 namespace ms {
 UIGaugeBoss::UIGaugeBoss(int16_t screen_width,
@@ -25,7 +25,7 @@ UIGaugeBoss::UIGaugeBoss(int16_t screen_width,
                          float percent) :
     screen_width_(screen_width),
     percentage_(percent) {
-    nl::node boss_gauge = nl::nx::ui["UIWindow2.img"]["MobGage"];
+    img::node boss_gauge = img::wz::ui["UIWindow2.img"]["MobGage"];
 
     tag_front_ = boss_gauge["Gage"][tag_color][1];
     should_use_tag_bg_ = (tag_bg_color != 5);

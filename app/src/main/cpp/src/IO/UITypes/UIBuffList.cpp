@@ -16,7 +16,7 @@
 #include "UIBuffList.h"
 
 #include <imgwz/node.hpp>
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../Data/ItemData.h"
 #include "StringHandling.h"
@@ -31,8 +31,8 @@ BuffIcon::BuffIcon(int32_t buff, int32_t dur) :
 
     if (buffid_ >= 0) {
         std::string strid = string_format::extend_id(buffid_, 7);
-        nl::node src =
-            nl::nx::skill[strid.substr(0, 3) + ".img"]["skill"][strid];
+        img::node src =
+            img::wz::skill[strid.substr(0, 3) + ".img"]["skill"][strid];
         icon_ = src["icon"];
     } else {
         icon_ = ItemData::get(-buffid_).get_icon(true);

@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Npc.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 namespace ms {
 Npc::Npc(int32_t id,
@@ -29,17 +29,17 @@ Npc::Npc(int32_t id,
     strid.insert(0, 7 - strid.size(), '0');
     strid.append(".img");
 
-    nl::node src = nl::nx::npc[strid];
-    nl::node strsrc = nl::nx::string["Npc.img"][std::to_string(id)];
+    img::node src = img::wz::npc[strid];
+    img::node strsrc = img::wz::string["Npc.img"][std::to_string(id)];
 
     std::string link = src["info"]["link"];
 
     if (!link.empty()) {
         link.append(".img");
-        src = nl::nx::npc[link];
+        src = img::wz::npc[link];
     }
 
-    nl::node info = src["info"];
+    img::node info = src["info"];
 
     hide_name_ = info["hideName"].get_bool();
     mouse_only_ = info["talkMouseOnly"].get_bool();

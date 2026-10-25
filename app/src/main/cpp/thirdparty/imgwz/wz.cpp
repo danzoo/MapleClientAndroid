@@ -1,15 +1,15 @@
 //  imgwz - the predefined category roots.  Each one used to be a whole .nx archive;
 //  in a Data tree it is the directory of the same name, so nothing else has to know
 //  that the container changed.
-#include "nx.hpp"
+#include "wz.hpp"
 
 #include "img_internal.hpp"
 
 #include <string>
 
-namespace nl
+namespace img
 {
-namespace nx
+namespace wz
 {
 node base, character, effect, etc, item, map, mapPretty, mapLatest, map001, mob, morph,
     npc, quest, reactor, skill, sound, string, tamingmob, ui;
@@ -34,7 +34,7 @@ void load_all(std::string const& data_root)
     effect = at("Effect");
     etc = at("Etc");
     item = at("Item");
-    // The map archives the nx setup kept apart (Map, Map001, MapLatest, MapPretty) are
+    // The map archives the old reader kept apart (Map, Map001, MapLatest, MapPretty) are
     // one merged directory, so all four names point at it.
     map = at("Map");
     mapPretty = map;
@@ -51,5 +51,5 @@ void load_all(std::string const& data_root)
     tamingmob = at("TamingMob");
     ui = at("UI");
 }
-} // namespace nx
-} // namespace nl
+} // namespace wz
+} // namespace img

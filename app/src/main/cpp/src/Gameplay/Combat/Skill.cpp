@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Skill.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../../Character/SkillId.h"
 #include "../../Data/SkillData.h"
@@ -33,7 +33,7 @@ Skill::Skill(int32_t id) : skill_id_(id) {
         strid = std::to_string(skill_id_);
     }
 
-    nl::node src = nl::nx::skill[strid.substr(0, 3) + ".img"]["skill"][strid];
+    img::node src = img::wz::skill[strid.substr(0, 3) + ".img"]["skill"][strid];
 
     projectile_ = true;
     over_regular_ = false;
@@ -56,7 +56,7 @@ Skill::Skill(int32_t id) : skill_id_(id) {
         use_effect_ = std::make_unique<MultiUseEffect>(src);
     } else {
         bool is_animation =
-            src["effect"]["0"].data_type() == nl::node::type::bitmap;
+            src["effect"]["0"].data_type() == img::node::type::bitmap;
         bool has_effect1 = src["effect"]["1"].size() > 0;
 
         if (is_animation) {
@@ -95,8 +95,8 @@ Skill::Skill(int32_t id) : skill_id_(id) {
         hit_effect_ = std::make_unique<NoHitEffect>();
     }
 
-    bool has_action0 = src["action"]["0"].data_type() == nl::node::type::string;
-    bool has_action1 = src["action"]["1"].data_type() == nl::node::type::string;
+    bool has_action0 = src["action"]["0"].data_type() == img::node::type::string;
+    bool has_action1 = src["action"]["1"].data_type() == img::node::type::string;
 
     if (has_action0 && has_action1) {
         action_ = std::make_unique<TwoHandedAction>(src);
@@ -104,7 +104,7 @@ Skill::Skill(int32_t id) : skill_id_(id) {
         action_ = std::make_unique<SingleAction>(src);
     } else if (data.is_attack()) {
         bool by_level =
-            src["level"]["1"]["action"].data_type() == nl::node::type::string;
+            src["level"]["1"]["action"].data_type() == img::node::type::string;
 
         if (by_level) {
             action_ = std::make_unique<ByLevelAction>(src, skill_id_);

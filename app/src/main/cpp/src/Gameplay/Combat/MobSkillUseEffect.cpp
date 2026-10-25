@@ -18,7 +18,7 @@
 #include "../MapleMap/Mob.h"
 
 namespace ms {
-MobSingleUseEffect::MobSingleUseEffect(const nl::node &src) :
+MobSingleUseEffect::MobSingleUseEffect(const img::node &src) :
     effect_(src["effect"]) {}
 
 void MobSingleUseEffect::apply(Mob &mob) const {
@@ -28,13 +28,13 @@ void MobSingleUseEffect::apply(Mob &mob) const {
     effect_.apply(func);
 }
 
-MobMultiUseEffect::MobMultiUseEffect(const nl::node &src, bool area_warning) {
+MobMultiUseEffect::MobMultiUseEffect(const img::node &src, bool area_warning) {
     if (area_warning) {
         effects_.push_back(src["areaWarning"]);
     }
 
     int8_t no = -1;
-    nl::node sub = src["effect"];
+    img::node sub = src["effect"];
     effects_.push_back(sub);
 
     while (sub) {

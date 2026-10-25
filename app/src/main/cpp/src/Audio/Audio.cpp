@@ -18,7 +18,7 @@
 #include <bass.h>
 
 #include <imgwz/audio.hpp>
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 #include <utility>
 
 #include "../Configuration.h"
@@ -43,7 +43,7 @@ Sound::Sound(int32_t itemid) {
     }
 }
 
-Sound::Sound(const nl::node &src) : id_(add_sound(src)) {}
+Sound::Sound(const img::node &src) : id_(add_sound(src)) {}
 
 Sound::Sound() : id_(0) {}
 
@@ -58,7 +58,7 @@ Error Sound::init() {
         return Error::Code::AUDIO;
     }
 
-    nl::node uisrc = nl::nx::sound["UI.img"];
+    img::node uisrc = img::wz::sound["UI.img"];
 
     add_sound(Sound::Name::BUTTON_CLICK, uisrc["BtMouseClick"]);
     add_sound(Sound::Name::BUTTON_OVER, uisrc["BtMouseOver"]);
@@ -76,7 +76,7 @@ Error Sound::init() {
     add_sound(Sound::Name::WORLD_MAP_OPEN, uisrc["WorldmapOpen"]);
     add_sound(Sound::Name::WORLD_MAP_CLOSE, uisrc["WorldmapClose"]);
 
-    nl::node gamesrc = nl::nx::sound["Game.img"];
+    img::node gamesrc = img::wz::sound["Game.img"];
 
     add_sound(Sound::Name::GAME_START, gamesrc["GameIn"]);
     add_sound(Sound::Name::JUMP, gamesrc["Jump"]);
@@ -86,7 +86,7 @@ Error Sound::init() {
     add_sound(Sound::Name::LEVEL_UP, gamesrc["LevelUp"]);
     add_sound(Sound::Name::TOMBSTONE, gamesrc["Tombstone"]);
 
-    nl::node itemsrc = nl::nx::sound["Item.img"];
+    img::node itemsrc = img::wz::sound["Item.img"];
 
     for (const auto &node : itemsrc) {
         add_sound(node.name(), node["Use"]);
@@ -124,8 +124,8 @@ void Sound::play(size_t id, float volume) {
     BASS_ChannelPlay(channel, true);
 }
 
-size_t Sound::add_sound(const nl::node &src) {
-    nl::audio ad = src;
+size_t Sound::add_sound(const img::node &src) {
+    img::audio ad = src;
 
     const auto *data = reinterpret_cast<const void *>(ad.data());
 
@@ -164,7 +164,7 @@ size_t Sound::add_sound(const nl::node &src) {
     return 0;
 }
 
-void Sound::add_sound(Name name, const nl::node &src) {
+void Sound::add_sound(Name name, const img::node &src) {
     size_t id = add_sound(src);
 
     if (id) {
@@ -172,7 +172,7 @@ void Sound::add_sound(Name name, const nl::node &src) {
     }
 }
 
-void Sound::add_sound(const std::string &itemid, const nl::node &src) {
+void Sound::add_sound(const std::string &itemid, const img::node &src) {
     size_t id = add_sound(src);
 
     if (id) {
@@ -203,7 +203,7 @@ void Music::play() const {
         return;
     }
 
-    nl::audio ad = nl::nx::sound.resolve(path_);
+    img::audio ad = img::wz::sound.resolve(path_);
     const auto *data = reinterpret_cast<const void *>(ad.data());
 
     if (data) {
@@ -231,7 +231,7 @@ void Music::play_once() const {
         return;
     }
 
-    nl::audio ad = nl::nx::sound.resolve(path_);
+    img::audio ad = img::wz::sound.resolve(path_);
     const auto *data = reinterpret_cast<const void *>(ad.data());
 
     if (data) {

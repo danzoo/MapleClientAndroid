@@ -1,11 +1,11 @@
-//  imgwz - sound handle, same public shape as NoLifeNx's nl::audio.
+//  imgwz - sound handle, same public shape as NoLifeNx's audio class.
 #pragma once
-#include "nxfwd.hpp"
+#include "fwd.hpp"
 
 #include <cstddef>
 #include <cstdint>
 
-namespace nl
+namespace img
 {
 class audio
 {
@@ -35,4 +35,4 @@ private:
     std::uint32_t m_length = 0;
     friend node;
 };
-} // namespace nl
+} // namespace img

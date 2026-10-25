@@ -1,5 +1,5 @@
 //  imgwz - canvas decoding.  NoLifeNx kept one global scratch buffer that every
-//  nl::bitmap::data() call inflated into, and the client depends on that (it copies
+//  img::bitmap::data() call inflated into, and the client depends on that (it copies
 //  the pixels into an atlas immediately), so the same rule is kept here.
 #include "bitmap.hpp"
 
@@ -9,7 +9,7 @@
 #include <vector>
 #include <zlib.h>
 
-namespace nl
+namespace img
 {
 namespace
 {
@@ -152,4 +152,4 @@ std::size_t bitmap::id() const
 {
     return reinterpret_cast<std::size_t>(m_data);
 }
-} // namespace nl
+} // namespace img

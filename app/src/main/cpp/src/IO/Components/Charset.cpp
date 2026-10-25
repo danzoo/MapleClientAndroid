@@ -16,12 +16,12 @@
 #include "Charset.h"
 
 namespace ms {
-Charset::Charset(const nl::node &src, Alignment alignment) :
+Charset::Charset(const img::node &src, Alignment alignment) :
     alignment_(alignment) {
     for (const auto &sub : src) {
         std::string name = sub.name();
 
-        if (sub.data_type() != nl::node::type::bitmap || name.empty()) {
+        if (sub.data_type() != img::node::type::bitmap || name.empty()) {
             continue;
         }
 

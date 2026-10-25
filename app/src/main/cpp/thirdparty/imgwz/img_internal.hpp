@@ -1,5 +1,5 @@
 //  imgwz internals: the mapped .img file and its lazily materialized property arena,
-//  the directory pseudo-nodes that stand in for the old nx archive roots, and the
+//  the directory pseudo-nodes that stand in for the old archive roots, and the
 //  string keystream tables.  None of this is part of the game-facing API.
 #pragma once
 #include "node.hpp"
@@ -10,7 +10,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nl
+namespace img
 {
 constexpr std::uint32_t none_index = 0xFFFFFFFFu;
 
@@ -36,7 +36,7 @@ struct prop_data {
     std::uint16_t flags = 0;
 };
 
-//! Decoded canvas location.  These addresses are handed out as nl::bitmap::id(),
+//! Decoded canvas location.  These addresses are handed out as img::bitmap::id(),
 //! which the texture atlas caches on, so they live in a deque and never move.
 struct canvas_data {
     std::uint8_t const* payload = nullptr; // deflate stream, 2-byte zlib header included
@@ -164,4 +164,4 @@ constexpr std::uint32_t img_iv = 0x4D23C72Bu;
 //! The fixed preamble every wz Sound_DX8 property stores in front of the serialised
 //! WAVEFORMATEXTENSIBLE; the byte after it is the format length.
 constexpr std::uint32_t sound_header_len = 51;
-} // namespace nl
+} // namespace img

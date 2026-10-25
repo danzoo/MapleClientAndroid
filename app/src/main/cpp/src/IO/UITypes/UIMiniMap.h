@@ -88,9 +88,9 @@ private:
     bool big_map_;
     bool has_map_;
     int16_t scale_;
-    nl::node map_;
-    nl::node mini_map_;
-    nl::node marker_;
+    img::node map_;
+    img::node mini_map_;
+    img::node marker_;
     Texture map_sprite_;
     Animation player_marker_;
     int16_t combined_text_width_;
@@ -112,7 +112,7 @@ private:
     Text town_text_;
 
     bool list_npc_enabled_;
-    nl::node list_npc_;
+    img::node list_npc_;
     std::vector<Sprite> list_npc_sprites_;
     std::vector<MapObject *> list_npc_list_;
     std::vector<Text> list_npc_names_;

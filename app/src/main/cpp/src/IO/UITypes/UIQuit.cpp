@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIQuit.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../../Character/ExpTable.h"
 #include "../../Gameplay/Stage.h"
@@ -28,12 +28,12 @@
 
 namespace ms {
 UIQuit::UIQuit(const CharStats &st) : stats_(st), screen_adj_(212, 114) {
-    nl::node askReward = nl::nx::ui["UIWindow6.img"]["askReward"];
-    nl::node userLog = askReward["userLog"];
-    nl::node exp = userLog["exp"];
-    nl::node level = userLog["level"];
-    nl::node time = userLog["time"];
-    nl::node backgrnd = userLog["backgrnd"];
+    img::node askReward = img::wz::ui["UIWindow6.img"]["askReward"];
+    img::node userLog = askReward["userLog"];
+    img::node exp = userLog["exp"];
+    img::node level = userLog["level"];
+    img::node time = userLog["time"];
+    img::node backgrnd = userLog["backgrnd"];
 
     sprites_.emplace_back(backgrnd, -screen_adj_);
 

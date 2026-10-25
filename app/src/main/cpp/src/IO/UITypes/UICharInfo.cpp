@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UICharInfo.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../../Gameplay/Stage.h"
 #include "../../Net/Packets/PlayerInteractionPackets.h"
@@ -47,10 +47,10 @@ UICharInfo::UICharInfo(int32_t cid) :
     collect_enabled_(false),
     damage_enabled_(false),
     item_enabled_(false) {
-    nl::node close = nl::nx::ui["Basic.img"]["BtClose3"];
-    nl::node UserInfo = nl::nx::ui["UIWindow2.img"]["UserInfo"];
-    nl::node character = UserInfo["character"];
-    nl::node backgrnd = character["backgrnd"];
+    img::node close = img::wz::ui["Basic.img"]["BtClose3"];
+    img::node UserInfo = img::wz::ui["UIWindow2.img"]["UserInfo"];
+    img::node character = UserInfo["character"];
+    img::node backgrnd = character["backgrnd"];
 
     /// Main Window
     sprites_.emplace_back(backgrnd);
@@ -100,8 +100,8 @@ UICharInfo::UICharInfo(int32_t cid) :
     buttons_[Buttons::BT_RIDE]->set_state(Button::State::DISABLED);
 
     /// Farm
-    nl::node farm = UserInfo["farm"];
-    nl::node farm_backgrnd = farm["backgrnd"];
+    img::node farm = UserInfo["farm"];
+    img::node farm_backgrnd = farm["backgrnd"];
 
     loading_ = farm["loading"];
 
@@ -126,8 +126,8 @@ UICharInfo::UICharInfo(int32_t cid) :
     bottom_window_adj_ = Point<int16_t>(0, backgrnd_dim.y() + 1);
 
     /// Personality
-    nl::node personality = UserInfo["personality"];
-    nl::node personality_backgrnd = personality["backgrnd"];
+    img::node personality = UserInfo["personality"];
+    img::node personality_backgrnd = personality["backgrnd"];
 
     personality_sprites_.emplace_back(personality_backgrnd, bottom_window_adj_);
     personality_sprites_.emplace_back(personality["backgrnd2"],
@@ -146,8 +146,8 @@ UICharInfo::UICharInfo(int32_t cid) :
     personality_dimensions_ = Texture(personality_backgrnd).get_dimensions();
 
     /// Collect
-    nl::node collect = UserInfo["collect"];
-    nl::node collect_backgrnd = collect["backgrnd"];
+    img::node collect = UserInfo["collect"];
+    img::node collect_backgrnd = collect["backgrnd"];
 
     collect_sprites_.emplace_back(collect_backgrnd, bottom_window_adj_);
     collect_sprites_.emplace_back(collect["backgrnd2"], bottom_window_adj_);
@@ -173,8 +173,8 @@ UICharInfo::UICharInfo(int32_t cid) :
     collect_dimensions_ = Texture(collect_backgrnd).get_dimensions();
 
     /// Damage
-    nl::node damage = UserInfo["damage"];
-    nl::node damage_backgrnd = damage["backgrnd"];
+    img::node damage = UserInfo["damage"];
+    img::node damage_backgrnd = damage["backgrnd"];
 
     damage_sprites_.emplace_back(damage_backgrnd, bottom_window_adj_);
     damage_sprites_.emplace_back(damage["backgrnd2"], bottom_window_adj_);
@@ -192,8 +192,8 @@ UICharInfo::UICharInfo(int32_t cid) :
     right_window_adj_ = Point<int16_t>(backgrnd_dim.x(), 0);
 
     /// Item
-    nl::node item = UserInfo["item"];
-    nl::node item_backgrnd = item["backgrnd"];
+    img::node item = UserInfo["item"];
+    img::node item_backgrnd = item["backgrnd"];
 
     item_sprites_.emplace_back(item_backgrnd, right_window_adj_);
     item_sprites_.emplace_back(item["backgrnd2"], right_window_adj_);

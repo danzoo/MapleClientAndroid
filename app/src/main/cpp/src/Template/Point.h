@@ -23,7 +23,7 @@ template<class T>
 class Point {
 public:
     // Construct a point from a vector property
-    Point(const nl::node &src) :
+    Point(const img::node &src) :
         a_(static_cast<T>(src.x())),
         b_(static_cast<T>(src.y())) {}
 
