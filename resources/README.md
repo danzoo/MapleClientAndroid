@@ -4,17 +4,21 @@
 `/storage/emulated/0/Android/data/com.OpenMapleClient/files/Data` 一一对应
 （`Base/`、`Character/`、`Map/`、`Sound/`、`UI/` …），所以同步到设备时整棵目录直接按相对路径推送即可。
 
-## 唯一未入库的文件
+## 走 git-lfs 的那一个文件
 
 `Sound/Skill.img`（134,412,532 字节 = 128.2 MiB）超过 GitHub 单文件 100 MiB 的硬限制，
-因此没有提交进 git。原件在
+普通提交会被服务端拒收，所以它由仓库根的 `.gitattributes` 单独交给 git-lfs 跟踪：
 
 ```
-F:\Code\MapleAndroid\Assets\v209\img_develop\Sound\Skill.img
+resources/img_develop/Sound/Skill.img filter=lfs diff=lfs merge=lfs -text
 ```
 
-换机器或新克隆时，这一个文件要从上面的路径单独拷贝，并单独 `adb push` 到设备，
-否则技能音效缺失（客户端读不到节点时静默不播，日志里看不到）。
+后果是**克隆前必须先装 git-lfs**（`git lfs install`），否则 checkout 出来的
+`Skill.img` 只是一个 134 字节的指针文本，客户端读不到任何音效节点、技能音效静默缺失
+（`Music::play()` 拿不到节点就直接返回，logcat 里不会有任何报错）。
+用 `git lfs ls-files` 能看到它，用 `git lfs pull` 可以补下真文件。
+
+其余 7600 个归档都是普通 blob，不走 LFS。
 
 ## 与源头基准的关系
 

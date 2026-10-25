@@ -1,0 +1,4 @@
+# 资源基准里唯一超过 GitHub 单文件 100 MiB 硬限的归档，走 git-lfs。
+# 克隆前需要先装 git-lfs，否则 checkout 出来的是一个 130 字节的指针文本，
+# 客户端读不到节点会静默不放技能音效（日志里看不到任何报错）。
+resources/img_develop/Sound/Skill.img filter=lfs diff=lfs merge=lfs -text
