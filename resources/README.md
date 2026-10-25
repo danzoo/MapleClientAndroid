@@ -1,8 +1,11 @@
-# resources/img_develop —— 客户端资源基准
+# resources/ —— 客户端资源基准
 
-这里存放客户端资源基准 `img_develop` 的版本管理副本。目录结构与实机
+这个目录本身就是客户端资源基准（版本管理副本）。它的目录结构与实机
 `/storage/emulated/0/Android/data/com.OpenMapleClient/files/Data` 一一对应
-（`Base/`、`Character/`、`Map/`、`Sound/`、`UI/` …），所以同步到设备时整棵目录直接按相对路径推送即可。
+（`Base/`、`Character/`、`Map/`、`Sound/`、`UI/` …），所以同步到设备时
+`resources/` 下的内容按相对路径直接推送即可，中间不再多一层目录。
+唯一的例外是本文件 `README.md`：它不是资源，同步时要把 `*.md` 排除掉，
+否则会跟着推到设备的 `Data/` 里，破坏「设备 Data 与基准逐文件一致」。
 
 ## 走 git-lfs 的那一个文件
 
@@ -10,7 +13,7 @@
 普通提交会被服务端拒收，所以它由仓库根的 `.gitattributes` 单独交给 git-lfs 跟踪：
 
 ```
-resources/img_develop/Sound/Skill.img filter=lfs diff=lfs merge=lfs -text
+resources/Sound/Skill.img filter=lfs diff=lfs merge=lfs -text
 ```
 
 后果是**克隆前必须先装 git-lfs**（`git lfs install`），否则 checkout 出来的
