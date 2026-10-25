@@ -17,6 +17,7 @@
 
 #include "../Audio/Audio.h"
 #include "../Data/WeaponData.h"
+#include "../Gameplay/Physics/PhysicsParams.h"
 #include "../IO/UI.h"
 #include "../IO/UITypes/UIStatsInfo.h"
 #include "../Net/Packets/GameplayPackets.h"
@@ -338,8 +339,12 @@ MobAttackResult Player::damage(const MobAttack &attack) {
     bool knockback = !missed && !immovable;
 
     if (knockback && randomizer_.above(stats_.get_stance())) {
-        phobj_.hspeed = fromleft ? -1.5 : 1.5;
-        phobj_.vforce -= 3.5;
+        // The shove is a distance the client had already decided on - a pixel and a half for the
+        // tick after the hit - rather than a speed the archive describes, so it is stated as the
+        // step it was meant to be. How far it carries before ground_damping() takes it back is the
+        // archive's business now.
+        phobj_.set_hstep(fromleft ? -1.5 : 1.5);
+        phobj_.vforce -= tick_units::accel(-3.5);
     }
 
     uint8_t direction = fromleft ? 0 : 1;
@@ -440,23 +445,49 @@ void Player::set_ladder(
 }
 
 float Player::get_walkforce() const {
-    return 0.05f
-           + 0.11f * static_cast<float>(stats_.get_total(EquipStat::Id::SPEED))
-                 / 100;
+    // The archive's walkForce already settles at walkSpeed under the ground damping that comes out
+    // of walkDrag, so the SPEED stat decides only what fraction of the baseline walk this character
+    // has.
+    const float speed =
+        static_cast<float>(stats_.get_total(EquipStat::Id::SPEED));
+
+    return PhysicsParams::walk_accel() * speed / 100;
+}
+
+float Player::get_walkspeed() const {
+    const float speed =
+        static_cast<float>(stats_.get_total(EquipStat::Id::SPEED));
+
+    return PhysicsParams::walk_speed() * speed / 100;
+}
+
+float Player::get_jumpspeed() const {
+    const float jump =
+        static_cast<float>(stats_.get_total(EquipStat::Id::JUMP));
+
+    // One and a half to three and a half times the baseline jump, which is the curve this client
+    // was built with, normalised so that a baseline JUMP stat is worth the jump the archive names.
+    return PhysicsParams::jump_speed() * (1.0f + 3.5f * jump / 100) / 4.5f;
 }
 
 float Player::get_jumpforce() const {
-    return 1.0f
-           + 3.5f * static_cast<float>(stats_.get_total(EquipStat::Id::JUMP))
-                 / 100;
+    return get_jumpspeed() / Constants::TICK_SECONDS;
 }
 
-float Player::get_climbforce() const {
-    return static_cast<float>(stats_.get_total(EquipStat::Id::SPEED)) / 100;
+float Player::get_climbspeed() const {
+    const double speed = stats_.get_total(EquipStat::Id::SPEED) / 100.0;
+
+    // Neither rope nor ladder has a key in the archive, so this is the client's own one pixel per
+    // tick at a baseline SPEED stat, restated.
+    return static_cast<float>(tick_units::velocity(speed));
 }
 
 float Player::get_flyforce() const {
-    return 0.25f;
+    return PhysicsParams::fly_accel();
+}
+
+float Player::get_swimforce() const {
+    return PhysicsParams::swim_accel();
 }
 
 bool Player::is_underwater() const {

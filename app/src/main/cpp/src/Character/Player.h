@@ -122,19 +122,26 @@ public:
     // Return the character's attacking speed.
     int8_t get_integer_attackspeed() const override;
 
-    // Returns the current walking force, calculated from the total ES_SPEED
-    // stat.
+    // The force that drives a walk, and the speed it settles at. Both are the values named by
+    // Map/Physics.img for the baseline character, put on the character's total ES_SPEED stat.
     float get_walkforce() const;
 
-    // Returns the current jumping force, calculated from the total ES_JUMP
-    // stat.
+    float get_walkspeed() const;
+
+    // A jump is one tick of force, so the force is the speed the jump leaves the ground with spread
+    // over that tick. Both are scaled by the character's total ES_JUMP stat.
+    float get_jumpspeed() const;
+
     float get_jumpforce() const;
 
-    // Returns the climbing force, calculated from the total ES_SPEED stat.
-    float get_climbforce() const;
+    // Climbing a rope or a ladder. The archive has nothing to say about these, so the speed stays
+    // the client's own, worked off the total ES_SPEED stat.
+    float get_climbspeed() const;
 
-    // Returns the flying force.
+    // The force that drives a flight, and the one that drives a stroke through water.
     float get_flyforce() const;
+
+    float get_swimforce() const;
 
     uint8_t get_world_id() const;
 

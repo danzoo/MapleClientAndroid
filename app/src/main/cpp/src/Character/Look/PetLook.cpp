@@ -18,6 +18,8 @@
 #include <imgwz/wz.hpp>
 #include <utility>
 
+#include "../../Gameplay/Physics/PhysicsParams.h"
+
 namespace ms {
 PetLook::PetLook(int32_t iid,
                  std::string nm,
@@ -69,8 +71,17 @@ void PetLook::draw(double viewx, double viewy, float alpha) const {
 }
 
 void PetLook::update(const Physics &physics, Point<int16_t> charpos) {
+    // The pet used to be given these two as pushes in pixels per tick squared. Its flight damping
+    // has not changed, so that one only has to be restated; the ground it walks on is damped by the
+    // archive's walkDrag now, so what carries over is the speed the old damping settled at - a push
+    // divided by its 0.4 over 3 - and that speed is what the new damping is asked to hold.
     static const double PETWALKFORCE = 0.35;
     static const double PETFLYFORCE = 0.2;
+    static const double OLD_GROUNDDAMP = 0.4 / 3.0;
+
+    const double walkdrive = PhysicsParams::ground_drive(
+        tick_units::velocity(PETWALKFORCE / OLD_GROUNDDAMP));
+    const double flydrive = tick_units::accel(PETFLYFORCE);
 
     Point<int16_t> curpos = phobj_.get_position();
 
@@ -81,12 +92,12 @@ void PetLook::update(const Physics &physics, Point<int16_t> charpos) {
                 set_position(charpos.x(), charpos.y());
             } else {
                 if (charpos.x() - curpos.x() > 50) {
-                    phobj_.hforce = PETWALKFORCE;
+                    phobj_.hforce = walkdrive;
                     flip_ = true;
 
                     set_stance(Stance::MOVE);
                 } else if (charpos.x() - curpos.x() < -50) {
-                    phobj_.hforce = -PETWALKFORCE;
+                    phobj_.hforce = -walkdrive;
                     flip_ = false;
 
                     set_stance(Stance::MOVE);
@@ -109,19 +120,19 @@ void PetLook::update(const Physics &physics, Point<int16_t> charpos) {
                 set_position(charpos.x(), charpos.y());
             } else {
                 if (charpos.x() - curpos.x() > 50) {
-                    phobj_.hforce = PETFLYFORCE;
+                    phobj_.hforce = flydrive;
                     flip_ = true;
                 } else if (charpos.x() - curpos.x() < -50) {
-                    phobj_.hforce = -PETFLYFORCE;
+                    phobj_.hforce = -flydrive;
                     flip_ = false;
                 } else {
                     phobj_.hforce = 0.0f;
                 }
 
                 if (charpos.y() - curpos.y() > 50.0f) {
-                    phobj_.vforce = PETFLYFORCE;
+                    phobj_.vforce = flydrive;
                 } else if (charpos.y() - curpos.y() < -50.0f) {
-                    phobj_.vforce = -PETFLYFORCE;
+                    phobj_.vforce = -flydrive;
                 } else {
                     phobj_.vforce = 0.0f;
                 }

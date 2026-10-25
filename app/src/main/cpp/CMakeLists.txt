@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.4.1)
 add_compile_definitions(NDK_DEBUG=1)
 
 add_subdirectory(thirdparty)
-include(thirdparty/Deps.cmake)
 
 set(${CMAKE_C_FLAGS}, "${CMAKE_C_FLAGS}")
 # now build app's shared lib
@@ -174,6 +173,7 @@ add_library(OpenMapleClient SHARED
         src/Gameplay/Physics/Foothold.cpp
         src/Gameplay/Physics/FootholdTree.cpp
         src/Gameplay/Physics/Physics.cpp
+        src/Gameplay/Physics/PhysicsParams.cpp
         src/Graphics/Animation.cpp
         src/Graphics/AndroidText.cpp
         src/Graphics/Color.cpp
@@ -247,4 +247,4 @@ target_include_directories(OpenMapleClient
         ${CMAKE_SOURCE_DIR}/thirdparty/glfm/include
         )
 # add lib dependencies
-target_link_libraries(OpenMapleClient glfm android log jnigraphics GLESv3 freetype imgwz ${CMAKE_SOURCE_DIR}/thirdparty/bass/libs/arm64-v8a/libbass.so)
+target_link_libraries(OpenMapleClient glfm android nativewindow log jnigraphics GLESv3 freetype imgwz ${CMAKE_SOURCE_DIR}/thirdparty/bass/libs/arm64-v8a/libbass.so)

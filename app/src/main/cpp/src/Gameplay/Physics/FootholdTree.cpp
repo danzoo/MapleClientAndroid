@@ -182,9 +182,13 @@ void FootholdTree::update_fh(PhysicsObject &phobj) const {
         }
 
         if (curfh.slope() != 0.0 || nextfh.slope() != 0.0) {
-            if (phobj.hspeed > 0.0 && vdelta <= phobj.hspeed) {
+            // vdelta is a number of pixels, so it is compared against the distance this tick will
+            // actually cover rather than against the speed it is covered at.
+            const double hstep = phobj.hstep();
+
+            if (phobj.hspeed > 0.0 && vdelta <= hstep) {
                 phobj.y = ground;
-            } else if (phobj.hspeed < 0.0 && vdelta >= phobj.hspeed) {
+            } else if (phobj.hspeed < 0.0 && vdelta >= hstep) {
                 phobj.y = ground;
             }
         }

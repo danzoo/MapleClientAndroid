@@ -1,4 +1,0 @@
-[submodule "app/src/main/cpp/thirdparty/glfw"]
-	path = app/src/main/cpp/thirdparty/glfw
-	url = https://github.com/inniyah/glfw
-	branch = android

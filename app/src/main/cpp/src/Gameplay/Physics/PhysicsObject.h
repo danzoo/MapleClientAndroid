@@ -20,7 +20,10 @@
 #include "../../Template/Point.h"
 
 namespace ms {
-// Structure that contains all properties for movement calculations
+// Positions are in pixels, speeds are in pixels per second and forces are in pixels per second
+// squared - the same units Map/Physics.img uses - so a value read from the archive is assigned
+// without being translated first. The simulation still only runs once per timestep, which is where
+// the step() accessors come in: they are the distance actually covered in one update.
 struct MovingObject {
     Linear<double> x;
     Linear<double> y;
@@ -33,8 +36,23 @@ struct MovingObject {
     }
 
     void move() {
-        x += hspeed;
-        y += vspeed;
+        x += hstep();
+        y += vstep();
+    }
+
+    double hstep() const { return hspeed * Constants::TICK_SECONDS; }
+
+    double vstep() const { return vspeed * Constants::TICK_SECONDS; }
+
+    // A step quoted in pixels per tick, which is the unit every hand-written speed in this client
+    // names. Constants::LEGACY_TICK_SECONDS is what keeps those numbers worth what they were written
+    // for; hstep() above is the same speed read out in the tick the loop actually runs.
+    void set_hstep(double pixels_per_quoted_tick) {
+        hspeed = pixels_per_quoted_tick / Constants::LEGACY_TICK_SECONDS;
+    }
+
+    void set_vstep(double pixels_per_quoted_tick) {
+        vspeed = pixels_per_quoted_tick / Constants::LEGACY_TICK_SECONDS;
     }
 
     void set_x(double d) { x.set(d); }
@@ -51,17 +69,17 @@ struct MovingObject {
         vspeed = 0.0;
     }
 
+    // Distance in pixels, delay in milliseconds of game time: the quotient is a speed in pixels per
+    // real second, which is what makes the move take the delay it names whatever the timestep is.
     void movexuntil(double d, uint16_t delay) {
         if (delay) {
-            double hdelta = d - x.get();
-            hspeed = Constants::TIMESTEP * hdelta / delay;
+            hspeed = (d - x.get()) * Constants::SIMULATION_SPEED * 1000 / delay;
         }
     }
 
     void moveyuntil(double d, uint16_t delay) {
         if (delay) {
-            double vdelta = d - y.get();
-            vspeed = Constants::TIMESTEP * vdelta / delay;
+            vspeed = (d - y.get()) * Constants::SIMULATION_SPEED * 1000 / delay;
         }
     }
 
@@ -75,9 +93,9 @@ struct MovingObject {
 
     double crnt_y() const { return y.get(); }
 
-    double next_x() const { return x + hspeed; }
+    double next_x() const { return x + hstep(); }
 
-    double next_y() const { return y + vspeed; }
+    double next_y() const { return y + vstep(); }
 
     int16_t get_x() const {
         double rounded = std::round(x.get());
@@ -138,10 +156,22 @@ struct PhysicsObject : public MovingObject {
     bool onground = true;
     bool enablejd = false;
 
+    // Accelerations applied by whatever is steering this object, and the sums the integrator
+    // builds from them, both in pixels per second squared.
     double hforce = 0.0;
     double vforce = 0.0;
     double hacc = 0.0;
     double vacc = 0.0;
+
+    // How far one force alone carries the object during a single timestep, in pixels. This is the
+    // term that a step projection has to add to hstep() to see where the object will be next tick.
+    double hpush() const {
+        return hforce * Constants::TICK_SECONDS * Constants::TICK_SECONDS;
+    }
+
+    double vpush() const {
+        return vforce * Constants::TICK_SECONDS * Constants::TICK_SECONDS;
+    }
 
     bool is_flag_set(Flag f) { return (flags & f) != 0; }
 
@@ -153,4 +183,21 @@ struct PhysicsObject : public MovingObject {
 
     void clear_flags() { flags = 0; }
 };
+
+// The numbers this client was written with before the physics archive became the source of them are
+// all still per timestep. Anything left over from that era is restated here rather than by hand, so
+// that the only unit a reader has to hold in mind while looking at a physics field is the second.
+//
+// The tick they are quoted in is Constants::LEGACY_TICK_SECONDS and not the one the loop runs, which
+// is what lets the update rate change without every one of these numbers moving under it.
+namespace tick_units {
+    inline double velocity(double pixels_per_tick) {
+        return pixels_per_tick / Constants::LEGACY_TICK_SECONDS;
+    }
+
+    inline double accel(double pixels_per_tick_squared) {
+        return pixels_per_tick_squared
+            / (Constants::LEGACY_TICK_SECONDS * Constants::LEGACY_TICK_SECONDS);
+    }
+}  // namespace tick_units
 }  // namespace ms

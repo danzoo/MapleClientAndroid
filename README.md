@@ -30,14 +30,15 @@ A connected gamepad replaces the touch overlay while it stays in use.
 | Select | Close the focused window |
 | Start | Main menu |
 
-glfm has no `AKEYCODE_BUTTON_*` mapping and routes controller axes to the touch callback, so the
-build carries a local patch in
-[thirdparty/glfm-gamepad-keys.patch](app/src/main/cpp/thirdparty/glfm-gamepad-keys.patch). CMake
-stops with an error if `thirdparty/glfm` is re-fetched without it; re-apply with
+The windowing layer is [glfm], which the client has to carry changes in: it has no `AKEYCODE_BUTTON_*`
+mapping and routes controller axes to the touch callback, and its render loop runs as fast as the
+buffer queue allows rather than at the frame rate asked for. So `thirdparty/glfm` is a copy of the
+upstream sources in this repository, built by `add_subdirectory` rather than fetched — no submodule
+to initialise and no clone step that can quietly drop those edits. The copy is upstream
+`607fc6ff8c89d58641c79adfb00ac9ced3652adc`; see [thirdparty/CMakeLists.txt](app/src/main/cpp/thirdparty/CMakeLists.txt)
+for what is ours.
 
-```
-git -C app/src/main/cpp/thirdparty/glfm apply ../glfm-gamepad-keys.patch
-```
+[glfm]: https://github.com/brackeen/glfm
 
 # Bug
 1. Graphic issues.

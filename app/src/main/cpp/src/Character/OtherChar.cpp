@@ -56,8 +56,10 @@ int8_t OtherChar::update(const Physics &physics) {
         set_state(laststate);
     }
 
-    phobj_.hspeed = last_move_.xpos - phobj_.crnt_x();
-    phobj_.vspeed = last_move_.ypos - phobj_.crnt_y();
+    // Another client's character is told where it should be, so the whole gap left to cover is
+    // spent in this one tick - which is a distance, not a speed quoted in the old timestep.
+    phobj_.hspeed = (last_move_.xpos - phobj_.crnt_x()) / Constants::TICK_SECONDS;
+    phobj_.vspeed = (last_move_.ypos - phobj_.crnt_y()) / Constants::TICK_SECONDS;
     phobj_.move();
 
     physics.get_fht().update_fh(phobj_);
@@ -75,7 +77,7 @@ void OtherChar::send_movement(const std::vector<Movement> &newmoves) {
     movements_.push(newmoves.back());
 
     if (timer_ == 0) {
-        constexpr uint16_t DELAY = 50;
+        constexpr uint16_t DELAY = 28;
         timer_ = DELAY;
     }
 }

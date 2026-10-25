@@ -123,9 +123,12 @@ bool Char::update(const Physics &physics, float speed) {
     }
 
     uint16_t stancespeed = 0;
+    const float advanced = Constants::ANIMATION_MS_PER_PIXEL * speed;
 
-    if (speed >= 1.0f / Constants::TIMESTEP) {
-        stancespeed = static_cast<uint16_t>(Constants::TIMESTEP * speed);
+    // Movement too slow to add up to a whole millisecond of animation this tick leaves the stance
+    // held rather than creeping forward.
+    if (advanced >= 1.0f) {
+        stancespeed = static_cast<uint16_t>(advanced);
     }
 
     after_image_.update(look_.get_frame(), stancespeed);
@@ -139,9 +142,11 @@ float Char::get_stancespeed() const {
     }
 
     switch (state_) {
-        case State::WALK: return static_cast<float>(std::abs(phobj_.hspeed));
+        // Animation is advanced once per timestep, so what it wants is the number of pixels a tick
+        // covers - not the speed those pixels are covered at.
+        case State::WALK: return static_cast<float>(std::abs(phobj_.hstep()));
         case State::LADDER:
-        case State::ROPE: return static_cast<float>(std::abs(phobj_.vspeed));
+        case State::ROPE: return static_cast<float>(std::abs(phobj_.vstep()));
         default: return 1.0f;
     }
 }

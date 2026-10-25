@@ -15,20 +15,31 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Physics.h"
 
+#include <cmath>
+
+#include "PhysicsParams.h"
+
 namespace ms {
-const double GRAVFORCE = Constants::GRAVITY;
-const double SWIMGRAVFORCE = 0.03;
-const double FRICTION = 0.3;
+// Ground takes speed off an object in two parts: walkDrag, which is proportional to the speed it
+// already has, and this slope term, which is proportional to the square of it and to how steep the
+// foothold is. That the second one is quadratic is why it keeps its shape untouched by the change of
+// time unit - a factor of seconds squared is exactly what a squared speed gives you.
 const double SLOPEFACTOR = 0.1;
 const double GROUNDSLIP = 3.0;
-const double FLYFRICTION = 0.05;
-const double SWIMFRICTION = 0.08;
 
-// Fastest a fall can go, in pixels per tick. Gravity is added to the downward speed every tick
-// with nothing taking it back off, so a long drop keeps building up until the character crosses the
-// screen in a handful of frames. This only binds past v*v/2g, about a hundred and twenty eight
-// pixels down, so platform-height drops and jumps fall exactly as they always have.
-const double MAXFALLSPEED = 6.0;
+// A slope this steep is treated as this steep, whatever the foothold says.
+const double MAXSLOPE = 0.5;
+
+// Nothing that is not being pushed keeps going this slowly: below here an object is considered to
+// have stopped. The archive's minFriction does the same job where a map sets its own friction, and
+// this is the client's own 0.1 pixels per tick restated for when it does not.
+const double STOP_SPEED = tick_units::velocity(0.1);
+
+// Free fall, the fastest a fall can go, the walk and the swim all come from Map/Physics.img now.
+// Gravity is added to the downward speed every tick with nothing taking it back off, so the cap is
+// what stops a long drop from crossing the screen in a handful of frames. It only binds past
+// v*v/2g, roughly a hundred pixels down, so platform-height drops and jumps still fall exactly as
+// they always have.
 
 Physics::Physics(const img::node &src) {
     fh_tree_ = src;
@@ -70,79 +81,112 @@ void Physics::move_normal(PhysicsObject &phobj) const {
         phobj.vacc += phobj.vforce;
         phobj.hacc += phobj.hforce;
 
-        if (phobj.hacc == 0.0 && phobj.hspeed < 0.1 && phobj.hspeed > -0.1) {
+        if (phobj.hacc == 0.0 && std::abs(phobj.hspeed) < STOP_SPEED) {
             phobj.hspeed = 0.0;
         } else {
-            double inertia = phobj.hspeed / GROUNDSLIP;
             double slopef = phobj.fhslope;
 
-            if (slopef > 0.5) {
-                slopef = 0.5;
-            } else if (slopef < -0.5) {
-                slopef = -0.5;
+            if (slopef > MAXSLOPE) {
+                slopef = MAXSLOPE;
+            } else if (slopef < -MAXSLOPE) {
+                slopef = -MAXSLOPE;
             }
 
-            phobj.hacc -=
-                (FRICTION + SLOPEFACTOR * (1.0 + slopef * -inertia)) * inertia;
+            phobj.hacc -= PhysicsParams::ground_damping() * phobj.hspeed;
+            phobj.hacc += SLOPEFACTOR * slopef * phobj.hspeed * phobj.hspeed
+                / (GROUNDSLIP * GROUNDSLIP);
         }
     } else if (phobj.is_flag_not_set(PhysicsObject::Flag::NO_GRAVITY)) {
-        phobj.vacc += GRAVFORCE;
+        phobj.vacc += PhysicsParams::gravity();
     }
 
     phobj.hforce = 0.0;
     phobj.vforce = 0.0;
 
-    phobj.hspeed += phobj.hacc;
-    phobj.vspeed += phobj.vacc;
+    phobj.hspeed += phobj.hacc * Constants::TICK_SECONDS;
+    phobj.vspeed += phobj.vacc * Constants::TICK_SECONDS;
 
-    if (!phobj.onground && phobj.vspeed > MAXFALLSPEED) {
-        phobj.vspeed = MAXFALLSPEED;
+    const double maxfall = PhysicsParams::max_fall_speed();
+
+    if (!phobj.onground && phobj.vspeed > maxfall) {
+        phobj.vspeed = maxfall;
     }
 }
 
 void Physics::move_flying(PhysicsObject &phobj) const {
-    phobj.hacc = phobj.hforce;
-    phobj.vacc = phobj.vforce;
+    const double damping = PhysicsParams::fly_damping();
+
+    phobj.hacc = phobj.hforce - damping * phobj.hspeed;
+    phobj.vacc = phobj.vforce - damping * phobj.vspeed;
     phobj.hforce = 0.0;
     phobj.vforce = 0.0;
 
-    phobj.hacc -= FLYFRICTION * phobj.hspeed;
-    phobj.vacc -= FLYFRICTION * phobj.vspeed;
+    phobj.hspeed += phobj.hacc * Constants::TICK_SECONDS;
+    phobj.vspeed += phobj.vacc * Constants::TICK_SECONDS;
 
-    phobj.hspeed += phobj.hacc;
-    phobj.vspeed += phobj.vacc;
+    // flySpeed is the speed a flight settles at. The archive's own drag for flying is not in the
+    // table, so this client's flight drag is kept, and the named speed is what bounds it.
+    const double maxfly = PhysicsParams::fly_speed();
 
-    if (phobj.hacc == 0.0 && phobj.hspeed < 0.1 && phobj.hspeed > -0.1) {
+    if (phobj.hspeed > maxfly) {
+        phobj.hspeed = maxfly;
+    } else if (phobj.hspeed < -maxfly) {
+        phobj.hspeed = -maxfly;
+    }
+
+    if (phobj.vspeed > maxfly) {
+        phobj.vspeed = maxfly;
+    } else if (phobj.vspeed < -maxfly) {
+        phobj.vspeed = -maxfly;
+    }
+
+    if (phobj.hacc == 0.0 && std::abs(phobj.hspeed) < STOP_SPEED) {
         phobj.hspeed = 0.0;
     }
 
-    if (phobj.vacc == 0.0 && phobj.vspeed < 0.1 && phobj.vspeed > -0.1) {
+    if (phobj.vacc == 0.0 && std::abs(phobj.vspeed) < STOP_SPEED) {
         phobj.vspeed = 0.0;
     }
 }
 
 void Physics::move_swimming(PhysicsObject &phobj) const {
-    phobj.hacc = phobj.hforce;
-    phobj.vacc = phobj.vforce;
+    const double damping = PhysicsParams::swim_damping();
+
+    phobj.hacc = phobj.hforce - damping * phobj.hspeed;
+    phobj.vacc = phobj.vforce - damping * phobj.vspeed;
     phobj.hforce = 0.0;
     phobj.vforce = 0.0;
 
-    phobj.hacc -= SWIMFRICTION * phobj.hspeed;
-    phobj.vacc -= SWIMFRICTION * phobj.vspeed;
-
+    // The archive leaves the water's own pull to the map, so it stays this client's.
     if (phobj.is_flag_not_set(PhysicsObject::Flag::NO_GRAVITY)) {
-        phobj.vacc += SWIMGRAVFORCE;
+        phobj.vacc += PhysicsParams::swim_gravity();
     }
 
-    phobj.hspeed += phobj.hacc;
-    phobj.vspeed += phobj.vacc;
+    phobj.hspeed += phobj.hacc * Constants::TICK_SECONDS;
+    phobj.vspeed += phobj.vacc * Constants::TICK_SECONDS;
 
-    if (phobj.hacc == 0.0 && phobj.hspeed < 0.1 && phobj.hspeed > -0.1) {
+    // The speed the archive names for swimming is the speed the strokes settle at, so it caps both
+    // axes rather than only the direction being paddled towards.
+    const double maxswim = PhysicsParams::swim_speed();
+
+    if (phobj.hspeed > maxswim) {
+        phobj.hspeed = maxswim;
+    } else if (phobj.hspeed < -maxswim) {
+        phobj.hspeed = -maxswim;
+    }
+
+    if (phobj.vspeed > maxswim) {
+        phobj.vspeed = maxswim;
+    } else if (phobj.vspeed < -maxswim) {
+        phobj.vspeed = -maxswim;
+    }
+
+    if (phobj.hacc == 0.0 && std::abs(phobj.hspeed) < STOP_SPEED) {
         phobj.hspeed = 0.0;
     }
 
-    if (phobj.vacc == 0.0 && phobj.vspeed < 0.1 && phobj.vspeed > -0.1) {
-        phobj.vspeed = 0.0f;
+    if (phobj.vacc == 0.0 && std::abs(phobj.vspeed) < STOP_SPEED) {
+        phobj.vspeed = 0.0;
     }
 }
 

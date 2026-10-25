@@ -18,6 +18,8 @@
 #include <imgwz/node.hpp>
 #include <imgwz/wz.hpp>
 
+#include "../Gameplay/Physics/PhysicsParams.h"
+
 #include <sys/stat.h>
 
 #include <stdexcept>
@@ -65,6 +67,8 @@ Error init(GLFMDisplay *pApp) {
         != img::node::type::bitmap) {
         return Error::Code::WRONG_UI_FILE;
     }
+
+    PhysicsParams::load();
 
     return Error::Code::NONE;
 }

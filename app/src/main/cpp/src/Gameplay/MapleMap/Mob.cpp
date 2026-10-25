@@ -18,6 +18,7 @@
 #include <imgwz/wz.hpp>
 
 #include "../../Net/Packets/GameplayPackets.h"
+#include "../Physics/PhysicsParams.h"
 #include "../Stage.h"
 #include "StringHandling.h"
 
@@ -99,11 +100,13 @@ Mob::Mob(int32_t oi,
     // init or risk crash
     animations_[Stance::SKILL] = animations_[Stance::STAND];
 
-    speed_ += 100;
-    speed_ *= 0.001f;
-
-    fly_speed_ += 100;
-    fly_speed_ *= 0.0005f;
+    // A mob stat used to be read as a push in pixels per tick squared, which the client's own ground
+    // damping - 0.4 over 3 taken off an object every tick - turned into a held speed seven and a
+    // half times as large, and its flight damping - 0.05 - into one a hundred times as large. Those
+    // products are the speeds the stats were always worth, so they are what the archive's damping
+    // and the archive's own speed caps are asked to hold now.
+    speed_ = tick_units::velocity((speed_ + 100) * 0.0075f);
+    fly_speed_ = tick_units::velocity((fly_speed_ + 100) * 0.01f);
 
     if (can_fly_) {
         phobj_.type = PhysicsObject::Type::FLYING;
@@ -282,25 +285,31 @@ int8_t Mob::update(const Physics &physics) {
         switch (stance_) {
             case Stance::MOVE:
                 if (can_fly_) {
-                    phobj_.hforce = flip_ ? fly_speed_ : -fly_speed_;
+                    const double drive =
+                        PhysicsParams::fly_damping() * fly_speed_;
+
+                    phobj_.hforce = flip_ ? drive : -drive;
 
                     switch (fly_direction_) {
                         case FlyDirection::UPWARDS:
-                            phobj_.vforce = -fly_speed_;
+                            phobj_.vforce = -drive;
                             break;
                         case FlyDirection::DOWNWARDS:
-                            phobj_.vforce = fly_speed_;
+                            phobj_.vforce = drive;
                             break;
                     }
                 } else {
-                    phobj_.hforce = flip_ ? speed_ : -speed_;
+                    const double drive = PhysicsParams::ground_drive(speed_);
+
+                    phobj_.hforce = flip_ ? drive : -drive;
                 }
 
                 break;
             case Stance::HIT:
                 if (can_move_) {
                     double KBFORCE = phobj_.onground ? 0.2 : 0.1;
-                    phobj_.hforce = flip_ ? -KBFORCE : KBFORCE;
+                    phobj_.hforce =
+                        tick_units::accel(flip_ ? -KBFORCE : KBFORCE);
 
                     // The platform lookup follows the chain of footholds off the end of a
                     // platform, so a mob shoved as far as the edge of the one it stands on has to
@@ -309,7 +318,7 @@ int8_t Mob::update(const Physics &physics) {
                         const Physics::Platform platform =
                             physics.get_platform(phobj_.fhid);
                         const double projected =
-                            phobj_.crnt_x() + phobj_.hspeed + phobj_.hforce;
+                            phobj_.crnt_x() + phobj_.hstep() + phobj_.hpush();
                         const double edgeleft =
                             platform.left + Constants::PLATFORM_EDGE_MARGIN;
                         const double edgeright =
@@ -323,7 +332,9 @@ int8_t Mob::update(const Physics &physics) {
                 }
 
                 break;
-            case Stance::JUMP: phobj_.vforce = -5.0; break;
+            case Stance::JUMP:
+                phobj_.vforce = tick_units::accel(-5.0);
+                break;
         }
 
         // A mob that wanders stays on the platform it is standing on. Off the end of it the
@@ -341,7 +352,8 @@ int8_t Mob::update(const Physics &physics) {
             // Held to the stretch only while standing on it, so a mob that has come off somewhere
             // else keeps walking instead of freezing where the two margins cross over.
             if (edgeleft < edgeright && x >= platform.left && x <= platform.right) {
-                const double projected = x + phobj_.hspeed + phobj_.hforce;
+                const double projected =
+                    x + phobj_.hstep() + phobj_.hpush();
 
                 if (projected > edgeright || projected < edgeleft) {
                     phobj_.hforce = 0.0;
