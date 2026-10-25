@@ -51,7 +51,7 @@ void MapDrops::update(const Physics &physics) {
     // or two, so the items elapse across a few consecutive frames. Gating the clatter on a short
     // cooldown instead of "once per frame" collapses the whole burst into a single sound, while a
     // later, separate kill still clatters on its own.
-    constexpr int16_t DROP_SOUND_COOLDOWN = 8;
+    constexpr int16_t DROP_SOUND_COOLDOWN = 15;
 
     if (drop_sound_cooldown_ > 0) {
         --drop_sound_cooldown_;

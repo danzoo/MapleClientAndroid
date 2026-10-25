@@ -21,11 +21,11 @@
 namespace ms {
 namespace {
 // Ticks an item spends in the air over level ground.
-constexpr double DROP_TICKS = 43.0;
+constexpr double DROP_TICKS = 76.0;
 
 // Pixels per tick the fall stops accelerating at. Without it an item dropped from a high platform
 // onto a low one covered the gap in a handful of ticks, which read as a snap rather than a fall.
-constexpr double DROP_MAX_FALL = 5.3;
+constexpr double DROP_MAX_FALL = 3.0;
 
 // The rise is half of the level-ground flight, and the same acceleration governs both halves of
 // every flight so the arc is one curve.

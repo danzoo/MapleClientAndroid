@@ -45,14 +45,14 @@ struct MovingObject {
     double vstep() const { return vspeed * Constants::TICK_SECONDS; }
 
     // A step quoted in pixels per tick, which is the unit every hand-written speed in this client
-    // names. Constants::LEGACY_TICK_SECONDS is what keeps those numbers worth what they were written
-    // for; hstep() above is the same speed read out in the tick the loop actually runs.
+    // names. hstep() above is the same speed read back out in the tick the loop runs, so what is
+    // stored stays in seconds and only the call site speaks in ticks.
     void set_hstep(double pixels_per_quoted_tick) {
-        hspeed = pixels_per_quoted_tick / Constants::LEGACY_TICK_SECONDS;
+        hspeed = pixels_per_quoted_tick / Constants::TICK_SECONDS;
     }
 
     void set_vstep(double pixels_per_quoted_tick) {
-        vspeed = pixels_per_quoted_tick / Constants::LEGACY_TICK_SECONDS;
+        vspeed = pixels_per_quoted_tick / Constants::TICK_SECONDS;
     }
 
     void set_x(double d) { x.set(d); }
@@ -188,16 +188,18 @@ struct PhysicsObject : public MovingObject {
 // all still per timestep. Anything left over from that era is restated here rather than by hand, so
 // that the only unit a reader has to hold in mind while looking at a physics field is the second.
 //
-// The tick they are quoted in is Constants::LEGACY_TICK_SECONDS and not the one the loop runs, which
-// is what lets the update rate change without every one of these numbers moving under it.
+// The tick they are quoted in is the one the loop runs, Constants::TICK_SECONDS, so the round trip
+// through here lands back on the literal: a speed of 3 put in comes out as 3 pixels per update. What
+// the conversion buys is that the fields themselves are all in seconds, which is the unit the
+// archive speaks, and that SIMULATION_SPEED can still be moved without rewriting them by hand.
 namespace tick_units {
     inline double velocity(double pixels_per_tick) {
-        return pixels_per_tick / Constants::LEGACY_TICK_SECONDS;
+        return pixels_per_tick / Constants::TICK_SECONDS;
     }
 
     inline double accel(double pixels_per_tick_squared) {
         return pixels_per_tick_squared
-            / (Constants::LEGACY_TICK_SECONDS * Constants::LEGACY_TICK_SECONDS);
+            / (Constants::TICK_SECONDS * Constants::TICK_SECONDS);
     }
 }  // namespace tick_units
 }  // namespace ms

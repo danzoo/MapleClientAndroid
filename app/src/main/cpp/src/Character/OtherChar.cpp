@@ -77,7 +77,7 @@ void OtherChar::send_movement(const std::vector<Movement> &newmoves) {
     movements_.push(newmoves.back());
 
     if (timer_ == 0) {
-        constexpr uint16_t DELAY = 28;
+        constexpr uint16_t DELAY = 50;
         timer_ = DELAY;
     }
 }

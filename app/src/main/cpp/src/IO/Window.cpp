@@ -399,30 +399,29 @@ namespace ms {
             // panel takes them and the queue never runs ahead of the picture.
             eglSwapInterval(eglGetCurrentDisplay(), 1);
             // The cap itself, held at the source: glfm's loop waits until the next frame is due before
-            // calling this function, so onDraw runs at TICK_RATE on a panel of any rate rather than
+            // calling this function, so onDraw runs at FRAME_RATE on a panel of any rate rather than
             // being entered more often and refused afterwards. Naming the rate to the compositor as
             // well so that a panel faster than the cap serves frames at the cap rather than at its own
             // rate, which is what leaves a frame the whole 1/60 to work in.
-            glfmSetFrameRate(display, static_cast<float>(Constants::TICK_RATE));
+            glfmSetFrameRate(display, static_cast<float>(Constants::FRAME_RATE));
             __android_log_print(ANDROID_LOG_INFO, "Window", "panel %.0f Hz, capped at %.0f fps",
-                                glfmGetDisplayRefreshRate(display), Constants::TICK_RATE);
+                                glfmGetDisplayRefreshRate(display), Constants::FRAME_RATE);
             Char::init();
             DamageNumber::init();
             MapPortals::init();
             Stage::get().init();
             UI::get().init();
-            Timer::get().start();
         }
 
         count_frames();
 
         if (game.is_running()) {
             Gamepad::get().update();
-            // One update per presented frame. The frame is paced to TICK_RATE and the timestep is
-            // the slice of game time that rate is worth, so the simulation and the picture advance
-            // together and there is no leftover time for a draw to interpolate across.
-            game.update();
-            game.draw(0.0f);
+            // The whole loop body, paced by the clock inside it: this frame is worth however many
+            // updates the time since the last one buys, and the picture is drawn at the moment
+            // between them that is left over. Held to FRAME_RATE by the deadline above, so the two
+            // rates are set independently of each other.
+            game.frame();
         } else {
             // Nothing is drawn until the server connection is up, which would leave the surface
             // presenting the uninitialised contents it was created with.
