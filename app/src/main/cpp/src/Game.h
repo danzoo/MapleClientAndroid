@@ -27,6 +27,10 @@ public:
 
     void start(GLFMDisplay *pApp);
 
+    // One frame's worth of the loop: spend the time since the last call on as many fixed-timestep
+    // updates as it buys, then draw the moment in between that is left over.
+    void frame();
+
     void update();
 
     void draw(float alpha);
