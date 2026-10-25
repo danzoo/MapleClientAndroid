@@ -1,0 +1,20 @@
+北斗写好了新的大地图要从140开始加，其它的加了程序也不识别，
+数字必须连续，中间不能留空否则无法识别，因此编号是改过的与官服不同，这里留下记录：
+
+需注意默认：
+140是海外旅游，141是鬼屋，142是新叶城，143是东方神州；
+
+海外旅游		WorldMap140.img，编号不用改		需修改link：日本145，新加坡149，马来西亚152
+狮子王城		WorldMap022→WorldMap144.img	需修改雪域WorldMap021.img的link为144；
+日本神社		WorldMap210→WorldMap145.img	需修改parent为140；
+昭和村		WorldMap211→WorldMap146.img	需修改parent为145；
+艾琳森林(新)	WorldMap032→WorldMap147.img	需修改玩具WorldMap030.img的link为147；
+		——注：原有的WorldMap032.img也要替换为新的，否则在艾琳森林前半段默认读取032旧文件；
+未来东京		WorldMap164→WorldMap148.img	需修改parent为145；
+新加坡		WorldMap220→WorldMap149.img
+台湾西门町/不夜城	WorldMap150.img			不用改编号			
+台湾101大厦	WorldMap151.img			不用改编号
+马来西亚		WorldMap230→WorldMap152.img
+枫城		WorldMap163→WorldMap153.img	需修改parent为145；
+狮子王城入口	WorldMap021复制命名WorldMap154.img  
+还差泰国水上市场/金庙
