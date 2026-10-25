@@ -22,13 +22,36 @@
 #include "Template/Singleton.h"
 
 namespace ms::Constants {
-// Timestep, e.g. the granularity in which the game advances.
-constexpr uint16_t TIMESTEP = 8;
+// Updates the simulation runs per real second, and the rate the picture is held to. The two are the
+// same number by design: the loop draws once per frame and updates once per draw, so nothing runs at
+// a rate of its own that could drift against the other.
+constexpr double TICK_RATE = 60;
 
-// Fraction of real time the simulation advances at. Movement, jumps and animations are all
-// driven by the timestep, so scaling it slows them together and keeps every trajectory intact;
-// lowering walk speed or jump force directly would shorten the jumps instead.
-constexpr double SIMULATION_SPEED = 0.85;
+// Timestep, e.g. the granularity in which the game advances, in milliseconds of game time. This is
+// the knob for how fast the game plays: every animation and every timer written in milliseconds
+// consumes this much per update.
+constexpr uint16_t TIMESTEP = 14;
+
+// How many real seconds one update of the simulation lasts. Anything written in pixels per second -
+// which is every speed and acceleration in Map/Physics.img - has to be traded against this.
+constexpr double TICK_SECONDS = 1.0 / TICK_RATE;
+
+// Fraction of real time the simulation advances at, which is the two above divided. Movement, jumps
+// and animations are all driven by the timestep, so scaling it slows them together and keeps every
+// trajectory intact; lowering walk speed or jump force directly would shorten the jumps instead.
+constexpr double SIMULATION_SPEED = TIMESTEP * 0.001 * TICK_RATE;
+
+// The tick that the hand-written pixels-per-tick numbers in this code were tuned against: an 8ms
+// slice of game time advancing at 0.85 of real time. Quantities quoted in it are restated through
+// here rather than through TICK_SECONDS, which is what lets the update rate be set on its own
+// without every one of them having to be rewritten.
+constexpr double LEGACY_TICK_SECONDS = 0.008 / 0.85;
+
+// Milliseconds of animation a pixel of movement is worth. The walk cycle and everything drawn along
+// with it are advanced by ground covered rather than by the clock, and this is the calibration those
+// numbers were written against - one pixel per tick at the old 8ms timestep - so it stays where it is
+// while the timestep itself moves.
+constexpr float ANIMATION_MS_PER_PIXEL = 8.0f;
 
 // Downward acceleration of a free falling object, in pixels per timestep squared. Anything that
 // predicts a trajectory has to use the same value the integrator applies.
@@ -37,11 +60,11 @@ constexpr double GRAVITY = 0.14;
 // How long loot that a mob dropped stays hidden after its packet arrives, on top of however long
 // that mob is still waiting for the blow that killed it. The server sends the loot before it sends
 // the kill, so without a wait the items are already flying out of a mob that is still standing.
-constexpr int16_t DROP_DELAY = 40;
+constexpr int16_t DROP_DELAY = 23;
 
 // Longest a mob flinches before the death animation starts, in timesteps. Only reached if the
 // flinch never reports that it has finished playing.
-constexpr int16_t HIT_DEATH_WAIT = 40;
+constexpr int16_t HIT_DEATH_WAIT = 23;
 
 // How far short of the end of a platform a knocked-back mob is held. Mobs hang off the point they
 // are stored at, so keeping this much clearance stops them from ending up over the gap they would

@@ -41,23 +41,27 @@ bool Bullet::settarget(Point<int16_t> target) {
 
     flip_ = xdelta > 0.0;
 
-    move_obj_.hspeed = xdelta / 32;
+    // The bullet is handed the whole distance in thirty-two ticks, with a floor and a ceiling on
+    // how far it is allowed to cover in one of them.
+    double hstep = xdelta / 32;
 
     if (xdelta > 0.0) {
-        if (move_obj_.hspeed < 3.0) {
-            move_obj_.hspeed = 3.0;
-        } else if (move_obj_.hspeed > 6.0) {
-            move_obj_.hspeed = 6.0;
+        if (hstep < 3.0) {
+            hstep = 3.0;
+        } else if (hstep > 6.0) {
+            hstep = 6.0;
         }
     } else if (xdelta < 0.0) {
-        if (move_obj_.hspeed > -3.0) {
-            move_obj_.hspeed = -3.0;
-        } else if (move_obj_.hspeed < -6.0) {
-            move_obj_.hspeed = -6.0;
+        if (hstep > -3.0) {
+            hstep = -3.0;
+        } else if (hstep < -6.0) {
+            hstep = -6.0;
         }
     }
 
-    move_obj_.vspeed = move_obj_.hspeed * ydelta / xdelta;
+    move_obj_.set_hstep(hstep);
+    // The fall is kept at the same angle as the flight, which is a ratio and so needs no units.
+    move_obj_.set_vstep(hstep * ydelta / xdelta);
 
     return false;
 }

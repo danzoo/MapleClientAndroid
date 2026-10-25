@@ -62,7 +62,7 @@ DamageNumber::DamageNumber(Type t, int32_t damage, int16_t starty, int16_t x) {
 
     move_obj_.set_x(x);
     move_obj_.set_y(starty);
-    move_obj_.vspeed = -0.25;
+    move_obj_.set_vstep(-0.25);
     opacity_.set(1.5f);
 }
 

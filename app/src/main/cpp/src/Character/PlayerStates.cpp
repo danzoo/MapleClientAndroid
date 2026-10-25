@@ -291,16 +291,21 @@ void PlayerFlyState::update(Player &player) const {
         return;
     }
 
+    // A stroke and a flight are two different pushes in the archive, even though the numbers it
+    // gives them happen to be the same; water damps and caps them differently again.
+    const double drive = player.is_underwater() ? player.get_swimforce()
+                                                 : player.get_flyforce();
+
     if (player.is_key_down(KeyAction::Id::LEFT)) {
-        player.get_phobj().hforce = -player.get_flyforce();
+        player.get_phobj().hforce = -drive;
     } else if (player.is_key_down(KeyAction::Id::RIGHT)) {
-        player.get_phobj().hforce = player.get_flyforce();
+        player.get_phobj().hforce = drive;
     }
 
     if (player.is_key_down(KeyAction::Id::UP)) {
-        player.get_phobj().vforce = -player.get_flyforce();
+        player.get_phobj().vforce = -drive;
     } else if (player.is_key_down(KeyAction::Id::DOWN)) {
-        player.get_phobj().vforce = player.get_flyforce();
+        player.get_phobj().vforce = drive;
     }
 }
 
@@ -338,14 +343,16 @@ void PlayerClimbState::send_action(Player &player,
                 if (player.is_key_down(KeyAction::Id::LEFT)) {
                     play_jumpsound();
                     player.set_direction(false);
-                    player.get_phobj().hspeed = -player.get_walkforce() * 8.0;
-                    player.get_phobj().vspeed = -player.get_jumpforce() / 1.5;
+                    // Leaping off a ladder throws the character sideways at the speed it walks at,
+                    // and two thirds of the way it jumps.
+                    player.get_phobj().hspeed = -player.get_walkspeed();
+                    player.get_phobj().vspeed = -player.get_jumpspeed() / 1.5;
                     cancel_ladder(player);
                 } else if (player.is_key_down(KeyAction::Id::RIGHT)) {
                     play_jumpsound();
                     player.set_direction(true);
-                    player.get_phobj().hspeed = player.get_walkforce() * 8.0;
-                    player.get_phobj().vspeed = -player.get_jumpforce() / 1.5;
+                    player.get_phobj().hspeed = player.get_walkspeed();
+                    player.get_phobj().vspeed = -player.get_jumpspeed() / 1.5;
                     cancel_ladder(player);
                 }
 
@@ -356,9 +363,9 @@ void PlayerClimbState::send_action(Player &player,
 
 void PlayerClimbState::update(Player &player) const {
     if (player.is_key_down(KeyAction::Id::UP)) {
-        player.get_phobj().vspeed = -player.get_climbforce();
+        player.get_phobj().vspeed = -player.get_climbspeed();
     } else if (player.is_key_down(KeyAction::Id::DOWN)) {
-        player.get_phobj().vspeed = player.get_climbforce();
+        player.get_phobj().vspeed = player.get_climbspeed();
     } else {
         player.get_phobj().vspeed = 0.0;
     }

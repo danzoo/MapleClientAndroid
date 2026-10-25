@@ -79,9 +79,9 @@ void Background::settype(Type type) {
 
     switch (type) {
         case Type::HMOVEA:
-        case Type::HMOVEB: move_obj_.hspeed = rx_ / 16; break;
+        case Type::HMOVEB: move_obj_.set_hstep(rx_ / 16); break;
         case Type::VMOVEA:
-        case Type::VMOVEB: move_obj_.vspeed = ry_ / 16; break;
+        case Type::VMOVEB: move_obj_.set_vstep(ry_ / 16); break;
         default:
             break;
     }

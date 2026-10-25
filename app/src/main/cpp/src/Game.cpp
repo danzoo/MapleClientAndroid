@@ -83,28 +83,6 @@ bool Game::is_running() {
     return true;
 }
 
-void Game::game_loop() {
-    Timer::get().start();
-
-    const int64_t timestep = Constants::TIMESTEP * 1000;
-    int64_t accumulator = timestep;
-
-    while (is_running()) {
-        int64_t elapsed = Timer::get().stop();
-
-        // Update game with constant timestep as many times as possible.
-        for (accumulator += elapsed; accumulator >= timestep;
-             accumulator -= timestep) {
-            update();
-        }
-        // Draw the game. Interpolate to account for remaining time.
-        float alpha = static_cast<float>(accumulator) / timestep;
-        draw(alpha);
-    }
-
-    Sound::close();
-}
-
 void Game::start(GLFMDisplay *pApp) {
     // Initialize and check for errors
     if (Error error = init(pApp)) {

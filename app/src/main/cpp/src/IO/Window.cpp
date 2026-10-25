@@ -30,8 +30,10 @@
 #include "Stage.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <utility>
+#include <EGL/egl.h>
 #include <android/log.h>
 #include <android/native_activity.h>
 #include <jni.h>
@@ -358,11 +360,52 @@ namespace ms {
         UI::get().send_close();
     }
 
+    // The rate the frames actually reach the panel, measured over a window long enough that the
+    // rounding of one frame cannot show. The cap itself is not here: it is the render loop's own
+    // deadline, which waits before calling this function rather than letting the frame through and
+    // refusing it afterwards, so every callback here draws and every drawing is swapped.
+    void count_frames() {
+        using clock = std::chrono::steady_clock;
+        constexpr uint16_t WINDOW = 120;
+
+        static clock::time_point window;
+        static uint16_t frames = 0;
+
+        if (!Configuration::get().get_show_fps()) {
+            return;
+        }
+
+        const clock::time_point now = clock::now();
+        if (frames++ == 0) {
+            window = now;
+        }
+
+        if (frames == WINDOW) {
+            // The window is timed between the first frame in it and the last, so it holds one
+            // interval fewer than the count.
+            const double seconds = std::chrono::duration<double>(now - window).count();
+            __android_log_print(ANDROID_LOG_INFO, "Window", "present %.1f fps",
+                                 (frames - 1) / seconds);
+            frames = 0;
+        }
+    }
+
     void onDraw(GLFMDisplay *display) {
         if (ms::program_ == 0) {
             program_ = glCreateProgram();
             GraphicsGL::get().init(display);
             GraphicsGL::get().reinit();
+            // One buffer swap per vsync, so a frame cannot be thrown at the panel faster than the
+            // panel takes them and the queue never runs ahead of the picture.
+            eglSwapInterval(eglGetCurrentDisplay(), 1);
+            // The cap itself, held at the source: glfm's loop waits until the next frame is due before
+            // calling this function, so onDraw runs at TICK_RATE on a panel of any rate rather than
+            // being entered more often and refused afterwards. Naming the rate to the compositor as
+            // well so that a panel faster than the cap serves frames at the cap rather than at its own
+            // rate, which is what leaves a frame the whole 1/60 to work in.
+            glfmSetFrameRate(display, static_cast<float>(Constants::TICK_RATE));
+            __android_log_print(ANDROID_LOG_INFO, "Window", "panel %.0f Hz, capped at %.0f fps",
+                                glfmGetDisplayRefreshRate(display), Constants::TICK_RATE);
             Char::init();
             DamageNumber::init();
             MapPortals::init();
@@ -370,19 +413,16 @@ namespace ms {
             UI::get().init();
             Timer::get().start();
         }
-        const int64_t timestep = Constants::TIMESTEP * 1000;
-        int64_t accumulator = timestep;
+
+        count_frames();
+
         if (game.is_running()) {
             Gamepad::get().update();
-            int64_t elapsed = Timer::get().stop();
-
-            // Update game with constant timestep as many times as possible.
-            for (accumulator += static_cast<int64_t>(elapsed * Constants::SIMULATION_SPEED);
-                 accumulator >= timestep; accumulator -= timestep) {
-                game.update();
-            }
-            float alpha = static_cast<float>(accumulator) / timestep;
-            game.draw(alpha);
+            // One update per presented frame. The frame is paced to TICK_RATE and the timestep is
+            // the slice of game time that rate is worth, so the simulation and the picture advance
+            // together and there is no leftover time for a draw to interpolate across.
+            game.update();
+            game.draw(0.0f);
         } else {
             // Nothing is drawn until the server connection is up, which would leave the surface
             // presenting the uninitialised contents it was created with.

@@ -27,8 +27,6 @@ public:
 
     void start(GLFMDisplay *pApp);
 
-    void game_loop();
-
     void update();
 
     void draw(float alpha);
