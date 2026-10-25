@@ -16,7 +16,7 @@
 #include "ItemData.h"
 
 #include <array>
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 #include <string>
 
 namespace ms {
@@ -27,8 +27,8 @@ ItemData::ItemData(int32_t id) : item_id_(id) {
     cash_item_ = false;
     gender_ = 0;
 
-    nl::node src;
-    nl::node strsrc;
+    img::node src;
+    img::node strsrc;
 
     std::string strprefix = "0" + std::to_string(get_item_prefix(item_id_));
     std::string strid = "0" + std::to_string(item_id_);
@@ -37,29 +37,29 @@ ItemData::ItemData(int32_t id) : item_id_(id) {
     switch (prefix) {
         case 1:
             category_ = get_eqcategory(item_id_);
-            src = nl::nx::character[category_][strid + ".img"]["info"];
-            strsrc = nl::nx::string["Eqp.img"]["Eqp"][category_]
+            src = img::wz::character[category_][strid + ".img"]["info"];
+            strsrc = img::wz::string["Eqp.img"]["Eqp"][category_]
                                    [std::to_string(item_id_)];
             break;
         case 2:
             category_ = "Consume";
-            src = nl::nx::item["Consume"][strprefix + ".img"][strid]["info"];
-            strsrc = nl::nx::string["Consume.img"][std::to_string(item_id_)];
+            src = img::wz::item["Consume"][strprefix + ".img"][strid]["info"];
+            strsrc = img::wz::string["Consume.img"][std::to_string(item_id_)];
             break;
         case 3:
             category_ = "Install";
-            src = nl::nx::item["Install"][strprefix + ".img"][strid]["info"];
-            strsrc = nl::nx::string["Ins.img"][std::to_string(item_id_)];
+            src = img::wz::item["Install"][strprefix + ".img"][strid]["info"];
+            strsrc = img::wz::string["Ins.img"][std::to_string(item_id_)];
             break;
         case 4:
             category_ = "Etc";
-            src = nl::nx::item["Etc"][strprefix + ".img"][strid]["info"];
-            strsrc = nl::nx::string["Etc.img"]["Etc"][std::to_string(item_id_)];
+            src = img::wz::item["Etc"][strprefix + ".img"][strid]["info"];
+            strsrc = img::wz::string["Etc.img"]["Etc"][std::to_string(item_id_)];
             break;
         case 5:
             category_ = "Cash";
-            src = nl::nx::item["Cash"][strprefix + ".img"][strid]["info"];
-            strsrc = nl::nx::string["Cash.img"][std::to_string(item_id_)];
+            src = img::wz::item["Cash"][strprefix + ".img"][strid]["info"];
+            strsrc = img::wz::string["Cash.img"][std::to_string(item_id_)];
             break;
     }
 

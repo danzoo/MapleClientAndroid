@@ -23,7 +23,7 @@ namespace ms {
 // Represents a single image loaded from a of game data
 class Texture {
 public:
-    Texture(nl::node source);
+    Texture(img::node source);
 
     Texture();
 
@@ -44,9 +44,9 @@ public:
     Point<int16_t> get_dimensions() const;
 
 private:
-    static nl::node find_child(const nl::node &source, const std::string &link);
+    static img::node find_child(const img::node &source, const std::string &link);
 
-    nl::bitmap bitmap_;
+    img::bitmap bitmap_;
     Point<int16_t> origin_;
     Point<int16_t> dimensions_;
 };

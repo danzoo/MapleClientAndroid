@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIEquipInventory.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../../Audio/Audio.h"
 #include "../../Data/ItemData.h"
@@ -89,8 +89,8 @@ UIEquipInventory::UIEquipInventory(const Inventory &invent) :
     tab_source_[Buttons::BT_TAB2] = "Pet";
     tab_source_[Buttons::BT_TAB3] = "Android";
 
-    nl::node close = nl::nx::ui["Basic.img"]["BtClose3"];
-    nl::node Equip = nl::nx::ui["UIWindow4.img"]["Equip"];
+    img::node close = img::wz::ui["Basic.img"]["BtClose3"];
+    img::node Equip = img::wz::ui["UIWindow4.img"]["Equip"];
 
     background_[Buttons::BT_TAB0] =
         Equip[tab_source_[Buttons::BT_TAB0]]["backgrnd"];
@@ -109,9 +109,9 @@ UIEquipInventory::UIEquipInventory(const Inventory &invent) :
         }
     }
 
-    nl::node EquipGL = nl::nx::ui["UIWindowGL.img"]["Equip"];
-    nl::node backgrnd = Equip["backgrnd"];
-    nl::node totem_backgrnd = EquipGL["Totem"]["backgrnd"];
+    img::node EquipGL = img::wz::ui["UIWindowGL.img"]["Equip"];
+    img::node backgrnd = Equip["backgrnd"];
+    img::node totem_backgrnd = EquipGL["Totem"]["backgrnd"];
 
     Point<int16_t> bg_dimensions = Texture(backgrnd).get_dimensions();
     totem_dimensions_ = Texture(totem_backgrnd).get_dimensions();
@@ -145,7 +145,7 @@ UIEquipInventory::UIEquipInventory(const Inventory &invent) :
     buttons_[Buttons::BT_EXCEPTION]->set_state(Button::State::DISABLED);
     buttons_[Buttons::BT_SHOP]->set_state(Button::State::DISABLED);
 
-    nl::node Tab = Equip["Tab"];
+    img::node Tab = Equip["Tab"];
 
     for (int i = Buttons::BT_TAB0; i < Buttons::BT_TABE; i++) {
         buttons_[Buttons::BT_TAB0 + i] =

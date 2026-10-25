@@ -17,26 +17,26 @@
 
 #include <array>
 #include <iostream>
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 #include <string>
 
 namespace ms {
 Hair::Hair(int32_t hairid, const BodyDrawInfo &drawinfo) {
-    nl::node hairnode =
-        nl::nx::character["Hair"]["000" + std::to_string(hairid) + ".img"];
+    img::node hairnode =
+        img::wz::character["Hair"]["000" + std::to_string(hairid) + ".img"];
 
     for (auto stance_iter : Stance::names) {
         Stance::Id stance = stance_iter.first;
         const std::string &stancename = stance_iter.second;
 
-        nl::node stancenode = hairnode[stancename];
+        img::node stancenode = hairnode[stancename];
 
         if (!stancenode) {
             continue;
         }
 
-        for (int frame = 0; nl::node framenode = stancenode[frame]; ++frame) {
-            for (const nl::node &layernode : framenode) {
+        for (int frame = 0; img::node framenode = stancenode[frame]; ++frame) {
+            for (const img::node &layernode : framenode) {
                 std::string layername = layernode.name();
                 auto layer_iter = layers_by_name_.find(layername);
 
@@ -59,7 +59,7 @@ Hair::Hair(int32_t hairid, const BodyDrawInfo &drawinfo) {
         }
     }
 
-    name_ = std::string(nl::nx::string["Eqp.img"]["Eqp"]["Hair"]
+    name_ = std::string(img::wz::string["Eqp.img"]["Eqp"]["Hair"]
                                       [std::to_string(hairid)]["name"]);
 
     const std::array<std::string, 8> haircolors = { "Black",  "Red",   "Orange",

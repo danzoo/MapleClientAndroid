@@ -3,7 +3,7 @@
 //  NoLifeNx's exact public shape (null nodes, implicit casts, iteration protocol,
 //  root()/resolve()) so no game file had to change when the container format did.
 #pragma once
-#include "nxfwd.hpp"
+#include "fwd.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -12,7 +12,7 @@
 #include <string_view>
 #include <utility>
 
-namespace nl
+namespace img
 {
 struct img_data;
 struct img_dir;
@@ -149,4 +149,4 @@ std::string operator+(std::string, node);
 std::string operator+(char const*, node);
 std::string operator+(node, std::string);
 std::string operator+(node, char const*);
-} // namespace nl
+} // namespace img

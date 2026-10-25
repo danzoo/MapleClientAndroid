@@ -1,4 +1,4 @@
-//  nl::node over a loose .img tree.  Every method mirrors NoLifeNx's node.cpp: a null
+//  img::node over a loose .img tree.  Every method mirrors NoLifeNx's node.cpp: a null
 //  node is usable and returns defaults, iteration walks a contiguous run of children,
 //  integer subscripts convert to decimal child names, and the casts convert between
 //  stored types the same way the archive used to.
@@ -11,7 +11,7 @@
 #include <cstring>
 #include <string>
 
-namespace nl
+namespace img
 {
 namespace
 {
@@ -561,4 +561,4 @@ std::string operator+(node n, char const* s)
 {
     return n.get_string() + s;
 }
-} // namespace nl
+} // namespace img

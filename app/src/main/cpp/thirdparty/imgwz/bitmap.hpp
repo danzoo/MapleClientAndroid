@@ -1,11 +1,11 @@
-//  imgwz - canvas handle, same public shape as NoLifeNx's nl::bitmap.
+//  imgwz - canvas handle, same public shape as NoLifeNx's bitmap class.
 #pragma once
-#include "nxfwd.hpp"
+#include "fwd.hpp"
 
 #include <cstddef>
 #include <cstdint>
 
-namespace nl
+namespace img
 {
 class bitmap
 {
@@ -45,4 +45,4 @@ private:
     std::uint16_t m_height = 0;
     friend node;
 };
-} // namespace nl
+} // namespace img

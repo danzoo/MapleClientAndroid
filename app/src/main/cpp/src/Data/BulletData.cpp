@@ -15,13 +15,13 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "BulletData.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 namespace ms {
 BulletData::BulletData(int32_t itemid) : item_data_(ItemData::get(itemid)) {
     std::string prefix = "0" + std::to_string(itemid / 10000);
     std::string strid = "0" + std::to_string(itemid);
-    nl::node src = nl::nx::item["Consume"][prefix + ".img"][strid];
+    img::node src = img::wz::item["Consume"][prefix + ".img"][strid];
 
     bullet_ = src["bullet"];
     watk_ = src["info"]["incPAD"];

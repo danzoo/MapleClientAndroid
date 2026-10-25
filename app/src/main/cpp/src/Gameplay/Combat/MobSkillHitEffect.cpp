@@ -18,7 +18,7 @@
 #include "../MapleMap/Mob.h"
 
 namespace ms {
-MobSingleHitEffect::MobSingleHitEffect(const nl::node &src) :
+MobSingleHitEffect::MobSingleHitEffect(const img::node &src) :
     effect_(src["mob"]) {}
 
 void MobSingleHitEffect::apply(Mob &mob) const {
@@ -29,7 +29,7 @@ void MobSingleHitEffect::apply(Mob &mob) const {
     effect_.apply(func);
 }
 
-MobBySkillLevelHitEffect::MobBySkillLevelHitEffect(const nl::node &src) {
+MobBySkillLevelHitEffect::MobBySkillLevelHitEffect(const img::node &src) {
     // for (auto sub : src["level"]) {
     //     auto level = string_conversion::or_zero<int32_t>(sub.name());
     //     effects_.emplace(level, sub["hit"]["0"]);

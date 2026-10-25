@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "PetLook.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 #include <utility>
 
 namespace ms {
@@ -39,7 +39,7 @@ PetLook::PetLook(int32_t iid,
                        name_);
 
     std::string strid = std::to_string(iid);
-    nl::node src = nl::nx::item["Pet"][strid + ".img"];
+    img::node src = img::wz::item["Pet"][strid + ".img"];
 
     animations_[Stance::MOVE] = src["move"];
     animations_[Stance::STAND] = src["stand0"];
@@ -49,7 +49,7 @@ PetLook::PetLook(int32_t iid,
     animations_[Stance::FLY] = src["fly"];
     animations_[Stance::HANG] = src["hang"];
 
-    nl::node effsrc = nl::nx::effect["PetEff.img"][strid];
+    img::node effsrc = img::wz::effect["PetEff.img"][strid];
 
     animations_[Stance::WARP] = effsrc["warp"];
 }

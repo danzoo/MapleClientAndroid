@@ -561,11 +561,11 @@ namespace ms {
         }
     }
 
-    void GraphicsGL::add_bitmap(const nl::bitmap &bmp) {
+    void GraphicsGL::add_bitmap(const img::bitmap &bmp) {
         get_offset(scene_atlas_, bmp);
     }
 
-    const GraphicsGL::Offset &GraphicsGL::get_offset(AtlasState &atlas, const nl::bitmap &bmp) {
+    const GraphicsGL::Offset &GraphicsGL::get_offset(AtlasState &atlas, const img::bitmap &bmp) {
         size_t id = bmp.id();
         auto offiter = atlas.offsets.find(id);
 
@@ -740,7 +740,7 @@ namespace ms {
                 .first->second;
     }
 
-    void GraphicsGL::draw(const nl::bitmap &bmp,
+    void GraphicsGL::draw(const img::bitmap &bmp,
                           const Rectangle<int16_t> &rect,
                           const Color &color,
                           float angle) {

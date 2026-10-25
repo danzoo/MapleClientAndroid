@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIShop.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 #include <string>
 
 #include "../Audio/Audio.h"
@@ -38,9 +38,9 @@ UIShop::UIShop(const CharLook &in_charlook, const Inventory &in_inventory) :
     UIDragElement<PosSHOP>(),
     charlook_(in_charlook),
     inventory_(in_inventory) {
-    nl::node src = nl::nx::ui["UIWindow2.img"]["Shop2"];
+    img::node src = img::wz::ui["UIWindow2.img"]["Shop2"];
 
-    nl::node background = src["backgrnd"];
+    img::node background = src["backgrnd"];
     Texture bg = background;
 
     auto bg_dimensions = bg.get_dimensions();
@@ -68,14 +68,14 @@ UIShop::UIShop(const CharLook &in_charlook, const Inventory &in_inventory) :
         Point<int16_t>(std::abs(cb_x), std::abs(cb_y)),
         cben.get_dimensions());
 
-    nl::node buyen = src["TabBuy"]["enabled"];
-    nl::node buydis = src["TabBuy"]["disabled"];
+    img::node buyen = src["TabBuy"]["enabled"];
+    img::node buydis = src["TabBuy"]["disabled"];
 
     buttons_[Buttons::OVERALL] =
         std::make_unique<TwoSpriteButton>(buydis[0], buyen[0]);
 
-    nl::node sellen = src["TabSell"]["enabled"];
-    nl::node selldis = src["TabSell"]["disabled"];
+    img::node sellen = src["TabSell"]["enabled"];
+    img::node selldis = src["TabSell"]["disabled"];
 
     for (int i = Buttons::EQUIP; i <= Buttons::CASH; i++) {
         std::string tabnum = std::to_string(i - Buttons::EQUIP);
@@ -424,7 +424,7 @@ void UIShop::changeselltab(InventoryType::Id type) {
 
 void UIShop::reset(int32_t npcid) {
     std::string strid = string_format::extend_id(npcid, 7);
-    npc_ = nl::nx::npc[strid + ".img"]["stand"]["0"];
+    npc_ = img::wz::npc[strid + ".img"]["stand"]["0"];
 
     for (auto &button : buttons_) {
         button.second->set_state(Button::State::NORMAL);
@@ -602,7 +602,7 @@ void UIShop::SellItem::draw(Point<int16_t> pos) const {
 
     if (show_count_) {
         static const Charset countset =
-            Charset(nl::nx::ui["Basic.img"]["ItemNo"],
+            Charset(img::wz::ui["Basic.img"]["ItemNo"],
                     Charset::Alignment::LEFT);
         countset.draw(std::to_string(sellable_), pos + Point<int16_t>(41, 28));
     }

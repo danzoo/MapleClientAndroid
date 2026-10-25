@@ -15,17 +15,17 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "PassiveBuffs.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "StringHandling.h"
 #include "SkillId.h"
 
 namespace ms {
-bool ConditionlessBuff::is_applicable(CharStats &, nl::node) const {
+bool ConditionlessBuff::is_applicable(CharStats &, img::node) const {
     return true;
 }
 
-void AngelBlessingBuff::apply_to(CharStats &stats, nl::node level) const {
+void AngelBlessingBuff::apply_to(CharStats &stats, img::node level) const {
     stats.add_value(EquipStat::Id::WATK, level["x"]);
     stats.add_value(EquipStat::Id::MAGIC, level["y"]);
     stats.add_value(EquipStat::Id::ACC, level["z"]);
@@ -33,35 +33,35 @@ void AngelBlessingBuff::apply_to(CharStats &stats, nl::node level) const {
 }
 
 template<Weapon::Type W1, Weapon::Type W2>
-bool f_is_applicable(CharStats &stats, nl::node level) {
+bool f_is_applicable(CharStats &stats, img::node level) {
     return f_is_applicable<W1>(stats, level)
            || f_is_applicable<W2>(stats, level);
 }
 
 template<Weapon::Type W1>
-bool f_is_applicable(CharStats &stats, const nl::node &) {
+bool f_is_applicable(CharStats &stats, const img::node &) {
     return stats.get_weapontype() == W1;
 }
 
 template<Weapon::Type... W>
 bool WeaponMasteryBuff<W...>::is_applicable(CharStats &stats,
-                                            nl::node level) const {
+                                            img::node level) const {
     return f_is_applicable<W...>(stats, level);
 }
 
 template<Weapon::Type... W>
-void WeaponMasteryBuff<W...>::apply_to(CharStats &stats, nl::node level) const {
+void WeaponMasteryBuff<W...>::apply_to(CharStats &stats, img::node level) const {
     float mastery = static_cast<float>(level["mastery"]) / 100;
     stats.set_mastery(mastery);
     stats.add_value(EquipStat::Id::ACC, level["x"]);
 }
 
-void AchillesBuff::apply_to(CharStats &stats, nl::node level) const {
+void AchillesBuff::apply_to(CharStats &stats, img::node level) const {
     float reducedamage = static_cast<float>(level["x"]) / 1000;
     stats.set_reducedamage(reducedamage);
 }
 
-bool BerserkBuff::is_applicable(CharStats &stats, nl::node level) const {
+bool BerserkBuff::is_applicable(CharStats &stats, img::node level) const {
     float hp_percent = static_cast<float>(level["x"]) / 100;
     int32_t hp_threshold =
         static_cast<int32_t>(stats.get_total(EquipStat::Id::HP) * hp_percent);
@@ -70,7 +70,7 @@ bool BerserkBuff::is_applicable(CharStats &stats, nl::node level) const {
     return hp_current <= hp_threshold;
 }
 
-void BerserkBuff::apply_to(CharStats &stats, nl::node level) const {
+void BerserkBuff::apply_to(CharStats &stats, img::node level) const {
     float damagepercent = static_cast<float>(level["damage"]) / 100;
     stats.set_damagepercent(damagepercent);
 }
@@ -137,7 +137,7 @@ void PassiveBuffs::apply_buff(CharStats &stats,
         strid = std::to_string(skill_id);
     }
 
-    nl::node src = nl::nx::skill[strid.substr(0, 3) + ".img"]["skill"][strid]
+    img::node src = img::wz::skill[strid.substr(0, 3) + ".img"]["skill"][strid]
                                 ["level"][skill_level];
 
     const PassiveBuff *buff = iter->second.get();

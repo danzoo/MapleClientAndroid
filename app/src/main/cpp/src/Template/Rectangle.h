@@ -22,11 +22,11 @@ namespace ms {
 template<class T>
 class Rectangle {
 public:
-    Rectangle(const nl::node &sourceLeftTop,
-              const nl::node &sourceRightBottom) :
+    Rectangle(const img::node &sourceLeftTop,
+              const img::node &sourceRightBottom) :
         left_top_(sourceLeftTop),
         right_bottom_(sourceRightBottom) {}
-    Rectangle(const nl::node &source) :
+    Rectangle(const img::node &source) :
         left_top_(source["lt"]),
         right_bottom_(source["rb"]) {}
 

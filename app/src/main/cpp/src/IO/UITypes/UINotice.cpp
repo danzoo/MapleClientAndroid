@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UINotice.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 #include <utility>
 
 #include "../Audio/Audio.h"
@@ -29,7 +29,7 @@ UINotice::UINotice(const std::string &message,
     UIDragElement<PosNOTICE>(),
     type_(t),
     alignment_(a) {
-    nl::node src = nl::nx::ui["Basic.img"]["Notice6"];
+    img::node src = img::wz::ui["Basic.img"]["Notice6"];
 
     top_ = src["t"];
     center_ = src["c"];
@@ -137,7 +137,7 @@ UIYesNo::UIYesNo(std::string message,
 
     int16_t belowtext = box2offset(false);
 
-    nl::node src = nl::nx::ui["Basic.img"];
+    img::node src = img::wz::ui["Basic.img"];
 
     buttons_[Buttons::YES] =
         std::make_unique<MapleButton>(src["BtOK4"],
@@ -194,7 +194,7 @@ UIEnterNumber::UIEnterNumber(std::string message,
     int16_t belowtext = box2offset(true) - 21;
     int16_t pos_y = belowtext + 35;
 
-    nl::node src = nl::nx::ui["Basic.img"];
+    img::node src = img::wz::ui["Basic.img"];
 
     buttons_[Buttons::OK] =
         std::make_unique<MapleButton>(src["BtOK4"], 156, pos_y);
@@ -306,7 +306,7 @@ UIOk::UIOk(std::string message, std::function<void(bool ok)> oh) :
     UINotice(std::move(message), NoticeType::OK) {
     okhandler_ = std::move(oh);
 
-    nl::node src = nl::nx::ui["Basic.img"];
+    img::node src = img::wz::ui["Basic.img"];
 
     buttons_[Buttons::OK] =
         std::make_unique<MapleButton>(src["BtOK4"], 197, box2offset(false));

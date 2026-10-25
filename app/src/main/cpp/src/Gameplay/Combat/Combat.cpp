@@ -422,7 +422,7 @@ void Combat::give_foreign_buff(int32_t cid, int32_t skillid, int8_t level) {
         const SpecialMove &move = get_move(skillid);
         user.add_recurring_effect(
             1,
-            nl::nx::skill["MobSkill.img"][skillid]["level"][level]["affected"],
+            img::wz::skill["MobSkill.img"][skillid]["level"][level]["affected"],
             1);
     }
 }
@@ -430,7 +430,7 @@ void Combat::give_foreign_buff(int32_t cid, int32_t skillid, int8_t level) {
 void Combat::show_player_disease(int32_t skillid, int8_t level) {
     player_.add_recurring_effect(
         1,
-        nl::nx::skill["MobSkill.img"][skillid]["level"][level]["affected"],
+        img::wz::skill["MobSkill.img"][skillid]["level"][level]["affected"],
         1);
 }
 

@@ -39,5 +39,5 @@ std::unordered_map<int64_t, std::pair<std::string, std::string>>
 get_life_on_map(int32_t mapid);
 
 // Returns the name of the node, under which the argument map id is in
-nl::node get_map_node_name(int32_t mapid);
+img::node get_map_node_name(int32_t mapid);
 }  // namespace ms::NxHelper::Map

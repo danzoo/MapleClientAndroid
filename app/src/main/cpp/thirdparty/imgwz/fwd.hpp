@@ -1,8 +1,8 @@
 #pragma once
 
-namespace nl
+namespace img
 {
 class node;
 class bitmap;
 class audio;
-} // namespace nl
+} // namespace img

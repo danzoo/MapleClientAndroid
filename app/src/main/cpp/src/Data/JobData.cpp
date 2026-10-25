@@ -16,21 +16,21 @@
 #include "JobData.h"
 
 #include <imgwz/node.hpp>
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "StringHandling.h"
 
 namespace ms {
 JobData::JobData(int32_t id) {
     std::string strid = string_format::extend_id(id, 3);
-    nl::node src = nl::nx::skill[strid + ".img"];
-    nl::node strsrc = nl::nx::string["Skill.img"][strid];
+    img::node src = img::wz::skill[strid + ".img"];
+    img::node strsrc = img::wz::string["Skill.img"][strid];
 
     icon_ = src["info"]["icon"];
 
     name_ = std::string(strsrc["bookName"]);
 
-    for (const nl::node &sub : src["skill"]) {
+    for (const img::node &sub : src["skill"]) {
         int32_t skill_id = string_conversion::or_zero<int32_t>(sub.name());
 
         if (skill_id == 0) {

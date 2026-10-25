@@ -15,14 +15,14 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "MapEffect.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 #include <utility>
 
 #include "../../Constants.h"
 
 namespace ms {
 MapEffect::MapEffect(std::string path) : active_(false) {
-    nl::node Effect = nl::nx::map["Effect.img"];
+    img::node Effect = img::wz::map["Effect.img"];
 
     effect_ = Effect.resolve(std::move(path));
 

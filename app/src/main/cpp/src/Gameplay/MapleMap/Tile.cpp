@@ -15,12 +15,12 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Tile.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 namespace ms {
-Tile::Tile(const nl::node &src, const std::string &ts) {
-    nl::node dsrc = nl::nx::map["Tile"][ts][src["u"]][src["no"]];
-    texture_ = Texture(nl::nx::map["Tile"][ts][src["u"]][src["no"]]);
+Tile::Tile(const img::node &src, const std::string &ts) {
+    img::node dsrc = img::wz::map["Tile"][ts][src["u"]][src["no"]];
+    texture_ = Texture(img::wz::map["Tile"][ts][src["u"]][src["no"]]);
     pos_ = Point<int16_t>(src["x"], src["y"]);
     z_ = dsrc["z"];
 

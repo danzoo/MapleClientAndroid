@@ -4,7 +4,7 @@
 //  the process, which is what NoLifeNx's mmapped archive guaranteed.
 #include "audio.hpp"
 
-namespace nl
+namespace img
 {
 audio::audio(void const* d, std::uint32_t l) : m_data(d), m_length(l)
 {
@@ -39,4 +39,4 @@ std::size_t audio::id() const
 {
     return reinterpret_cast<std::size_t>(m_data);
 }
-} // namespace nl
+} // namespace img

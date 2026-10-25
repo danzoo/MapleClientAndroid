@@ -15,23 +15,23 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "BodyDrawInfo.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "Body.h"
 
 namespace ms {
 void BodyDrawInfo::init() {
-    nl::node bodynode = nl::nx::character["00002000.img"];
-    nl::node headnode = nl::nx::character["00012000.img"];
+    img::node bodynode = img::wz::character["00002000.img"];
+    img::node headnode = img::wz::character["00012000.img"];
 
-    for (const nl::node &stancenode : bodynode) {
+    for (const img::node &stancenode : bodynode) {
         std::string ststr = stancenode.name();
 
         uint16_t attackdelay = 0;
 
-        for (int frame = 0; nl::node framenode = stancenode[frame]; ++frame) {
+        for (int frame = 0; img::node framenode = stancenode[frame]; ++frame) {
             bool isaction =
-                framenode["action"].data_type() == nl::node::type::string;
+                framenode["action"].data_type() == img::node::type::string;
 
             if (isaction) {
                 BodyAction action = framenode;
@@ -70,7 +70,7 @@ void BodyDrawInfo::init() {
                     }
                 }
 
-                nl::node headmap = headnode[ststr][frame]["head"]["map"];
+                img::node headmap = headnode[ststr][frame]["head"]["map"];
 
                 for (const auto &mapnode : headmap) {
                     bodyshiftmap[Body::Layer::HEAD].emplace(mapnode.name(),

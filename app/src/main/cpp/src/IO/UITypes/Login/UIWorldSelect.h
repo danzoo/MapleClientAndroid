@@ -162,8 +162,8 @@ private:
     bool show_recommended_;
     bool draw_chatballoon_;
 
-    nl::node world_select_;
-    nl::node world_src_;
-    nl::node channel_src_;
+    img::node world_select_;
+    img::node world_src_;
+    img::node channel_src_;
 };
 }  // namespace ms

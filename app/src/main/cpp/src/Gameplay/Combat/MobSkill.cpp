@@ -15,17 +15,17 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "MobSkill.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../MapleMap/Mob.h"
 
 namespace ms {
 MobSkill::MobSkill(int32_t id, int32_t level) : skill_id_(id), level_(level) {
-    nl::node src = nl::nx::skill["MobSkill.img"][skill_id_];
+    img::node src = img::wz::skill["MobSkill.img"][skill_id_];
 
     // sound_ = std::make_unique<SingleSkillSound>(strid);
 
-    // nl::node src = nl::nx::mob["8510000.img"];
+    // img::node src = img::wz::mob["8510000.img"];
     // bool multi_effect = src["attack1"]["info"]["effect0"].size() > 0;
 
     use_effect_ = std::make_unique<MobSingleUseEffect>(src["level"][level]);

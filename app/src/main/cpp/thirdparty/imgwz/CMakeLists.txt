@@ -7,7 +7,7 @@ add_library(imgwz STATIC
     img_cipher.cpp
     img_file.cpp
     node.cpp
-    nx.cpp)
+    wz.cpp)
 target_include_directories(imgwz PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(imgwz PUBLIC cxx_std_17)
 target_link_libraries(imgwz PUBLIC z)

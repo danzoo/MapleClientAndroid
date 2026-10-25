@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UILogo.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../Audio/Audio.h"
 #include "../Configuration.h"
@@ -29,7 +29,7 @@ UILogo::UILogo() :
     user_clicked_(false) {
     Music("BgmUI.img/NxLogo").play_once();
 
-    nl::node Logo = nl::nx::ui["Logo.img"];
+    img::node Logo = img::wz::ui["Logo.img"];
 
     nexon_ = Logo["Nexon"];
     wizet_ = Logo["Wizet"];

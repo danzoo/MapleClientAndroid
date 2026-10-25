@@ -16,8 +16,8 @@
 #include "MapleButton.h"
 
 namespace ms {
-    MapleButton::MapleButton(const nl::node &src, Point<int16_t> pos) {
-    nl::node normal = src["normal"];
+    MapleButton::MapleButton(const img::node &src, Point<int16_t> pos) {
+    img::node normal = src["normal"];
 
     if (normal.size() > 1) {
         animations_[Button::State::NORMAL] = normal;
@@ -34,10 +34,10 @@ namespace ms {
     state_ = Button::State::NORMAL;
 }
 
-MapleButton::MapleButton(const nl::node &src, int16_t x, int16_t y) :
+MapleButton::MapleButton(const img::node &src, int16_t x, int16_t y) :
     MapleButton(src, Point<int16_t>(x, y)) {}
 
-MapleButton::MapleButton(const nl::node &src) :
+MapleButton::MapleButton(const img::node &src) :
     MapleButton(src, Point<int16_t>()) {}
 
 void MapleButton::draw(Point<int16_t> parentpos) const {

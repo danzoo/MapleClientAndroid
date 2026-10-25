@@ -16,7 +16,7 @@
 #include "ImgFiles.h"
 
 #include <imgwz/node.hpp>
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include <sys/stat.h>
 
@@ -49,8 +49,8 @@ Error init(GLFMDisplay *pApp) {
     const std::string root = game_path(pApp);
     const std::string data = root + "/Data";
     try {
-        nl::nx::load_all(is_directory(data) ? data : root);
-        if (nl::nx::ui.size() == 0) {
+        img::wz::load_all(is_directory(data) ? data : root);
+        if (img::wz::ui.size() == 0) {
             throw std::runtime_error("No game files in " + data);
         }
     } catch (const std::exception &ex) {
@@ -61,8 +61,8 @@ Error init(GLFMDisplay *pApp) {
     constexpr const char *POSTCHAOS_BITMAP =
         "Login.img/WorldSelect/BtChannel/layer:bg";
 
-    if (nl::nx::ui.resolve(POSTCHAOS_BITMAP).data_type()
-        != nl::node::type::bitmap) {
+    if (img::wz::ui.resolve(POSTCHAOS_BITMAP).data_type()
+        != img::node::type::bitmap) {
         return Error::Code::WRONG_UI_FILE;
     }
 

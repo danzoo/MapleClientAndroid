@@ -16,10 +16,10 @@
 #include "MapleFrame.h"
 
 #include <algorithm>
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 namespace ms {
-MapleFrame::MapleFrame(const nl::node &src) {
+MapleFrame::MapleFrame(const img::node &src) {
     center_ = src["c"];
     east_ = src["e"];
     north_east_ = src["ne"];

@@ -16,7 +16,7 @@
 #include "SkillAffectedEffect.h"
 
 namespace ms {
-SingleAffectedEffect::SingleAffectedEffect(const nl::node &src) :
+SingleAffectedEffect::SingleAffectedEffect(const img::node &src) :
     effect_(src["affected"]) {}
 
 void SingleAffectedEffect::apply(Char &target) const {

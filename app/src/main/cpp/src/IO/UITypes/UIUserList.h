@@ -102,7 +102,7 @@ private:
     };
 
     uint16_t tab_;
-    nl::node user_list_;
+    img::node user_list_;
     Texture background_;
 
     // Party tab

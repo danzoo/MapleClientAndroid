@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UISkillBook.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../../Character/SkillId.h"
 #include "../../Data/JobData.h"
@@ -113,9 +113,9 @@ UISkillBook::UISkillBook(const CharStats &in_stats,
     grabbing_(false),
     macro_enabled_(false),
     sp_enabled_(false) {
-    nl::node Skill = nl::nx::ui["UIWindow2.img"]["Skill"];
-    nl::node main = Skill["main"];
-    nl::node ui_backgrnd = main["backgrnd"];
+    img::node Skill = img::wz::ui["UIWindow2.img"]["Skill"];
+    img::node main = Skill["main"];
+    img::node ui_backgrnd = main["backgrnd"];
 
     bg_dimensions_ = Texture(ui_backgrnd).get_dimensions();
 
@@ -136,7 +136,7 @@ UISkillBook::UISkillBook(const CharStats &in_stats,
     buttons_[Buttons::BT_GUILD_SKILL]->set_state(Button::State::DISABLED);
     buttons_[Buttons::BT_RIDE]->set_state(Button::State::DISABLED);
 
-    nl::node skillPoint = nl::nx::ui["UIWindow4.img"]["Skill"]["skillPoint"];
+    img::node skillPoint = img::wz::ui["UIWindow4.img"]["Skill"]["skillPoint"];
 
     sp_backgrnd_ = skillPoint["backgrnd"];
     sp_backgrnd2_ = skillPoint["backgrnd2"];
@@ -173,7 +173,7 @@ UISkillBook::UISkillBook(const CharStats &in_stats,
     sprites_.emplace_back(main["backgrnd2"]);
     sprites_.emplace_back(main["backgrnd3"]);
 
-    nl::node macro = Skill["macro"];
+    img::node macro = Skill["macro"];
 
     macro_backgrnd_ = macro["backgrnd"];
     macro_backgrnd2_ = macro["backgrnd2"];
@@ -185,15 +185,15 @@ UISkillBook::UISkillBook(const CharStats &in_stats,
 
     buttons_[Buttons::BT_MACRO_OK]->set_state(Button::State::DISABLED);
 
-    nl::node close = nl::nx::ui["Basic.img"]["BtClose3"];
+    img::node close = img::wz::ui["Basic.img"]["BtClose3"];
 
     buttons_[Buttons::BT_CLOSE] = std::make_unique<MapleButton>(
         close,
         Point<int16_t>(bg_dimensions_.x() - 23, 6));
 
-    nl::node Tab = main["Tab"];
-    nl::node enabled = Tab["enabled"];
-    nl::node disabled = Tab["disabled"];
+    img::node Tab = main["Tab"];
+    img::node enabled = Tab["enabled"];
+    img::node disabled = Tab["disabled"];
 
     for (int i = Buttons::BT_TAB0; i <= Buttons::BT_TAB4; ++i) {
         auto tabid = i - Buttons::BT_TAB0;

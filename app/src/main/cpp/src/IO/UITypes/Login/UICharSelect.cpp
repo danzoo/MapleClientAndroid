@@ -32,7 +32,7 @@
 #include <windows.h>
 #endif
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 #include <utility>
 
 namespace ms {
@@ -87,7 +87,7 @@ UICharSelect::UICharSelect(std::vector<CharEntry> c,
     selected_page = selected_character_ / PAGESIZE_;
     page_count_ = std::ceil((double)slots_ / (double)PAGESIZE_);
 
-    tab_ = nl::nx::ui["Basic.img"]["Cursor"]["18"]["0"];
+    tab_ = img::wz::ui["Basic.img"]["Cursor"]["18"]["0"];
 
     tab_index_ = 0;
     tab_active_ = false;
@@ -105,12 +105,12 @@ UICharSelect::UICharSelect(std::vector<CharEntry> c,
     tab_map_[1] = Buttons::CHARACTER_NEW;
     tab_map_[2] = Buttons::CHARACTER_DELETE;
 
-    nl::node Login = nl::nx::ui["Login.img"];
-    nl::node Common = Login["Common"];
-    nl::node CharSelect = Login["CharSelect"];
-    nl::node selectWorld = Common["selectWorld"];
-    nl::node selectedWorld = CharSelect["selectedWorld"];
-    nl::node pageNew = CharSelect["pageNew"];
+    img::node Login = img::wz::ui["Login.img"];
+    img::node Common = Login["Common"];
+    img::node CharSelect = Login["CharSelect"];
+    img::node selectWorld = Common["selectWorld"];
+    img::node selectedWorld = CharSelect["selectedWorld"];
+    img::node pageNew = CharSelect["pageNew"];
 
     world_dimensions_ = Texture(selectWorld).get_dimensions();
 
@@ -130,8 +130,8 @@ UICharSelect::UICharSelect(std::vector<CharEntry> c,
     world_sprites_.emplace_back(selectedWorld["ch"][channel_id],
                                 world_pos_ - Point<int16_t>(0, 1));
 
-    nl::node map = nl::nx::map001["Back"]["login.img"];
-    nl::node ani = map["ani"];
+    img::node map = img::wz::map001["Back"]["login.img"];
+    img::node ani = map["ani"];
 
     sprites_.emplace_back(map["back"]["13"], Point<int16_t>(392, 297));
     sprites_.emplace_back(ani["17"], Point<int16_t>(151, 283));

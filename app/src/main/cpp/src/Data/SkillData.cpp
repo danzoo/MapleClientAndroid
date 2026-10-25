@@ -15,7 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "SkillData.h"
 
-#include <imgwz/nx.hpp>
+#include <imgwz/wz.hpp>
 
 #include "../Character/SkillId.h"
 #include "StringHandling.h"
@@ -25,8 +25,8 @@ SkillData::SkillData(int32_t id) {
     /// Locate sources
     std::string strid = string_format::extend_id(id, 7);
     std::string jobid = strid.substr(0, 3);
-    nl::node src = nl::nx::skill[jobid + ".img"]["skill"][strid];
-    nl::node strsrc = nl::nx::string["Skill.img"][strid];
+    img::node src = img::wz::skill[jobid + ".img"]["skill"][strid];
+    img::node strsrc = img::wz::string["Skill.img"][strid];
 
     // Load icons
     icons_ = { src["icon"], src["iconDisabled"], src["iconMouseOver"] };
@@ -35,13 +35,13 @@ SkillData::SkillData(int32_t id) {
     name_ = std::string(strsrc["name"]);
     desc_ = std::string(strsrc["desc"]);
 
-    for (int level = 1; nl::node sub = strsrc["h" + std::to_string(level)];
+    for (int level = 1; img::node sub = strsrc["h" + std::to_string(level)];
          level++) {
         levels_.emplace(level, sub);
     }
 
     /// Load stats
-    nl::node levelsrc = src["level"];
+    img::node levelsrc = src["level"];
 
     for (const auto &sub : levelsrc) {
         float damage = (float)sub["damage"] / 100;
@@ -95,7 +95,7 @@ SkillData::SkillData(int32_t id) {
     invisible_ = src["invisible"].get_bool();
 
     /// Load required skills
-    nl::node reqsrc = src["req"];
+    img::node reqsrc = src["req"];
 
     for (const auto &sub : reqsrc) {
         int32_t skillid =

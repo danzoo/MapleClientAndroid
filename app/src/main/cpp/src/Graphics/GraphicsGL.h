@@ -45,10 +45,10 @@ namespace ms {
         void clear();
 
         // Add a bitmap to the available resources.
-        void add_bitmap(const nl::bitmap &bmp);
+        void add_bitmap(const img::bitmap &bmp);
 
         // Draw the bitmap with the given parameters.
-        void draw(const nl::bitmap &bmp,
+        void draw(const img::bitmap &bmp,
                   const Rectangle<int16_t> &rect,
                   const Color &color,
                   float angle);
@@ -338,7 +338,7 @@ namespace ms {
         // scene otherwise.
         AtlasState &active_atlas();
 
-        const Offset &get_offset(AtlasState &atlas, const nl::bitmap &bmp);
+        const Offset &get_offset(AtlasState &atlas, const img::bitmap &bmp);
 
         // Metrics (and the raster behind them) for one code point in one face, independent of any
         // atlas. Rasterises over JNI on first use.

@@ -122,8 +122,8 @@ private:
 
     Keyboard *keyboard_ = nullptr;
 
-    nl::node key_;
-    nl::node icon_;
+    img::node key_;
+    img::node icon_;
 
     EnumMap<KeyConfig::Key, Texture> key_textures_;
     EnumMap<KeyConfig::Key, Point<int16_t>> keys_pos_;
