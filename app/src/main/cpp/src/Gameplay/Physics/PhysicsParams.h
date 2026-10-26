@@ -20,9 +20,9 @@ namespace ms {
 //
 // Everything handed out here is in seconds: pixels per second for a speed, pixels per second
 // squared for an acceleration, per second for a damping rate. That is the unit the archive's own
-// *Speed and *Acc keys are already written in, and the keys that are not (the *Force and *Drag
-// fixed-point pairs, which belong to an integrator that advanced every 14 ms) are converted on load
-// so that nothing downstream has to know which family a number came from.
+// *Speed and *Acc keys are already written in, and the keys that are not - the *Force and *Drag
+// fixed-point pairs, which are quoted per tick of the 14 ms integrator the archive was written for -
+// only have to leave the fixed point behind, because Constants::TIMESTEP is that same 14 ms.
 //
 // A missing archive, or a missing key inside it, leaves that one value at what this client was
 // built with, so a Data tree that predates the file still plays.
@@ -39,10 +39,6 @@ public:
 
     // The speed a jump leaves the ground with.
     static double jump_speed();
-
-    // The acceleration that, applied for a single timestep, leaves a jump at jump_speed(). The
-    // integrator reads jumps as one tick of vforce, so this is the form the state code wants.
-    static double jump_impulse();
 
     // The force that drives a walk.
     static double walk_accel();
@@ -64,7 +60,7 @@ public:
 
     static double fly_speed();
 
-    // Flight drag. The archive has no key for this one, so it is this client's own FLYFRICTION.
+    // Flight drag, from the archive's floatDrag2.
     static double fly_damping();
 
     // The force that drives a stroke, and the speed swimming settles at.
@@ -75,8 +71,10 @@ public:
     // Water drag, from the archive's swimSpeedDec.
     static double swim_damping();
 
-    // How fast water pulls a swimmer down. The archive leaves this to the map, so it is the
-    // client's own SWIMGRAVFORCE.
+    // How fast water pulls a swimmer down. The one live figure with no key behind it: the
+    // archive's floatCoefficient is the only candidate, and reading it as a fraction of gravityAcc
+    // would take this from 468.8 to 20 pixels per second squared, which is a change of behaviour
+    // rather than of units, so it stays this client's own SWIMGRAVFORCE until that is asked for.
     static double swim_gravity();
 };
 }  // namespace ms

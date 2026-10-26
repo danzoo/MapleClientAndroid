@@ -43,10 +43,11 @@ private:
     enum Buttons : uint16_t { CANCEL };
 
     // Nothing on the server side promises an answer, and the connection itself can die without the
-    // login loop ever noticing. Without this the box would sit over the login screen forever.
-    static constexpr uint32_t TIMEOUT_TICKS = 3750;  // 30s at the 8ms timestep
+    // login loop ever noticing. Without the timeout held in Constants::LOGIN_WAIT_TIMEOUT_MS the
+    // box would sit over the login screen forever.
 
     std::function<void()> okhandler_;
+    // Milliseconds the box has been up, counted in whole updates.
     uint32_t elapsed_ = 0;
 };
 }  // namespace ms

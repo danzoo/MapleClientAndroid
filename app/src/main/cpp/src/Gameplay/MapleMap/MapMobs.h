@@ -72,8 +72,8 @@ public:
     // number of milliseconds.
     void expect_hit(int32_t oid, uint16_t delay);
 
-    // How long until the next locally queued blow lands on this mob, in timesteps.
-    int16_t pending_hit(int32_t oid) const;
+    // How long until the next locally queued blow lands on this mob, in milliseconds.
+    int32_t pending_hit(int32_t oid) const;
 
     // Check if the mob with the specified oid exists.
     bool contains(int32_t oid) const;

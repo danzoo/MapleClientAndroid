@@ -653,10 +653,14 @@ void UIMiniMap::draw_movable_markers(Point<int16_t> init_pos,
         return;
     }
 
+    // Every marker uses the canvas' own transform, (world + center) / scale,
+    // with no per-kind fudge: overlaying the footholds of the shipped maps onto
+    // their miniMap/canvas picture puts them exactly on the drawn ground, so any
+    // extra offset only moves a marker off the surface it stands on. The portal
+    // hit test and the selected-NPC marker already worked this way.
+
     Animation marker_sprite;
     Point<int16_t> sprite_offset;
-    constexpr Point<int16_t> char_pos_offset = { 60, 150 };
-    constexpr Point<int16_t> npc_pos_offset = { 0, 65 };
 
     /// NPCs
     MapObjects *npcs = Stage::get().get_npcs().get_npcs();
@@ -666,7 +670,7 @@ void UIMiniMap::draw_movable_markers(Point<int16_t> init_pos,
     for (auto npc = npcs->begin(); npc != npcs->end(); ++npc) {
         Point<int16_t> npc_pos = npc->second->get_position();
         marker_sprite.draw(
-            (npc_pos + center_offset_ + npc_pos_offset) / scale_ - sprite_offset
+            (npc_pos + center_offset_) / scale_ - sprite_offset
                 + Point<int16_t>(map_draw_origin_x_, map_draw_origin_y_)
                 + init_pos,
             alpha);
@@ -680,8 +684,7 @@ void UIMiniMap::draw_movable_markers(Point<int16_t> init_pos,
     for (auto chr = chars->begin(); chr != chars->end(); ++chr) {
         Point<int16_t> chr_pos = chr->second->get_position();
         marker_sprite.draw(
-            (chr_pos + char_pos_offset + center_offset_) / scale_
-                - sprite_offset
+            (chr_pos + center_offset_) / scale_ - sprite_offset
                 + Point<int16_t>(map_draw_origin_x_, map_draw_origin_y_)
                 + init_pos,
             alpha);
@@ -691,7 +694,7 @@ void UIMiniMap::draw_movable_markers(Point<int16_t> init_pos,
     Point<int16_t> player_pos = Stage::get().get_player().get_position();
     sprite_offset = player_marker_.get_dimensions() / Point<int16_t>(2, 0);
     player_marker_.draw(
-        (player_pos + char_pos_offset + center_offset_) / scale_ - sprite_offset
+        (player_pos + center_offset_) / scale_ - sprite_offset
             + Point<int16_t>(map_draw_origin_x_, map_draw_origin_y_) + init_pos,
         alpha);
 }
@@ -710,17 +713,14 @@ void UIMiniMap::update_static_markers() {
     marker_sprite = Animation(marker_["portal"]);
     Point<int16_t> marker_offset =
         marker_sprite.get_dimensions() / Point<int16_t>(2, 0);
-    constexpr Point<int16_t> marker_pos_offset = { 0, 65 };
 
     for (img::node portal = portals.begin(); portal != portals.end(); ++portal) {
         int portal_type = portal["pt"];
 
         if (portal_type == 2) {
             Point<int16_t> marker_pos =
-                (Point<int16_t>(portal["x"], portal["y"]) + marker_pos_offset
-                 + center_offset_)
-                    / scale_
-                - marker_offset
+                (Point<int16_t>(portal["x"], portal["y"]) + center_offset_)
+                    / scale_ - marker_offset
                 + Point<int16_t>(map_draw_origin_x_, map_draw_origin_y_);
             static_marker_info_.emplace_back(portal.name(), marker_pos);
         }

@@ -164,6 +164,12 @@ public:
     // Char::ROPE.
     void set_ladder(std::optional<std::reference_wrapper<const Ladder>> ladder);
 
+    // Keep the character off any rope or ladder for a moment.
+    void set_climb_cooldown();
+
+    // Whether a rope or ladder can be grabbed right now.
+    bool can_climb() const;
+
     void set_channel_id(uint8_t ch);
 
     // Obtain a reference to the player's stats.
@@ -214,7 +220,15 @@ private:
 
     std::optional<std::reference_wrapper<const Ladder>> ladder_;
 
+    TimedBool climb_cooldown_;
+
     bool underwater_;
+
+    // The speed the hop leaves with, the character's own run included, and whether the tick that
+    // launches it is still owed. The launch tick is a ground tick, so it needs the drive that
+    // cancels the ground damping at that speed or the body leaves the ground short of the hop.
+    bool knockback_launch_ = false;
+    double knockback_speed_ = 0.0;
 
     int32_t cid_;
     uint8_t wid_;

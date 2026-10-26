@@ -18,6 +18,7 @@
 #include <imgwz/wz.hpp>
 #include <string>
 
+#include "../../Constants.h"
 #include "../../Data/EquipData.h"
 #include "../../Gameplay/Stage.h"
 #include "../../Net/Packets/InventoryPackets.h"
@@ -257,8 +258,10 @@ void UIItemInventory::draw(float alpha) const {
 void UIItemInventory::update() {
     UIElement::update();
 
-    new_item_tab_.update(6);
-    new_item_slot_.update(6);
+    // The NEW badge is played at three quarters of real time, the six milliseconds of art it used to
+    // be walked through every eight millisecond tick.
+    new_item_tab_.update(Constants::REDUCED_ANIMATION_MS);
+    new_item_slot_.update(Constants::REDUCED_ANIMATION_MS);
 
     std::string meso_str = std::to_string(inventory_.get_meso());
     string_format::split_number(meso_str);

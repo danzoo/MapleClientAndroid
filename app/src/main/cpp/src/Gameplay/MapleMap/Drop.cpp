@@ -18,56 +18,52 @@
 #include <algorithm>
 #include <cmath>
 
+#include "../../../Constants.h"
+
 namespace ms {
 namespace {
-// Ticks an item spends in the air over level ground.
-constexpr double DROP_TICKS = 76.0;
-
-// Pixels per tick the fall stops accelerating at. Without it an item dropped from a high platform
-// onto a low one covered the gap in a handful of ticks, which read as a snap rather than a fall.
-constexpr double DROP_MAX_FALL = 3.0;
-
 // The rise is half of the level-ground flight, and the same acceleration governs both halves of
 // every flight so the arc is one curve.
-constexpr double RISE_TICKS = DROP_TICKS / 2.0;
+constexpr double RISE_SECONDS = Constants::DROP_RISE_SECONDS;
 
-// The acceleration that carries a peak of this height through the rise in RISE_TICKS. Picking it
-// from the height is what keeps a flight over level ground at DROP_TICKS however high the peak is
-// set, so raising the arc does not slow the drop down with it.
+// The acceleration that carries a peak of this height through the rise in RISE_SECONDS. Picking it
+// from the height is what keeps a flight over level ground at Constants::DROP_FLIGHT_SECONDS
+// however high the peak is set, so raising the arc does not slow the drop down with it.
 constexpr double arc_accel(double rise) {
-    return 2.0 * rise / (RISE_TICKS * RISE_TICKS);
+    return 2.0 * rise / (RISE_SECONDS * RISE_SECONDS);
 }
 
 // One ballistic route: how high it peaks, and the gravity that carries it there and back down.
 struct Arc {
     double rise;
     double accel;
-    // Where the fall reaches DROP_MAX_FALL, and how far it has fallen by then.
-    double cap_ticks;
+    // Where the fall reaches DROP_MAX_FALL_SPEED, and how far it has fallen by then.
+    double cap_seconds;
     double cap_dist;
 
     constexpr Arc(double r) :
         rise(r),
         accel(arc_accel(r)),
-        cap_ticks(DROP_MAX_FALL / arc_accel(r)),
-        cap_dist(DROP_MAX_FALL * DROP_MAX_FALL / (2.0 * arc_accel(r))) {}
+        cap_seconds(Constants::DROP_MAX_FALL_SPEED / arc_accel(r)),
+        cap_dist(Constants::DROP_MAX_FALL_SPEED * Constants::DROP_MAX_FALL_SPEED
+                 / (2.0 * arc_accel(r))) {}
 
-    // Ticks spent falling from the peak through the height of the destination below it.
-    double ticks(double distance) const {
+    // Seconds spent falling from the peak through the height of the destination below it.
+    double seconds(double distance) const {
         if (distance <= cap_dist) {
             return std::sqrt(2.0 * distance / accel);
         }
 
-        return cap_ticks + (distance - cap_dist) / DROP_MAX_FALL;
+        return cap_seconds + (distance - cap_dist) / Constants::DROP_MAX_FALL_SPEED;
     }
 
-    // Height below the peak after ticks of the fall.
-    double offset(double ticks) const {
-        if (ticks <= cap_ticks) {
-            return 0.5 * accel * ticks * ticks;
+    // Height below the peak after seconds of the fall.
+    double offset(double seconds) const {
+        if (seconds <= cap_seconds) {
+            return 0.5 * accel * seconds * seconds;
         }
 
-        return cap_dist + DROP_MAX_FALL * (ticks - cap_ticks);
+        return cap_dist + Constants::DROP_MAX_FALL_SPEED * (seconds - cap_seconds);
     }
 };
 
@@ -75,11 +71,10 @@ struct Arc {
 // bag. Kept away from the destination so an item that ends up on a platform below still gets the
 // same toss up out of the mob, rather than having its arc flattened into a fall by the height it
 // has left to drop.
-constexpr Arc SPAWN(56.0);
+constexpr Arc SPAWN(Constants::DROP_TOSS_RISE);
 
-// The hop an item gets when someone picks it up. Lower than the toss it was thrown with, because
-// being collected reads as handed over rather than as thrown again.
-constexpr Arc PICKUP(42.0);
+// The hop an item gets when someone picks it up.
+constexpr Arc PICKUP(Constants::PICKUP_RISE);
 
 }  // namespace
 
@@ -123,8 +118,8 @@ Drop::Drop(int32_t id,
 
             rise_ = SPAWN.rise;
             apex_ = std::min(static_cast<double>(launch_.y()), landing) - SPAWN.rise;
-            rise_ticks_ = std::sqrt(2.0 * (launch_.y() - apex_) / SPAWN.accel);
-            air_ticks_ = rise_ticks_ + SPAWN.ticks(landing - apex_);
+            rise_seconds_ = std::sqrt(2.0 * (launch_.y() - apex_) / SPAWN.accel);
+            air_seconds_ = rise_seconds_ + SPAWN.seconds(landing - apex_);
 
             phobj_.type = PhysicsObject::Type::FIXATED;
             break;
@@ -137,8 +132,8 @@ Drop::Drop(int32_t id,
         case 3:
             state_ = Drop::State::PICKED_UP;
             // The drop is fixated by now, so this is not physics: it is the height the item is
-            // lifted as it leaves for the hand.
-            phobj_.set_vstep(-5.0f);
+            // lifted as it leaves for the hand, walked at a steady pace and never accelerated.
+            phobj_.vspeed = -Constants::PICKUP_LIFT_SPEED;
             break;
     }
 }
@@ -147,9 +142,9 @@ int8_t Drop::update(const Physics &physics) {
     physics.move_object(phobj_);
 
     if (state_ == Drop::State::DROPPED) {
-        fallen_ += 1.0;
+        fallen_ += Constants::TICK_SECONDS;
 
-        double progress = fallen_ / air_ticks_;
+        double progress = fallen_ / air_seconds_;
 
         if (progress >= 1.0) {
             phobj_.hspeed = 0.0;
@@ -173,36 +168,40 @@ int8_t Drop::update(const Physics &physics) {
 
             const Arc arc(rise_);
 
-            if (fallen_ <= rise_ticks_) {
+            if (fallen_ <= rise_seconds_) {
                 // The rise is the fall run backwards from the peak, so both halves are one curve.
-                const double since = fallen_ - rise_ticks_;
+                const double since = fallen_ - rise_seconds_;
 
                 phobj_.y = apex_ + 0.5 * arc.accel * since * since;
             } else {
-                phobj_.y = apex_ + arc.offset(fallen_ - rise_ticks_);
+                phobj_.y = apex_ + arc.offset(fallen_ - rise_seconds_);
             }
 
-            static const float SPINSTEP = 0.2f;
-            angle_ += SPINSTEP;
+            // How fast the icon spins on its way down.
+            angle_ += Constants::DROP_SPIN_DEGREES_PER_SECOND * Constants::TICK_SECONDS;
         }
     }
 
     if (state_ == Drop::State::FLOATING) {
+        // Same story for the idle bob: the wave is walked at a fixed rate rather than the clock.
         phobj_.y = base_y_ + 5.0f + (cos(moved_) - 1.0f) * 2.5f;
-        moved_ = (moved_ < 360.0f) ? moved_ + 0.025f : 0.0f;
+        moved_ = (moved_ < 360.0f)
+                     ? moved_ + Constants::DROP_BOB_DEGREES_PER_SECOND * Constants::TICK_SECONDS
+                     : 0.0f;
     }
 
     if (state_ == Drop::State::PICKED_UP) {
         // The fade is spread over exactly the flight, so the item reaches the hand at the moment it
         // disappears. With nothing to fly to (someone else's loot, or a plain despawn) it fades out
-        // where it lies, over the length of a toss across level ground.
-        const float step = looter_ ? static_cast<float>(1.0 / air_ticks_)
-                                   : static_cast<float>(1.0 / DROP_TICKS);
+        // where it lies, over the length of a toss across level ground. Either way it is one unit
+        // of opacity for the whole flight, so what this update takes is its share of a second.
+        const double flight = looter_ ? air_seconds_ : Constants::DROP_FLIGHT_SECONDS;
+        const float step = static_cast<float>(Constants::TICK_SECONDS / flight);
 
         if (looter_) {
-            fallen_ += 1.0;
+            fallen_ += Constants::TICK_SECONDS;
 
-            const double progress = fallen_ / air_ticks_;
+            const double progress = fallen_ / air_seconds_;
 
             // Aimed at where the hand is now rather than where it was when the item left the ground,
             // so walking off with a flight already under way still ends at the character.
@@ -212,12 +211,12 @@ int8_t Drop::update(const Physics &physics) {
 
             const Arc arc(rise_);
 
-            if (fallen_ <= rise_ticks_) {
-                const double since = fallen_ - rise_ticks_;
+            if (fallen_ <= rise_seconds_) {
+                const double since = fallen_ - rise_seconds_;
 
                 phobj_.y = apex_ + 0.5 * arc.accel * since * since;
             } else {
-                phobj_.y = apex_ + arc.offset(fallen_ - rise_ticks_);
+                phobj_.y = apex_ + arc.offset(fallen_ - rise_seconds_);
             }
         }
 
@@ -256,8 +255,8 @@ void Drop::expire(int8_t type, const PhysicsObject *lt) {
 
                 rise_ = PICKUP.rise;
                 apex_ = std::min(static_cast<double>(launch_.y()), landing) - PICKUP.rise;
-                rise_ticks_ = std::sqrt(2.0 * (launch_.y() - apex_) / PICKUP.accel);
-                air_ticks_ = rise_ticks_ + PICKUP.ticks(landing - apex_);
+                rise_seconds_ = std::sqrt(2.0 * (launch_.y() - apex_) / PICKUP.accel);
+                air_seconds_ = rise_seconds_ + PICKUP.seconds(landing - apex_);
             }
 
             phobj_.hspeed = 0.0;

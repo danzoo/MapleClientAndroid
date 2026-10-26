@@ -62,7 +62,9 @@ DamageNumber::DamageNumber(Type t, int32_t damage, int16_t starty, int16_t x) {
 
     move_obj_.set_x(x);
     move_obj_.set_y(starty);
-    move_obj_.set_vstep(-0.25);
+    // Rises at a quarter of a pixel an update, which is the thirty-one and a quarter pixels a second
+    // that worked out to - and the whole float is timed by the fade below, not by this.
+    move_obj_.vspeed = -Constants::DAMAGE_NUMBER_RISE;
     opacity_.set(1.5f);
 }
 

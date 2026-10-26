@@ -26,37 +26,26 @@
 #endif
 
 namespace {
+using ms::Constants::GROUND_FRICTION;
 using ms::tick_units::accel;
+using ms::tick_units::velocity;
 
 // The archive mixes two generations of units. Every *Speed and *Acc key is already in pixels per
 // second (or per second squared), which is the unit Params holds its fields in: gravityAcc 2000 and
 // jumpSpeed 555 put the apex of a jump at 77 pixels, and walkSpeed 125 is exactly walkForce over
 // walkDrag. The *Force and *Drag keys are the other generation - a fixed-point fraction of a pixel,
-// per tick of an integrator that advanced every 14 ms of real time - so those two have to be turned
-// into an acceleration and a damping rate.
+// per tick of the 14 ms integrator this archive was written for.
 //
-// That the second family reproduces the first is the proof that 14 ms is the right tick: 1.4 over
-// 0.8 is 1.75 pixels per tick, and 125 pixels per second divided by 1.75 is 71.43, which is
-// exactly 1/0.014.
-constexpr double GMS_TIMESTEP = 0.014;
+// The loop runs at that same tick, so nothing has to be rescaled between two cadences: a *Force is
+// already so many pixels per tick squared and a *Drag already the fraction of its speed a tick takes
+// off, and both leave the fixed point and go through tick_units like every other per-tick figure in
+// this client. A drag is dimensionless rather than a speed, but per-tick to per-second is the same
+// division either way.
+//
+// That the second family reproduces the first is the proof that 14 ms is the archive's tick: 1.4 over
+// 0.8 is 1.75 pixels per tick, and 125 pixels per second divided by 1.75 is 71.43, which is exactly
+// 1/0.014.
 constexpr double FIXED_POINT = 100000.0;
-
-// A push that a 14 ms integrator was given every tick, restated as an acceleration.
-double gms_accel(double fixed_point_force) {
-    return fixed_point_force / FIXED_POINT / (GMS_TIMESTEP * GMS_TIMESTEP);
-}
-
-// The fraction of its speed that a 14 ms integrator took off an object every tick, restated as a
-// damping rate.
-double gms_damping(double taken_off) {
-    return taken_off / GMS_TIMESTEP;
-}
-
-// swimSpeedDec is the same thing written the other way round: it names how much is left, not how
-// much is taken.
-double gms_decay(double decayed_to) {
-    return gms_damping(1.0 - decayed_to);
-}
 
 // Where every field starts from: the baseline archive's own keys, run through the same conversions
 // load() applies to them, so that a default and the number it stands for cannot drift apart. They
@@ -64,22 +53,27 @@ double gms_decay(double decayed_to) {
 // values rather than as this client's old per-tick figures means the absent case continues the
 // physics that is actually running instead of reaching back for one nobody has tested.
 //
-// fly_damping and swim_gravity are the two the archive has no key for, so those stay this client's
-// own figures, quoted per timestep through the channel every other leftover per-tick number uses.
+// swim_gravity is the one field the archive has no key for, so it stays this client's own figure:
+// 468.75 pixels a second squared, which is the three hundredths of a pixel per tick squared it was
+// written at, held against the same damping so that a body settles at the sinking speed it always did.
+//
+// walk_accel is the other that is not the archive's own: 3125 is Constants::GROUND_FRICTION over the
+// tick, times the archive's walkSpeed, which is the drive that settles at 125 under the damping this
+// client actually uses.
 struct Params {
     double gravity = 2000.0;
     double max_fall_speed = 670.0;
     double jump_speed = 555.0;
-    double walk_accel = gms_accel(140000.0);
+    double walk_accel = 3125.0;
     double walk_speed = 125.0;
-    double ground_damping = gms_damping(80000.0 / FIXED_POINT);
-    double fly_accel = gms_accel(120000.0);
+    double ground_damping = velocity(GROUND_FRICTION);
+    double fly_accel = accel(120000.0 / FIXED_POINT);
     double fly_speed = 200.0;
-    double fly_damping = 0.05 / ms::Constants::TICK_SECONDS;
-    double swim_accel = gms_accel(120000.0);
+    double fly_damping = velocity(10000.0 / FIXED_POINT);
+    double swim_accel = accel(120000.0 / FIXED_POINT);
     double swim_speed = 140.0;
-    double swim_damping = gms_decay(0.9);
-    double swim_gravity = accel(0.03);
+    double swim_damping = velocity(1.0 - 0.9);
+    double swim_gravity = 468.75;
 };
 
 Params params;
@@ -129,67 +123,70 @@ void PhysicsParams::load() {
         params.jump_speed = raw;
     }
 
-    if (numeric(src, "walkForce", raw)) {
-        params.walk_accel = gms_accel(raw);
-    }
-
-    // walkSpeed is the speed that walkForce and walkDrag already settle at, so it is only used
-    // where a walk has to be named outright - the leap out onto a ladder, for instance.
+    // walkSpeed is the speed a walk is held to, and it is the figure the eye checks - the ladder leap
+    // names it outright too. walkForce and walkDrag are the pair the archive uses to settle at that
+    // same speed, and neither is read: their ratio is the ramp, and the ramp they give is a tick up to
+    // full speed and three to a dead stop. The drive comes from the speed instead, against the damping
+    // this client actually runs, so that the walking speed stays the archive's and only the time it
+    // takes to get there is this client's. See Constants::GROUND_FRICTION.
     if (numeric(src, "walkSpeed", raw)) {
         params.walk_speed = raw;
     }
 
-    // walkDrag is the ground friction coefficient the archive names, and minFriction and maxFriction
-    // are the bounds it puts on that same coefficient - which is why they read as 0.05 and 2.0 next
-    // to a walkDrag of 0.8. Without the key there is no coefficient to bound, so the default stands
-    // instead of being run through a conversion meant for the archive's own figures.
-    if (numeric(src, "walkDrag", raw)) {
-        double friction = raw / FIXED_POINT;
-
-        double min_friction, max_friction;
-
-        if (numeric(src, "minFriction", min_friction)
-            && friction < min_friction) {
-            friction = min_friction;
-        }
-
-        if (numeric(src, "maxFriction", max_friction)
-            && friction > max_friction) {
-            friction = max_friction;
-        }
-
-        params.ground_damping = gms_damping(friction);
-    }
+    params.ground_damping = velocity(Constants::GROUND_FRICTION);
+    params.walk_accel = ground_drive(params.walk_speed);
 
     if (numeric(src, "flyForce", raw)) {
-        params.fly_accel = gms_accel(raw);
+        params.fly_accel = accel(raw / FIXED_POINT);
     }
 
     if (numeric(src, "flySpeed", raw)) {
         params.fly_speed = raw;
     }
 
+    // floatDrag2 is the flight drag, and the archive says so twice over. swimSpeedDec 0.9 names the
+    // water's drag as the fraction left after a tick, so the water takes 0.1 off; floatDrag2 is
+    // 10000 over 100000, the same 0.1, in the fixed-point notation the *Drag keys use. The two
+    // states the archive gives equal force (flyForce and swimForce are both 120000) therefore come
+    // out with equal drag, and each is then bounded by the speed the archive names for it - which
+    // is the only reading under which flySpeed 200 does any work, since flyForce over the stronger
+    // floatDrag1 settles at 86 and would never reach the cap.
+    if (numeric(src, "floatDrag2", raw)) {
+        params.fly_damping = velocity(raw / FIXED_POINT);
+    }
+
     if (numeric(src, "swimForce", raw)) {
-        params.swim_accel = gms_accel(raw);
+        params.swim_accel = accel(raw / FIXED_POINT);
     }
 
     if (numeric(src, "swimSpeed", raw)) {
         params.swim_speed = raw;
     }
 
+    // swimSpeedDec is the water's drag written the other way round: it names how much of the speed
+    // is left after a tick, not how much is taken off.
     if (numeric(src, "swimSpeedDec", raw)) {
-        params.swim_damping = gms_decay(raw);
+        params.swim_damping = velocity(1.0 - raw);
     }
 
-    // slipForce and slipSpeed have nothing to bind to: this client has no ice physics -
-    // PhysicsObject::Type::ICE is never selected and no foothold carries the flag that would ask
-    // for it - and floatDrag1, floatDrag2, floatCoefficient and flyJumpDec describe a body
-    // floating at the surface of the water, which is a state the player never enters either.
+    // The keys left over either name a state this client does not have or belong to the walk that is
+    // now driven from walkSpeed, so reading them would only store a number nothing looks at:
+    //
+    // walkForce and walkDrag, with minFriction and maxFriction bounding that drag, are the pair above.
+    //
+    // slipForce and slipSpeed are the drive and the cap for ice, and PhysicsObject::Type::ICE is
+    // never selected - no foothold carries a slippery flag, because Foothold only parses
+    // id/prev/next/layer and its two endpoints.
+    //
+    // floatDrag1 and floatCoefficient belong to a body floating at the surface of the water, which
+    // PlayerFlyState never chooses: underwater it takes SWIMMING and above it FLYING.
+    //
+    // flyJumpDec is what a jump costs you while flying, and PlayerFlyState binds no jump key.
 
 #ifdef __ANDROID__
     __android_log_print(ANDROID_LOG_INFO,
                         "PhysicsParams",
-                        "tick %.5f  gravity %.1f  fall %.1f  jump %.1f  walk %.1f/%.1f@%.2f  fly %.1f/%.1f  swim %.1f/%.1f@%.2f",
+                        "tick %.5f  gravity %.1f  fall %.1f  jump %.1f  walk %.1f/%.1f@%.2f  fly %.1f/%.1f@%.2f  swim %.1f/%.1f@%.2f  swimg %.1f",
                         Constants::TICK_SECONDS,
                         params.gravity,
                         params.max_fall_speed,
@@ -199,9 +196,11 @@ void PhysicsParams::load() {
                         params.ground_damping,
                         params.fly_speed,
                         params.fly_accel,
+                        params.fly_damping,
                         params.swim_speed,
                         params.swim_accel,
-                        params.swim_damping);
+                        params.swim_damping,
+                        params.swim_gravity);
 #endif
 }
 
@@ -215,11 +214,6 @@ double PhysicsParams::max_fall_speed() {
 
 double PhysicsParams::jump_speed() {
     return params.jump_speed;
-}
-
-double PhysicsParams::jump_impulse() {
-    // One tick of this is the whole speed the jump starts with.
-    return params.jump_speed / Constants::TICK_SECONDS;
 }
 
 double PhysicsParams::walk_accel() {

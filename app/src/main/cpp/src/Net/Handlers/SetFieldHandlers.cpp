@@ -16,6 +16,7 @@
 #include "SetFieldHandlers.h"
 
 #include "../../Configuration.h"
+#include "../../Constants.h"
 #include "../../Gameplay/Stage.h"
 #include "../../IO/UI.h"
 #include "../../IO/UITypes/Login/UICharSelect.h"
@@ -33,9 +34,7 @@ auto fn_player_update = []<typename... T>(T && ...args) {
 }  // namespace
 
 void SetFieldHandler::transition(int32_t mapid, uint8_t portalid) const {
-    float fadestep = 0.025f;
-
-    Window::get().fadeout(fadestep, [mapid, portalid]() {
+    Window::get().fadeout(Constants::SCREEN_FADE_MS, [mapid, portalid]() {
         GraphicsGL::get().clear();
 
         Stage::get().load(mapid, portalid);

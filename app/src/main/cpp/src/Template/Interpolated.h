@@ -44,6 +44,8 @@ public:
         threshold_ = thrs;
     }
 
+    void shift(T value) { now_ += value; }
+
     bool operator==(T value) const { return now_ == value; }
 
     bool operator!=(T value) const { return now_ != value; }
@@ -93,6 +95,11 @@ public:
         before_ = now_;
         now_ += value;
     }
+
+    // Move without giving up the segment being interpolated: this is for taking one update's
+    // displacement in several pieces, where the whole update still has to read as the single step
+    // from where the object started to where it ends up.
+    void shift(T value) { now_ += value; }
 
     void operator-=(T value) {
         before_ = now_;

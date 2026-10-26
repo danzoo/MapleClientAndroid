@@ -53,8 +53,10 @@ private:
         }
 
         bool update() {
+            // A rate on real time, as in EffectLayer: the effect's own timeline spends a timestep per
+            // update at rate one.
             bool ended = sprite_.update(
-                static_cast<uint16_t>(Constants::ANIMATION_MS_PER_PIXEL * speed_));
+                static_cast<uint16_t>(Constants::TIMESTEP * speed_));
 
             if (ended) {
                 sprite_.reset();

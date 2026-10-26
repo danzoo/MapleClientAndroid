@@ -134,7 +134,7 @@ int32_t DropSpawn::get_oid() const {
 
 bool DropSpawn::elapsed() {
     if (delay_ > 0) {
-        --delay_;
+        delay_ -= Constants::TIMESTEP;
         return false;
     }
 

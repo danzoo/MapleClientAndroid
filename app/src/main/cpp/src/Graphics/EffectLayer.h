@@ -55,8 +55,10 @@ private:
         }
 
         bool update() {
+            // The speed an effect carries is a rate on real time - the attacker's attackspeed - so
+            // it spends one timestep of the artwork's timeline per update at rate one.
             return sprite_.update(
-                static_cast<uint16_t>(Constants::ANIMATION_MS_PER_PIXEL * speed_));
+                static_cast<uint16_t>(Constants::TIMESTEP * speed_));
         }
 
     private:

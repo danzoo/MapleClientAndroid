@@ -384,5 +384,10 @@ void PlayerClimbState::update_state(Player &player) const {
 void PlayerClimbState::cancel_ladder(Player &player) const {
     player.set_state(Char::State::FALL);
     player.set_ladder({});
+
+    // Leaving a rope is followed by a moment in which no rope can be grabbed. The key that let go of
+    // this one is still held, and the ladder check now runs every frame it is held, so without this a
+    // leap off a rope or a descent that runs out at the bottom is undone by the next frame's grab.
+    player.set_climb_cooldown();
 }
 }  // namespace ms

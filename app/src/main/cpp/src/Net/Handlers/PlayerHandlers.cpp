@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "PlayerHandlers.h"
 
+#include "../../Constants.h"
 #include "../../Gameplay/Stage.h"
 #include "../../IO/UI.h"
 #include "../../IO/UITypes/UIBuffList.h"
@@ -36,9 +37,7 @@ auto fn_player_login = []<typename... T>(T && ...args) {
 }  // namespace
 
 void transition(int32_t mapid, uint8_t portalid) {
-    float fadestep = 0.025f;
-
-    Window::get().fadeout(fadestep, [mapid, portalid]() {
+    Window::get().fadeout(Constants::SCREEN_FADE_MS, [mapid, portalid]() {
         GraphicsGL::get().clear();
         Stage::get().load(mapid, portalid);
         UI::get().enable();

@@ -122,14 +122,10 @@ bool Char::update(const Physics &physics, float speed) {
         }
     }
 
-    uint16_t stancespeed = 0;
-    const float advanced = Constants::ANIMATION_MS_PER_PIXEL * speed;
-
-    // Movement too slow to add up to a whole millisecond of animation this tick leaves the stance
-    // held rather than creeping forward.
-    if (advanced >= 1.0f) {
-        stancespeed = static_cast<uint16_t>(advanced);
-    }
+    // speed is already the animation milliseconds this update spends, so only the too-slow-to-count
+    // case has to be held: an update worth less than a millisecond leaves the stance where it is
+    // rather than creeping forward.
+    const uint16_t stancespeed = speed >= 1.0f ? static_cast<uint16_t>(speed) : 0;
 
     after_image_.update(look_.get_frame(), stancespeed);
 
@@ -137,17 +133,31 @@ bool Char::update(const Physics &physics, float speed) {
 }
 
 float Char::get_stancespeed() const {
+    // Two families come through here and they are calibrated against different things.
+    //
+    // A walk and a climb are advanced by ground covered: the artwork is drawn to move one pixel for
+    // every Constants::ANIMATION_MS_PER_PIXEL of its own timeline, so what is spent is that many
+    // milliseconds for each pixel the update walked.
+    //
+    // Everything else - standing, idle, and an attack running at its attackspeed rate - is a rate on
+    // real time, and one update of real time is Constants::TIMESTEP long. The reference client
+    // multiplies a rate by its own timestep, which was 8; keeping the 8 as a literal through the
+    // timestep's move to 14 is what left attacks and idle animations playing at eight fourteenths of
+    // their speed.
     if (attacking_) {
-        return get_real_attackspeed();
+        return get_real_attackspeed() * Constants::TIMESTEP;
     }
 
     switch (state_) {
-        // Animation is advanced once per timestep, so what it wants is the number of pixels a tick
-        // covers - not the speed those pixels are covered at.
-        case State::WALK: return static_cast<float>(std::abs(phobj_.hstep()));
+        case State::WALK:
+            return static_cast<float>(std::abs(phobj_.hstep()))
+                * Constants::ANIMATION_MS_PER_PIXEL;
         case State::LADDER:
-        case State::ROPE: return static_cast<float>(std::abs(phobj_.vstep()));
-        default: return 1.0f;
+        case State::ROPE:
+            return static_cast<float>(std::abs(phobj_.vstep()))
+                * Constants::ANIMATION_MS_PER_PIXEL;
+        default:
+            return static_cast<float>(Constants::TIMESTEP);
     }
 }
 
@@ -166,7 +176,9 @@ uint16_t Char::get_attackdelay(size_t no) const {
 }
 
 int8_t Char::update(const Physics &physics) {
-    update(physics, 1.0f);
+    // A character that is not walked or climbed by the stance - a mob, an npc - has no ground covered
+    // to measure against, so its animation simply runs at real time.
+    update(physics, static_cast<float>(Constants::TIMESTEP));
 
     return get_layer();
 }

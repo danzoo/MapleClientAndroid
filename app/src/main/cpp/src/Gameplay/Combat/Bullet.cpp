@@ -15,9 +15,14 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Bullet.h"
 
+#include <algorithm>
+#include <cmath>
 #include <utility>
 
+#include "../../Constants.h"
+
 namespace ms {
+
 Bullet::Bullet(Animation a, Point<int16_t> origin, bool toleft) :
     animation_(std::move(a)),
     flip_(toleft) {
@@ -41,27 +46,17 @@ bool Bullet::settarget(Point<int16_t> target) {
 
     flip_ = xdelta > 0.0;
 
-    // The bullet is handed the whole distance in thirty-two ticks, with a floor and a ceiling on
-    // how far it is allowed to cover in one of them.
-    double hstep = xdelta / 32;
+    // The whole distance is covered over the flight time, kept between the two speeds a projectile is
+    // allowed to go.
+    const double sign = xdelta > 0.0 ? 1.0 : -1.0;
+    const double speed = std::clamp(
+        std::abs(xdelta) * 1000.0 / Constants::BULLET_FLIGHT_MS,
+        Constants::BULLET_MIN_SPEED,
+        Constants::BULLET_MAX_SPEED);
 
-    if (xdelta > 0.0) {
-        if (hstep < 3.0) {
-            hstep = 3.0;
-        } else if (hstep > 6.0) {
-            hstep = 6.0;
-        }
-    } else if (xdelta < 0.0) {
-        if (hstep > -3.0) {
-            hstep = -3.0;
-        } else if (hstep < -6.0) {
-            hstep = -6.0;
-        }
-    }
-
-    move_obj_.set_hstep(hstep);
+    move_obj_.hspeed = sign * speed;
     // The fall is kept at the same angle as the flight, which is a ratio and so needs no units.
-    move_obj_.set_vstep(hstep * ydelta / xdelta);
+    move_obj_.vspeed = move_obj_.hspeed * ydelta / xdelta;
 
     return false;
 }

@@ -41,7 +41,9 @@ void MapEffect::draw() const {
 
 void MapEffect::update() {
     if (!active_) {
-        active_ = effect_.update(6);
+        // Three quarters of real time - the six milliseconds of its own timeline an effect used to
+        // walk for every eight millisecond tick. The api takes whole milliseconds, so it is ten.
+        active_ = effect_.update(Constants::REDUCED_ANIMATION_MS);
     }
 }
 }  // namespace ms

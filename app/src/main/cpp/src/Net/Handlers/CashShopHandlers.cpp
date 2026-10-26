@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "CashShopHandlers.h"
 
+#include "../../Constants.h"
 #include "../../Gameplay/Stage.h"
 #include "../../IO/UI.h"
 #include "../../IO/Window.h"
@@ -63,9 +64,7 @@ void SetCashShopHandler::transition() const {
     Constants::Constants::get().set_viewwidth(1024);
     Constants::Constants::get().set_viewheight(768);
 
-    float fadestep = 0.025f;
-
-    Window::get().fadeout(fadestep, []() {
+    Window::get().fadeout(Constants::SCREEN_FADE_MS, []() {
         GraphicsGL::get().clear();
 
         Stage::get().load(-1, 0);

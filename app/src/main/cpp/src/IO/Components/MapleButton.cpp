@@ -15,6 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "MapleButton.h"
 
+#include "../../Constants.h"
+
 namespace ms {
     MapleButton::MapleButton(const img::node &src, Point<int16_t> pos) {
     img::node normal = src["normal"];
@@ -49,7 +51,9 @@ void MapleButton::draw(Point<int16_t> parentpos) const {
 
 void MapleButton::update() {
     if (active_) {
-        animations_[state_].update(6);
+        // Three quarters of real time, the six milliseconds of art an animated button used to be
+        // asked to walk for every eight millisecond tick.
+        animations_[state_].update(Constants::REDUCED_ANIMATION_MS);
     }
 }
 

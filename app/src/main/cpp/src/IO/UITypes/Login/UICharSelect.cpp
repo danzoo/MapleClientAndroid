@@ -246,8 +246,10 @@ void UICharSelect::draw(float inter) const {
     UIElement::draw_sprites(inter);
 
     version_.draw(position_ + Point<int16_t>(707, 1));
-    charslot_.draw(position_ + Point<int16_t>(589, 106 - charslot_y_));
-    chat_slot_label_.draw(position_ + Point<int16_t>(700, 110 - charslot_y_));
+    charslot_.draw(position_
+                   + Point<int16_t>(589, static_cast<int16_t>(106 - charslot_y_)));
+    chat_slot_label_.draw(
+        position_ + Point<int16_t>(700, static_cast<int16_t>(110 - charslot_y_)));
 
     for (const Sprite &sprite : world_sprites_) {
         sprite.draw(position_, inter);
@@ -356,12 +358,16 @@ void UICharSelect::draw(float inter) const {
 void UICharSelect::update() {
     UIElement::update();
 
+    // The slide carried the label a pixel every eight millisecond tick, which is to say a hundred
+    // and twenty five pixels a second; the window it slides through is already counted in ms.
+    constexpr double CHARSLOT_STEP = Constants::CHAR_SLOT_SCROLL_SPEED * Constants::TICK_SECONDS;
+
     if (show_timestamp_) {
         if (timestamp_ > 0) {
             timestamp_ -= Constants::TIMESTEP;
 
             if (timestamp_ <= 176) {
-                charslot_y_ += 1;
+                charslot_y_ += CHARSLOT_STEP;
             }
         }
     } else {
@@ -369,11 +375,14 @@ void UICharSelect::update() {
             timestamp_ += Constants::TIMESTEP;
 
             if (charslot_y_ >= 0) {
-                charslot_y_ -= 1;
+                charslot_y_ -= CHARSLOT_STEP;
             }
         }
     }
 
+    // Four whole pixels for a four pixel slide, one an update. At this timestep that takes fifty
+    // six milliseconds rather than thirty two; nothing about a tab moving four pixels is legible
+    // enough to be worth a fraction of a pixel.
     if (tab_move_ && tab_move_pos_ < 4) {
         tab_move_pos_ += 1;
     }

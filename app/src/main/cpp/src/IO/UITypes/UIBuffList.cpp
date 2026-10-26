@@ -27,7 +27,9 @@ BuffIcon::BuffIcon(int32_t buff, int32_t dur) :
     buffid_ = buff;
     duration_ = dur;
     opacity_.set(1.0f);
-    opcstep_ = -0.05f;
+    // The blink is a rate per second rather than an amount per update, and the sign is what says
+    // which way it is going.
+    opcstep_ = -Constants::BUFF_FADE_PER_SECOND;
 
     if (buffid_ >= 0) {
         std::string strid = string_format::extend_id(buffid_, 7);
@@ -46,7 +48,7 @@ void BuffIcon::draw(Point<int16_t> position, float alpha) const {
 
 bool BuffIcon::update() {
     if (duration_ <= FLASH_TIME_) {
-        opacity_ += opcstep_;
+        opacity_ += opcstep_ * Constants::TICK_SECONDS;
 
         bool fadedout = opcstep_ < 0.0f && opacity_.last() <= 0.0f;
         bool fadedin = opcstep_ > 0.0f && opacity_.last() >= 1.0f;

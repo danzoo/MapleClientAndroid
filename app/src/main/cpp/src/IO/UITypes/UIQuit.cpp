@@ -18,6 +18,7 @@
 #include <imgwz/wz.hpp>
 
 #include "../../Character/ExpTable.h"
+#include "../../Constants.h"
 #include "../../Gameplay/Stage.h"
 #include "../../Net/Session.h"
 #include "../Components/MapleButton.h"
@@ -190,9 +191,7 @@ Button::State UIQuit::button_pressed(uint16_t buttonid) {
     switch (buttonid) {
         case Buttons::NO: deactivate(); break;
         case Buttons::YES: {
-            float fadestep = 0.025f;
-
-            Window::get().fadeout(fadestep, []() {
+            Window::get().fadeout(Constants::SCREEN_FADE_MS, []() {
                 GraphicsGL::get().clear();
 
                 UI::get().change_state(UI::State::LOGIN);

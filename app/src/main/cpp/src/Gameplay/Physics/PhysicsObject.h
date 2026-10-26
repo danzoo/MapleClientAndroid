@@ -44,17 +44,6 @@ struct MovingObject {
 
     double vstep() const { return vspeed * Constants::TICK_SECONDS; }
 
-    // A step quoted in pixels per tick, which is the unit every hand-written speed in this client
-    // names. hstep() above is the same speed read back out in the tick the loop runs, so what is
-    // stored stays in seconds and only the call site speaks in ticks.
-    void set_hstep(double pixels_per_quoted_tick) {
-        hspeed = pixels_per_quoted_tick / Constants::TICK_SECONDS;
-    }
-
-    void set_vstep(double pixels_per_quoted_tick) {
-        vspeed = pixels_per_quoted_tick / Constants::TICK_SECONDS;
-    }
-
     void set_x(double d) { x.set(d); }
 
     void set_y(double d) { y.set(d); }
@@ -173,6 +162,11 @@ struct PhysicsObject : public MovingObject {
         return vforce * Constants::TICK_SECONDS * Constants::TICK_SECONDS;
     }
 
+    void apply_substep(double dx, double dy) {
+        x.shift(dx);
+        y.shift(dy);
+    }
+
     bool is_flag_set(Flag f) { return (flags & f) != 0; }
 
     bool is_flag_not_set(Flag f) { return !is_flag_set(f); }
@@ -184,14 +178,11 @@ struct PhysicsObject : public MovingObject {
     void clear_flags() { flags = 0; }
 };
 
-// The numbers this client was written with before the physics archive became the source of them are
-// all still per timestep. Anything left over from that era is restated here rather than by hand, so
-// that the only unit a reader has to hold in mind while looking at a physics field is the second.
-//
-// The tick they are quoted in is the one the loop runs, Constants::TICK_SECONDS, so the round trip
-// through here lands back on the literal: a speed of 3 put in comes out as 3 pixels per update. What
-// the conversion buys is that the fields themselves are all in seconds, which is the unit the
-// archive speaks, and that SIMULATION_SPEED can still be moved without rewriting them by hand.
+// Map/Physics.img quotes its forces and drags as fixed-point amounts of a tick, and its tick is the
+// one this loop runs, so those figures only have to be lifted out of the fixed point and put through
+// here to become the pixels per second squared and per second that the fields above are stored in.
+// Nothing else is quoted per tick any more: every hand-written speed is in pixels per second and
+// every duration in milliseconds, so this belongs to the archive and to PhysicsParams alone.
 namespace tick_units {
     inline double velocity(double pixels_per_tick) {
         return pixels_per_tick / Constants::TICK_SECONDS;

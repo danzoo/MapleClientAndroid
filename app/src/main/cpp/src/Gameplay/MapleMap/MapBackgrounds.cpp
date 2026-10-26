@@ -17,6 +17,7 @@
 
 #include <imgwz/wz.hpp>
 
+#include "../../Constants.h"
 #include "../../Graphics/GraphicsGL.h"
 
 namespace ms {
@@ -78,10 +79,15 @@ void Background::settype(Type type) {
     }
 
     switch (type) {
+        // A scrolling background drifts a fixed speed for each point the map names.
         case Type::HMOVEA:
-        case Type::HMOVEB: move_obj_.set_hstep(rx_ / 16); break;
+        case Type::HMOVEB:
+            move_obj_.hspeed = rx_ * Constants::BACKGROUND_SCROLL_PER_POINT;
+            break;
         case Type::VMOVEA:
-        case Type::VMOVEB: move_obj_.set_vstep(ry_ / 16); break;
+        case Type::VMOVEB:
+            move_obj_.vspeed = ry_ * Constants::BACKGROUND_SCROLL_PER_POINT;
+            break;
         default:
             break;
     }
