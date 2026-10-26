@@ -108,7 +108,7 @@ public:
 
     int32_t get_oid() const;
 
-    // Count one timestep against the wait and report whether the drop may come out yet.
+    // Take the update that just went by off the wait and report whether the drop may come out yet.
     bool elapsed();
 
     bool plays_sound() const;

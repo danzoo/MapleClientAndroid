@@ -47,8 +47,8 @@ private:
     std::unordered_map<uint8_t, Portal> portals_by_id_;
     std::unordered_map<std::string, uint8_t> portal_ids_by_name_;
 
-    // Timesteps of not firing a portal again right after walking out of one.
-    static const int16_t WARPCD = 48;
+    // Milliseconds of not firing a portal again right after walking out of one is
+    // Constants::PORTAL_COOLDOWN_MS.
     int16_t cooldown_;
 };
 }  // namespace ms

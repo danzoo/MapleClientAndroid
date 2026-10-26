@@ -510,15 +510,14 @@ void DropLootHandler::handle(InPacket &recv) const {
         // The server echoes back the swing length of the blow that killed the mob and holds that
         // mob's death for the same time, so this is the wait the loot has to match. For a death the
         // server worked out on its own - a script, a dot - it says nothing here, and the local
-        // countdown for the blow still coming for that mob is the only thing to go on.
-        int32_t serverticks = serverdelay / Constants::TIMESTEP;
-        int32_t ticks
-            = std::max(serverticks,
-                       static_cast<int32_t>(
-                           Stage::get().get_mobs().pending_hit(dropper)));
+        // countdown for the blow still coming for that mob is the only thing to go on. Both are
+        // already in the milliseconds the loot is held for, so nothing converts between them.
+        int32_t millis
+            = std::max(static_cast<int32_t>(serverdelay),
+                       Stage::get().get_mobs().pending_hit(dropper));
 
         delay = Constants::DROP_DELAY
-                + std::min(ticks,
+                + std::min(millis,
                            static_cast<int32_t>(INT16_MAX - Constants::DROP_DELAY));
     }
 

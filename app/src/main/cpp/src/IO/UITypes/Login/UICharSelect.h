@@ -137,7 +137,10 @@ private:
     std::array<Animation, 2> selected_slot_effect_;
     OutlinedText chat_slot_label_;
     int16_t timestamp_;
-    uint16_t charslot_y_;
+    // Pixels the slot label has slid. It moves a hundred and twenty five pixels a second, which at
+    // this timestep is more than a whole pixel an update, so the height is kept as a fraction and
+    // squared up only when it is drawn.
+    double charslot_y_;
     bool show_timestamp_;
     bool burning_character_;
 

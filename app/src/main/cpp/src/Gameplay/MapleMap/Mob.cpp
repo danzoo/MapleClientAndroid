@@ -17,6 +17,7 @@
 
 #include <imgwz/wz.hpp>
 
+#include "../../Constants.h"
 #include "../../Net/Packets/GameplayPackets.h"
 #include "../Physics/PhysicsParams.h"
 #include "../Stage.h"
@@ -31,6 +32,10 @@ auto fn_move_mob = []<typename... T>(T && ...args) {
 // How near the player can get before a chasing mob stops bothering to re-face them. Measured
 // against nothing, a mob standing on the player spins in place between two pixels.
 constexpr double CHASE_TURN = 4.0;
+
+// How long a mob spends coming in and going out. The time is named in Constants and the step is
+// whatever the updates it takes to spend it work out to.
+constexpr float FADE_STEP = Constants::TIMESTEP / Constants::MOB_FADE_MS;
 }  // namespace
 
 Mob::Mob(int32_t oi,
@@ -103,10 +108,10 @@ Mob::Mob(int32_t oi,
     // A mob stat used to be read as a push in pixels per tick squared, which the client's own ground
     // damping - 0.4 over 3 taken off an object every tick - turned into a held speed seven and a
     // half times as large, and its flight damping - 0.05 - into one a hundred times as large. Those
-    // products are the speeds the stats were always worth, so they are what the archive's damping
+    // products are the speeds the stats were always worth, and they are what the archive's damping
     // and the archive's own speed caps are asked to hold now.
-    speed_ = tick_units::velocity((speed_ + 100) * 0.0075f);
-    fly_speed_ = tick_units::velocity((fly_speed_ + 100) * 0.01f);
+    speed_ = (speed_ + 100) * Constants::MOB_WALK_SPEED_PER_POINT;
+    fly_speed_ = (fly_speed_ + 100) * Constants::MOB_FLY_SPEED_PER_POINT;
 
     if (can_fly_) {
         phobj_.type = PhysicsObject::Type::FLYING;
@@ -188,12 +193,17 @@ int8_t Mob::update(const Physics &physics) {
     }
 
     if (pending_hit_ > 0) {
-        --pending_hit_;
+        pending_hit_ -= Constants::TIMESTEP;
+
+        if (pending_hit_ < 0) {
+            pending_hit_ = 0;
+        }
     }
 
     if (death_pending_) {
         if (stance_ == Stance::HIT) {
-            if (aniend || ++death_wait_ >= Constants::HIT_DEATH_WAIT) {
+            if (aniend || (death_wait_ += Constants::TIMESTEP)
+                >= Constants::HIT_DEATH_WAIT) {
                 death_pending_ = false;
                 apply_death();
             }
@@ -216,17 +226,17 @@ int8_t Mob::update(const Physics &physics) {
     }
 
     if (fading_) {
-        opacity_ -= 0.025f;
+        opacity_ -= FADE_STEP;
 
-        if (opacity_.last() < 0.025f) {
+        if (opacity_.last() < FADE_STEP) {
             opacity_.set(0.0f);
             fading_ = false;
             dead_ = true;
         }
     } else if (fade_in_) {
-        opacity_ += 0.025f;
+        opacity_ += FADE_STEP;
 
-        if (opacity_.last() > 0.975f) {
+        if (opacity_.last() > 1.0f - FADE_STEP) {
             opacity_.set(1.0f);
             fade_in_ = false;
         }
@@ -307,9 +317,13 @@ int8_t Mob::update(const Physics &physics) {
                 break;
             case Stance::HIT:
                 if (can_move_) {
-                    double KBFORCE = phobj_.onground ? 0.2 : 0.1;
-                    phobj_.hforce =
-                        tick_units::accel(flip_ ? -KBFORCE : KBFORCE);
+                    // Held for as long as the flinch plays, so what carries over from the old
+                    // timestep is the acceleration it amounted to. How far the mob slides is then
+                    // the flinch's business.
+                    const double kbaccel = phobj_.onground
+                                               ? Constants::MOB_KNOCKBACK_ACCEL
+                                               : Constants::MOB_KNOCKBACK_ACCEL_AIR;
+                    phobj_.hforce = flip_ ? -kbaccel : kbaccel;
 
                     // The platform lookup follows the chain of footholds off the end of a
                     // platform, so a mob shoved as far as the edge of the one it stands on has to
@@ -333,7 +347,11 @@ int8_t Mob::update(const Physics &physics) {
 
                 break;
             case Stance::JUMP:
-                phobj_.vforce = tick_units::accel(-5.0);
+                // Delivered once, because a force is only heard by the integrator while the mob is
+                // still on the ground and it leaves the ground on the tick it is given this: a force
+                // lasts for one tick, so the speed the hop starts with over that tick is what is
+                // asked for.
+                phobj_.vforce = -Constants::MOB_HOP_SPEED / Constants::TICK_SECONDS;
                 break;
         }
 
@@ -369,14 +387,14 @@ int8_t Mob::update(const Physics &physics) {
         physics.move_object(phobj_);
 
         if (control_) {
-            counter_++;
+            counter_ += Constants::TIMESTEP;
 
             bool next = false;
 
             switch (stance_) {
-                case Stance::HIT: next = counter_ > 200; break;
+                case Stance::HIT: next = counter_ > Constants::MOB_WANDER_MS; break;
                 case Stance::JUMP: next = phobj_.onground; break;
-                default: next = aniend && counter_ > 200; break;
+                default: next = aniend && counter_ > Constants::MOB_WANDER_MS; break;
             }
 
             if (next) {
@@ -771,21 +789,21 @@ void Mob::apply_damage(int32_t damage, bool toleft) {
         apply_death();
     } else if (control_ && is_alive() && damage >= knockback_ && !is_boss_) {
         flip_ = toleft;
-        counter_ = 170;
+        counter_ = Constants::MOB_WANDER_MS - Constants::MOB_HIT_GRACE_MS;
         set_stance(Stance::HIT);
 
         update_movement();
     }
 }
 
-void Mob::expect_hit(int16_t ticks) {
-    if (ticks > pending_hit_) {
-        pending_hit_ = ticks;
+void Mob::expect_hit(int32_t millis) {
+    if (millis > pending_hit_) {
+        pending_hit_ = millis;
         hit_played_ = false;
     }
 }
 
-int16_t Mob::pending_hit() const {
+int32_t Mob::pending_hit() const {
     return pending_hit_;
 }
 

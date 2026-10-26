@@ -45,7 +45,8 @@ namespace ms {
 
         void end() const;
 
-        void fadeout(float step, std::function<void()> fadeprocedure);
+        // Fade the whole screen out over the given number of milliseconds, then run the procedure.
+        void fadeout(uint16_t millis, std::function<void()> fadeprocedure);
 
         void check_events();
 

@@ -174,10 +174,12 @@ public:
 protected:
     Char(int32_t oid, const CharLook &look, const std::string &name);
 
-    // Update the character's animation with the given speed.
+    // Update the character's animation, spending the animation milliseconds per update that
+    // get_stancespeed reports.
     bool update(const Physics &physics, float speed);
 
-    // Get a speed modifier for the current stance.
+    // The milliseconds of the artwork's own timeline that one update is worth: pixels of ground
+    // covered for a walk or a climb, a rate on real time for everything else.
     float get_stancespeed() const;
 
     CharLook look_;

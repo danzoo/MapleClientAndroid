@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UICashShop.h"
 
+#include "../../Constants.h"
 #include "../../Gameplay/Stage.h"
 #include "../../Net/Packets/GameplayPackets.h"
 #include "../../Net/Packets/LoginPackets.h"
@@ -354,9 +355,7 @@ Button::State UICashShop::button_pressed(uint16_t buttonid) {
             Constants::Constants::get().set_viewwidth(width);
             Constants::Constants::get().set_viewheight(height);
 
-            float fadestep = 0.025f;
-
-            Window::get().fadeout(fadestep, []() {
+            Window::get().fadeout(Constants::SCREEN_FADE_MS, []() {
                 GraphicsGL::get().clear();
                 fn_change_map();
             });

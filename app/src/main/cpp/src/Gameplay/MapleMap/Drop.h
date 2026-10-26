@@ -70,15 +70,17 @@ private:
 
     Point<int16_t> dest_;
     Point<int16_t> launch_;
-    // The height the current flight peaks at, how long it takes to get there, and how high above
-    // the ground it was thrown. The height picks the gravity the rest of the flight is computed
-    // with, so the toss out of a mob and the hop to whoever picks it up are separate routes.
+    // The height the current flight peaks at, how many seconds it takes to get there, and how high
+    // above the ground it was thrown. The height picks the gravity the rest of the flight is
+    // computed with, so the toss out of a mob and the hop to whoever picks it up are separate
+    // routes.
     double apex_;
-    double rise_ticks_;
+    double rise_seconds_;
     double rise_;
     double base_y_;
     double moved_;
+    // Seconds of the current flight that have gone by, and how long the whole flight takes.
     double fallen_;
-    double air_ticks_;
+    double air_seconds_;
 };
 }  // namespace ms

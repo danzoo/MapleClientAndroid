@@ -47,14 +47,14 @@ void MapDrops::draw(Layer::Id layer,
 
 void MapDrops::update(const Physics &physics) {
     // A mob's loot burst does not always land on one frame: each item is its own packet, and the
-    // per-item server delay or the frame the packet arrives on can shift its countdown by a tick
+    // per-item server delay or the frame the packet arrives on can shift its countdown by an update
     // or two, so the items elapse across a few consecutive frames. Gating the clatter on a short
     // cooldown instead of "once per frame" collapses the whole burst into a single sound, while a
-    // later, separate kill still clatters on its own.
-    constexpr int16_t DROP_SOUND_COOLDOWN = 15;
+    // later, separate kill still clatters on its own. The cooldown is
+    // Constants::DROP_SOUND_COOLDOWN_MS.
 
     if (drop_sound_cooldown_ > 0) {
-        --drop_sound_cooldown_;
+        drop_sound_cooldown_ -= Constants::TIMESTEP;
     }
 
     for (size_t pending = spawns_.size(); pending > 0; --pending) {
@@ -69,9 +69,9 @@ void MapDrops::update(const Physics &physics) {
             continue;
         }
 
-        if (spawn.plays_sound() && drop_sound_cooldown_ == 0) {
+        if (spawn.plays_sound() && drop_sound_cooldown_ <= 0) {
             Sound(Sound::Name::DROP).play();
-            drop_sound_cooldown_ = DROP_SOUND_COOLDOWN;
+            drop_sound_cooldown_ = Constants::DROP_SOUND_COOLDOWN_MS;
         }
 
         int32_t oid = spawn.get_oid();

@@ -15,6 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Player.h"
 
+#include <cmath>
+
 #include "../Audio/Audio.h"
 #include "../Data/WeaponData.h"
 #include "../Gameplay/Physics/PhysicsParams.h"
@@ -156,8 +158,22 @@ void Player::draw(Layer::Id layer,
 int8_t Player::update(const Physics &physics) {
     const PlayerState *pst = get_state(state_);
 
+    climb_cooldown_.update();
+
     if (pst) {
         pst->update(*this);
+
+        if (knockback_launch_) {
+            knockback_launch_ = false;
+            // The tick that launches the hop is still a ground tick, so the ground damping would take
+            // a quarter of the sideways speed out of it before the body is airborne. The drive is
+            // exactly what that damping removes at the speed the hop leaves with, and it lasts the
+            // one tick: from the next one on the body is in the air, where hforce is not even read.
+            // It is added to rather than placed over hforce because the walk state may well have
+            // driven this same tick, and that drive is the part of the run the blow has to cancel.
+            phobj_.hforce += PhysicsParams::ground_drive(knockback_speed_);
+        }
+
         physics.move_object(phobj_);
 
         bool aniend = Char::update(physics, get_stancespeed());
@@ -339,12 +355,30 @@ MobAttackResult Player::damage(const MobAttack &attack) {
     bool knockback = !missed && !immovable;
 
     if (knockback && randomizer_.above(stats_.get_stance())) {
-        // The shove is a distance the client had already decided on - a pixel and a half for the
-        // tick after the hit - rather than a speed the archive describes, so it is stated as the
-        // step it was meant to be. How far it carries before ground_damping() takes it back is the
-        // archive's business now.
-        phobj_.set_hstep(fromleft ? -1.5 : 1.5);
-        phobj_.vforce -= tick_units::accel(-3.5);
+        // The hop is the two figures in Constants - how high, how far back - and its speeds are worked
+        // out from them against the gravity this map is using: the lift is whatever speed comes back
+        // down to that height, the airtime is twice that speed over gravity, and the sideways speed is
+        // the distance divided by the airtime. That is what keeps the two knobs independent, since a
+        // higher hop is a longer flight and a fixed distance would else be covered at a new speed.
+        const double gravity = PhysicsParams::gravity();
+        const double rise
+            = std::sqrt(2.0 * gravity * Constants::PLAYER_KNOCKBACK_HEIGHT);
+        const double airtime = 2.0 * rise / gravity;
+        const double shove
+            = Constants::PLAYER_KNOCKBACK_DISTANCE / airtime * (fromleft ? -1.0 : 1.0);
+
+        // The shove is added to the speed the character is already going at rather than put in its
+        // place, so running into a blow and standing there for it are two different hops: struck from
+        // the far side, part of the run is spent against the shove and the body goes back a shorter
+        // way than the distance asks; struck from behind, it rides both and goes further.
+        knockback_speed_ = phobj_.hspeed + shove;
+        knockback_launch_ = true;
+        phobj_.hspeed = knockback_speed_;
+
+        // The lift goes in through vforce, which is the one channel the ground branch of move_normal
+        // listens to, and it is spent by the single tick that follows - so the force that buys a rise
+        // of that speed in one tick is the speed over the length of the tick.
+        phobj_.vforce -= rise / Constants::TICK_SECONDS;
     }
 
     uint8_t direction = fromleft ? 0 : 1;
@@ -439,15 +473,28 @@ void Player::set_ladder(
         phobj_.hspeed = 0.0;
         phobj_.vspeed = 0.0;
         phobj_.fhlayer = 7;
+        // A rope is always climbed facing the same way. The stance art is not symmetric about the
+        // navel, so whichever way the character happens to have been looking when it jumped on
+        // decides whether its body sits a pixel left or a pixel right of the rope - arriving from
+        // the left and from the right then look like two different ropes. Leaping off still turns
+        // the character towards the leap, which is the only place the facing matters here.
+        set_direction(true);
         set_state(ldr->get().is_ladder() ? Char::State::LADDER
                                          : Char::State::ROPE);
     }
 }
 
+void Player::set_climb_cooldown() {
+    climb_cooldown_.set_for(Constants::CLIMB_COOLDOWN_MS);
+}
+
+bool Player::can_climb() const {
+    return !climb_cooldown_;
+}
+
 float Player::get_walkforce() const {
-    // The archive's walkForce already settles at walkSpeed under the ground damping that comes out
-    // of walkDrag, so the SPEED stat decides only what fraction of the baseline walk this character
-    // has.
+    // walk_accel is already the drive that holds walkSpeed under the ground's damping, so the SPEED
+    // stat decides only what fraction of the baseline walk this character has.
     const float speed =
         static_cast<float>(stats_.get_total(EquipStat::Id::SPEED));
 
@@ -477,9 +524,9 @@ float Player::get_jumpforce() const {
 float Player::get_climbspeed() const {
     const double speed = stats_.get_total(EquipStat::Id::SPEED) / 100.0;
 
-    // Neither rope nor ladder has a key in the archive, so this is the client's own one pixel per
-    // tick at a baseline SPEED stat, restated.
-    return static_cast<float>(tick_units::velocity(speed));
+    // Neither rope nor ladder has a key in the archive, so this is the client's own, restated as a
+    // speed for each point of the character's SPEED stat.
+    return static_cast<float>(speed * Constants::CLIMB_SPEED_PER_POINT);
 }
 
 float Player::get_flyforce() const {

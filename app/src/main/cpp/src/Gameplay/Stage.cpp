@@ -180,11 +180,20 @@ void Stage::update() {
     drops_.update(physics_);
     player_.update(physics_);
 
-    // A ladder is only grabbed when the key goes down, so reaching one a frame after the stick was
-    // pushed up - on foot, or flying past it mid-jump - left it untouched until the key was pressed
-    // again. Checking whenever the key is held covers both.
-    if (player_.is_key_down(KeyAction::Id::UP)) {
+    // A ladder has to be re-checked while the key is held rather than only on the edge of the press.
+    // The edge arrives once - the stick reports a direction when the direction changes, not every
+    // frame it is held - and a character still walking into the rope spends that single edge one
+    // frame short of the range. Down is the worse of the two on touch, since a down-drag begun from a
+    // walk is often absorbed as the horizontal direction the stick already owns, so missing it left
+    // the rope at the platform's edge ungrabbable. Up gives way when down is held as well, so the two
+    // cannot fight over one rope.
+    if (player_.is_key_down(KeyAction::Id::UP)
+        && !player_.is_key_down(KeyAction::Id::DOWN)) {
         check_ladders(true);
+    }
+
+    if (player_.is_key_down(KeyAction::Id::DOWN)) {
+        check_ladders(false);
     }
 
     portals_.update(player_.get_position());
@@ -243,7 +252,7 @@ void Stage::check_seats() {
 }
 
 void Stage::check_ladders(bool up) {
-    if (player_.is_climbing() || player_.is_attacking()) {
+    if (!player_.can_climb() || player_.is_climbing() || player_.is_attacking()) {
         return;
     }
 

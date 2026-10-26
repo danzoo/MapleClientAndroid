@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "MapInfo.h"
 
+#include "../../GameAttributes.h"
 #include "../Constants.h"
 
 namespace ms {
@@ -119,18 +120,28 @@ bool Ladder::is_ladder() const {
 }
 
 bool Ladder::inrange(Point<int16_t> position, bool upwards) const {
-    auto hor = Range<int16_t>::symmetric(position.x(), 10);
+    auto hor =
+        Range<int16_t>::symmetric(position.x(), GameAttributes::CLIMB_RANGE_X);
     auto ver = Range<int16_t>(y1_, y2_);
 
-    int16_t y = upwards ? position.y() - 5 : position.y() + 5;
+    int16_t y = upwards ? position.y() - GameAttributes::CLIMB_MARGIN_Y
+                        : position.y() + GameAttributes::CLIMB_MARGIN_Y;
 
     return hor.contains(x_) && ver.contains(y);
 }
 
 bool Ladder::felloff(int16_t y, bool downwards) const {
-    int16_t dy = downwards ? y + 1 : y - 1;
+    // The same margin the grab is measured with, and it has to be the same one: in every one of the
+    // shipped maps the rope's top sits exactly two pixels below the platform it hangs from, so a
+    // character standing at the top is two pixels above y1. Asked whether it has fallen off with a
+    // narrower margin than the grab used, the answer is yes on the very frame the grab lands, which
+    // cancels the climb before it can move - the grab then arrives again next frame, so the body
+    // plays the climbing animation without ever leaving the platform.
+    constexpr int16_t margin = GameAttributes::CLIMB_MARGIN_Y;
 
-    return dy > y2_ || y + 1 < y1_;
+    int16_t dy = downwards ? y + margin : y - margin;
+
+    return dy > y2_ || y + margin < y1_;
 }
 
 int16_t Ladder::get_x() const {

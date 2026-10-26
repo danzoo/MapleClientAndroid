@@ -513,8 +513,11 @@ namespace ms {
         glfmSwapBuffers(display);
     }
 
-    void Window::fadeout(float step, std::function<void()> fadeproc) {
-        opc_step_ = -step;
+    void Window::fadeout(uint16_t millis, std::function<void()> fadeproc) {
+        // The fade is spread over exactly the time it is given, so an update takes off the share of
+        // the opacity that its own length is worth of it.
+        opc_step_
+            = -static_cast<float>(Constants::TIMESTEP) / static_cast<float>(millis);
         fade_procedure_ = std::move(fadeproc);
     }
 

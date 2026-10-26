@@ -26,6 +26,18 @@ namespace ms::GameAttributes {
     constexpr int16_t PICKUP_RANGE = 24;
     constexpr int16_t TALK_RANGE = 350;
 
+    // How wide a band around a rope or ladder still counts as standing at it. The reference client's
+    // ten pixels are a mouse-width target; on a phone the position is aimed with a joystick, so the
+    // grab has to forgive noticeably more. Only the grab reads this - once it lands the character is
+    // snapped onto the rope's own x, so a wide window cannot make it drift.
+    constexpr int16_t CLIMB_RANGE_X = 16;
+
+    // The vertical margin a rope's two ends are measured with. One number serves both the grab and
+    // the release test, and it has to stay one: a grab allowed inside a wider band than the release
+    // is tested with is cancelled on the next tick, and with the climb cooldown that reads as being
+    // dropped off the rope.
+    constexpr int16_t CLIMB_MARGIN_Y = 8;
+
     // The size the login and character selection screens are designed around.
     constexpr int16_t LOGIN_WIDTH = 800;
     constexpr int16_t LOGIN_HEIGHT = 600;

@@ -89,12 +89,16 @@ FootholdTree::FootholdTree(const img::node &src) {
 FootholdTree::FootholdTree() = default;
 
 void FootholdTree::limit_movement(PhysicsObject &phobj) const {
+    limit_movement(phobj, phobj.hstep(), phobj.vstep());
+}
+
+void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmove) const {
     if (phobj.hmobile()) {
         double crnt_x = phobj.crnt_x();
-        double next_x = phobj.next_x();
+        double next_x = crnt_x + hmove;
 
         bool left = phobj.hspeed < 0.0f;
-        double wall = get_wall(phobj.fhid, left, phobj.next_y());
+        double wall = get_wall(phobj.fhid, left, phobj.crnt_y() + vmove);
         bool collision = left ? crnt_x >= wall && next_x <= wall
                               : crnt_x <= wall && next_x >= wall;
 
@@ -111,20 +115,26 @@ void FootholdTree::limit_movement(PhysicsObject &phobj) const {
         }
     }
 
+    // Where the sweep above left the object is what the one below has to be measured from: if a
+    // wall stopped it, there is no horizontal travel left in this piece to carry across the floor.
+    if (!phobj.hmobile()) {
+        hmove = 0.0;
+    }
+
     if (phobj.vmobile()) {
         double crnt_y = phobj.crnt_y();
-        double next_y = phobj.next_y();
+        double next_y = crnt_y + vmove;
 
         auto ground =
             Range<double>(get_fh(phobj.fhid).ground_below(phobj.crnt_x()),
-                          get_fh(phobj.fhid).ground_below(phobj.next_x()));
+                          get_fh(phobj.fhid).ground_below(phobj.crnt_x() + hmove));
 
         bool collision = crnt_y <= ground.first() && next_y >= ground.second();
 
         if (collision) {
             phobj.limity(ground.second());
 
-            limit_movement(phobj);
+            limit_movement(phobj, hmove, 0.0);
         } else {
             if (next_y < borders_.first()) {
                 phobj.limity(borders_.first());

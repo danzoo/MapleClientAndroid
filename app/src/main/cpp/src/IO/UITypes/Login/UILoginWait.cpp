@@ -18,6 +18,7 @@
 #include <imgwz/wz.hpp>
 #include <utility>
 #define _SILENCE_CXX17_RESULT_OF_DEPRECATION_WARNING
+#include "../../../Constants.h"
 #include "../../Net/PacketProcessor.h"
 #include "../Components/MapleButton.h"
 #include "../UI.h"
@@ -49,7 +50,9 @@ UIElement::Type UILoginWait::get_type() const {
 void UILoginWait::update() {
     UIElement::update();
 
-    if (++elapsed_ < TIMEOUT_TICKS) {
+    elapsed_ += Constants::TIMESTEP;
+
+    if (elapsed_ < Constants::LOGIN_WAIT_TIMEOUT_MS) {
         return;
     }
 

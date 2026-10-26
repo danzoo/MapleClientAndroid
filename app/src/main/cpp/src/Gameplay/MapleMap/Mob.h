@@ -109,11 +109,11 @@ public:
     void apply_damage(int32_t damage, bool toleft);
 
     // Note that a blow the client has queued locally for this mob is due to land in the specified
-    // number of timesteps.
-    void expect_hit(int16_t ticks);
+    // number of milliseconds.
+    void expect_hit(int32_t millis);
 
-    // How long until the next locally queued blow lands on this mob.
-    int16_t pending_hit() const;
+    // How long until the next locally queued blow lands on this mob, in milliseconds.
+    int32_t pending_hit() const;
 
     // Create a touch damage attack to the player
     MobAttack create_touch_attack() const;
@@ -227,6 +227,7 @@ private:
     TimedBool show_hp_;
 
     std::vector<Movement> movements_;
+    // Milliseconds the current stance has been held for; a wander is picked when it runs out.
     uint16_t counter_;
 
     int32_t id_;
@@ -249,8 +250,9 @@ private:
     // Set once the flinch and its sound for the blow being waited on have been played, so the
     // death doesn't add a second reaction for the same swing.
     bool hit_played_;
+    // Both countdowns are in milliseconds of game time.
     int16_t death_wait_;
-    int16_t pending_hit_;
+    int32_t pending_hit_;
     Linear<float> opacity_;
 };
 }  // namespace ms

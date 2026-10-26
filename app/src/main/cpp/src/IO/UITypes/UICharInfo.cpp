@@ -305,7 +305,11 @@ void UICharInfo::draw(float inter) const {
 }
 
 void UICharInfo::update() {
-    if (timestep_ >= Constants::TIMESTEP * UCHAR_MAX) {
+    // The spinner used to be held for two hundred and fifty five updates; that is two thousand and
+    // forty milliseconds of the eight millisecond tick it was written against.
+    // The spinner is held for Constants::CHAR_INFO_LOADING_MS before the fetched information is
+    // shown, whatever the timestep counts that out in.
+    if (timestep_ >= Constants::CHAR_INFO_LOADING_MS) {
         is_loading_ = false;
     } else {
         loading_.update();

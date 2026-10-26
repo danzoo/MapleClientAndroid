@@ -52,11 +52,11 @@ MapPortals::MapPortals(const img::node &src, int32_t mapid) {
         portal_ids_by_name_.emplace(name, portal_id);
     }
 
-    cooldown_ = WARPCD;
+    cooldown_ = Constants::PORTAL_COOLDOWN_MS;
 }
 
 MapPortals::MapPortals() {
-    cooldown_ = WARPCD;
+    cooldown_ = Constants::PORTAL_COOLDOWN_MS;
 }
 
 void MapPortals::update(Point<int16_t> playerpos) {
@@ -72,7 +72,7 @@ void MapPortals::update(Point<int16_t> playerpos) {
     }
 
     if (cooldown_ > 0) {
-        cooldown_--;
+        cooldown_ -= Constants::TIMESTEP;
     }
 }
 
@@ -104,8 +104,8 @@ Point<int16_t> MapPortals::get_portal_by_name(
 }
 
 Portal::WarpInfo MapPortals::find_warp_at(Point<int16_t> playerpos) {
-    if (cooldown_ == 0) {
-        cooldown_ = WARPCD;
+    if (cooldown_ <= 0) {
+        cooldown_ = Constants::PORTAL_COOLDOWN_MS;
 
         for (auto &iter : portals_by_id_) {
             const Portal &portal = iter.second;

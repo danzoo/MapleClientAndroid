@@ -33,6 +33,11 @@ public:
     // platforms in this tree.
     void limit_movement(PhysicsObject &touse) const;
 
+    // Same check, measured against a displacement given by hand instead of read back off the
+    // object's speed. One update taken in pieces needs each piece looked at on its own; asking the
+    // whole tick's speed whether it fits would test the end of the tick from the middle of it.
+    void limit_movement(PhysicsObject &touse, double hmove, double vmove) const;
+
     // Updates a PhysicsObject's fhid based on it's position.
     void update_fh(PhysicsObject &touse) const;
 

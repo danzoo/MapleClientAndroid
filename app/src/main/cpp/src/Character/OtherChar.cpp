@@ -40,9 +40,9 @@ OtherChar::OtherChar(int32_t id,
 }
 
 int8_t OtherChar::update(const Physics &physics) {
-    if (timer_ > 1) {
-        timer_--;
-    } else if (timer_ == 1) {
+    if (timer_ > Constants::TIMESTEP) {
+        timer_ -= Constants::TIMESTEP;
+    } else if (timer_ > 0) {
         if (!movements_.empty()) {
             last_move_ = movements_.front();
             movements_.pop();
@@ -77,8 +77,7 @@ void OtherChar::send_movement(const std::vector<Movement> &newmoves) {
     movements_.push(newmoves.back());
 
     if (timer_ == 0) {
-        constexpr uint16_t DELAY = 50;
-        timer_ = DELAY;
+        timer_ = Constants::OTHERCHAR_BUFFER_MS;
     }
 }
 

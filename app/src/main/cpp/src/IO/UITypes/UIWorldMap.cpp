@@ -17,6 +17,7 @@
 
 #include <imgwz/wz.hpp>
 
+#include "../../Constants.h"
 #include "../Gameplay/Stage.h"
 #include "../IO/Components/MapleButton.h"
 #include "../UI.h"
@@ -159,7 +160,9 @@ void UIWorldMap::update() {
     }
 
     for (auto &npc_po : npc_pos_) {
-        npc_po.update(1);
+        // An eighth of real time, the one millisecond of art these markers were walked through every
+        // eight millisecond tick; a whole millisecond is as close as the api gets at this timestep.
+        npc_po.update(Constants::CRAWLING_ANIMATION_MS);
     }
 
     cur_pos_.update();
