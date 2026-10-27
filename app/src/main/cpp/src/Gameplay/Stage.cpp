@@ -256,7 +256,10 @@ void Stage::check_ladders(bool up) {
         return;
     }
 
-    auto ladder = map_info_.findladder(player_.get_position(), up);
+    // Whether the character stands on terrain decides how generously it may reach for a rope, so a
+    // leap across one is not read as an attempt to grab it.
+    auto ladder = map_info_.findladder(player_.get_position(), up,
+                                       player_.get_phobj().onground);
     player_.set_ladder(ladder);
 }
 

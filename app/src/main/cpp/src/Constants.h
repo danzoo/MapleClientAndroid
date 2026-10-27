@@ -103,10 +103,11 @@ constexpr uint16_t DROP_SOUND_COOLDOWN_MS = 120;
 constexpr uint16_t PORTAL_COOLDOWN_MS = 384;
 constexpr uint16_t OTHERCHAR_BUFFER_MS = 400;
 
-// How long a body that has just left a rope or ladder is kept from grabbing one again. Leaving is
-// the rope's own doing (it ran out) or the character's (a leap off it), and in both cases the key is
-// still held, so without this the same rope is re-grabbed the next frame: at the bottom of a descent
-// that reads as a snag, and off a leap it undoes the jump. The reference client's own second.
+// How long a body that has just leapt off a rope or ladder is kept from grabbing one again. A leap
+// leaves along the rope rather than past an end of it, and the key is still held, so without this the
+// next frame undoes the jump. Reaching either end of a rope needs no such lock: the grab is measured
+// with the same margin as the release, so the rope is out of reach on the frame it lets go. The
+// reference client's own second.
 constexpr uint16_t CLIMB_COOLDOWN_MS = 1000;
 
 // How long the screen takes to go out and come back wherever the client fades between maps or

@@ -347,13 +347,13 @@ void PlayerClimbState::send_action(Player &player,
                     // and two thirds of the way it jumps.
                     player.get_phobj().hspeed = -player.get_walkspeed();
                     player.get_phobj().vspeed = -player.get_jumpspeed() / 1.5;
-                    cancel_ladder(player);
+                    cancel_ladder(player, true);
                 } else if (player.is_key_down(KeyAction::Id::RIGHT)) {
                     play_jumpsound();
                     player.set_direction(true);
                     player.get_phobj().hspeed = player.get_walkspeed();
                     player.get_phobj().vspeed = -player.get_jumpspeed() / 1.5;
-                    cancel_ladder(player);
+                    cancel_ladder(player, true);
                 }
 
                 break;
@@ -377,17 +377,28 @@ void PlayerClimbState::update_state(Player &player) const {
     auto ladder = player.get_ladder();
 
     if (ladder && ladder->get().felloff(y, downwards)) {
-        cancel_ladder(player);
+        // Neither end of a rope needs the cooldown, because neither can take itself back on: coming
+        // off over the top is the end of a climb, and the character has reached the platform it
+        // climbed to, while coming off at the bottom leaves the body further below the rope than a
+        // grab measured with the same margin as the release can reach. The rope stays one drag away
+        // in either case, which is what a touch player expects from a rope it has just ridden. Only
+        // a leap needs the cooldown, since that leaves along the rope instead of past its end.
+        cancel_ladder(player, false);
     }
 }
 
-void PlayerClimbState::cancel_ladder(Player &player) const {
+void PlayerClimbState::cancel_ladder(Player &player, bool cooldown) const {
     player.set_state(Char::State::FALL);
     player.set_ladder({});
 
-    // Leaving a rope is followed by a moment in which no rope can be grabbed. The key that let go of
-    // this one is still held, and the ladder check now runs every frame it is held, so without this a
-    // leap off a rope or a descent that runs out at the bottom is undone by the next frame's grab.
+    if (!cooldown) {
+        return;
+    }
+
+    // Leaping off a rope is followed by a moment in which no rope can be grabbed. The key that held
+    // this one is still down, and the ladder check now runs every frame it is held, so without this
+    // the leap - which leaves along the rope rather than past an end of it - is undone by the next
+    // frame's grab.
     player.set_climb_cooldown();
 }
 }  // namespace ms
