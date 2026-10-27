@@ -49,6 +49,10 @@ public:
     // space, where only out.advance is meaningful) or if the bridge is unavailable.
     static bool rasterize(uint32_t codepoint, float px_size, bool bold, GlyphBitmap &out);
 
+    // The advance the platform renderer gives a code point at the given pixel size, without
+    // drawing it. Returns false if the bridge is unavailable.
+    static bool measure(uint32_t codepoint, float px_size, bool bold, float &advance);
+
     static bool available();
 };
 }  // namespace ms

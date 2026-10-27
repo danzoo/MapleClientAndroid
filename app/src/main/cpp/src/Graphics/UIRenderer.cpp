@@ -21,7 +21,7 @@
 
 namespace ms {
 void UIRenderer::flush() {
-    if (ui_quads_.empty() && ui_circles_.empty()) {
+    if (empty()) {
         return;
     }
 
@@ -87,12 +87,15 @@ void UIRenderer::flush() {
                         GL_ONE,
                         GL_ONE_MINUS_SRC_ALPHA);
 
-    // Coordinates are divided by the layout size to land in clip space, while the viewport is the
-    // native target: that ratio is what magnifies every window, button and glyph up to native pixel
-    // density in a single rasterisation, rather than drawing small and stretching afterwards.
-    graphics.set_text_scale(static_cast<float>(target_width) / static_cast<float>(layout_width));
+    // Geometry is mapped from the layout size to the native target, which is what magnifies every
+    // window, button and picture up to native pixel density in a single rasterisation, rather than
+    // drawing small and stretching afterwards. The lettering in the same batch is already measured
+    // in the target's own pixels, so flush_ui walks the batch once and switches the screensize
+    // between the runs instead of drawing all the text last - doing that was what let the status
+    // bar's name and the chat line float over windows opened after them.
     graphics.bind_atlas(graphics.ui_atlas_);
-    graphics.flush_batch(ui_quads_, ui_circles_, layout_width, layout_height);
+    graphics.flush_ui(ui_quads_, ui_circles_,
+                      layout_width, layout_height, target_width, target_height);
 
     // Nothing else is expected to read this target while the frame is still open, so hand the scene
     // pass back the state it left.

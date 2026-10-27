@@ -578,6 +578,10 @@ namespace ms {
         // pixel density instead of being drawn small and stretched over the box afterwards.
         UIRenderer::get().set_native_size(box_width, box_height);
 
+        // Both passes magnify by a ratio of this box to their own screen, and text has to be
+        // rasterised at that ratio to reach the screen one texel per pixel.
+        GraphicsGL::get().set_output_size(box_width, box_height);
+
         glViewport(offset_x_, offset_y_, box_width, box_height);
         // Keeps the bars black, since the view itself is cleared over its own box.
         glScissor(offset_x_, offset_y_, box_width, box_height);

@@ -38,6 +38,12 @@ android {
         }
     }
 
+    androidResources {
+        // The text rasterizer loads its faces through Typeface.createFromAsset, which needs the
+        // font bytes seekable; a deflated asset gives no random access.
+        noCompress = ["otf", "ttf"]
+    }
+
     sourceSets {
         main {
             assets.srcDirs = ['src/main/assets']

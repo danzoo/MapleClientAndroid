@@ -59,7 +59,9 @@ public:
     void flush();
 
     // The composite step in GraphicsGL::end_scene reads these to blit the interface over the scene.
-    bool empty() const { return ui_quads_.empty() && ui_circles_.empty(); }
+    bool empty() const {
+        return ui_quads_.empty() && ui_circles_.empty();
+    }
 
     GLuint texture() const { return ui_tex_; }
 
@@ -72,6 +74,8 @@ public:
 private:
     bool active_ = false;
 
+    // Geometry and lettering in one vector, in the order they were drawn, so a window opened later
+    // covers the text of a window opened earlier. GraphicsGL::flush_ui splits the run by Quad::text.
     std::vector<GraphicsGL::Quad> ui_quads_;
     std::vector<GraphicsGL::Circle> ui_circles_;
 
