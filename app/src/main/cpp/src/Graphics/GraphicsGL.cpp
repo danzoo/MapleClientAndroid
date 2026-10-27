@@ -37,8 +37,6 @@ namespace ms {
         scene_tex_ = 0;
         scene_width_ = 0;
         scene_height_ = 0;
-
-        text_scale_ = Constants::UI_SCALE;
     }
 
     Error GraphicsGL::init(GLFMDisplay *pApp) {
@@ -339,23 +337,42 @@ namespace ms {
         return UIRenderer::get().active() ? ui_atlas_ : scene_atlas_;
     }
 
-    void GraphicsGL::set_text_scale(float scale) {
-        if (scale <= 0.0f) {
+    void GraphicsGL::set_atlas_text_scale(AtlasState &atlas, float scale) {
+        if (std::abs(scale - atlas.text_scale) <= 0.01f) {
             return;
         }
 
-        if (std::abs(scale - text_scale_) > 0.01f) {
-            text_scale_ = scale;
+        // Rewind the strip because its density moved: every bitmap in it was rasterised for the old
+        // size. Logical metrics survive, since they are the device numbers divided back out of the
+        // density; only the pixels have to be redrawn.
+        atlas.text_scale = scale;
+        atlas.rasters.clear();
+        atlas.glyphs.clear();
+        reset_glyph_region(atlas);
+    }
 
-            // Logical metrics are density independent, so layouts already built stay valid; only the
-            // bitmaps were rasterised at the old density and have to be redone in both atlases.
-            rasters_.clear();
-
-            for (AtlasState *atlas : {&scene_atlas_, &ui_atlas_}) {
-                atlas->glyphs.clear();
-                reset_glyph_region(*atlas);
-            }
+    void GraphicsGL::set_output_size(int32_t box_width, int32_t box_height) {
+        if (box_width <= 0 || box_height <= 0 || VWIDTH <= 0) {
+            return;
         }
+
+        // A fade holds the previous picture and its batches and re-submits them every frame, so
+        // rewinding a strip here would move glyphs out from under the frame being shown.
+        if (locked_) {
+            return;
+        }
+
+        // The scene goes into a texture the size of the view and is then stretched over the box; the
+        // interface is laid out on a screen UI_SCALE smaller and is rasterised straight into a
+        // target the size of the box. Each pass's text has to be built for its own stretch, or the
+        // letters get resampled on the way to the screen.
+        const int16_t layout_width =
+                static_cast<int16_t>(std::ceil(VWIDTH / Constants::UI_SCALE));
+
+        set_atlas_text_scale(scene_atlas_,
+                             static_cast<float>(box_width) / static_cast<float>(VWIDTH));
+        set_atlas_text_scale(ui_atlas_,
+                             static_cast<float>(box_width) / static_cast<float>(layout_width));
     }
 
     void GraphicsGL::font_metrics(Text::Font id, float &px, bool &bold) {
@@ -404,12 +421,12 @@ namespace ms {
         return static_cast<int16_t>(px * 1.35 + 1);
     }
 
-    const GraphicsGL::GlyphRaster &GraphicsGL::get_raster(uint32_t codepoint, Text::Font id) {
+    int16_t GraphicsGL::glyph_advance(uint32_t codepoint, Text::Font id) {
         uint64_t key = (static_cast<uint64_t>(id) << 32) | codepoint;
 
-        auto cached = rasters_.find(key);
+        auto cached = advance_cache_.find(key);
 
-        if (cached != rasters_.end()) {
+        if (cached != advance_cache_.end()) {
             return cached->second;
         }
 
@@ -417,32 +434,60 @@ namespace ms {
         bool bold;
         font_metrics(id, px, bold);
 
+        float advance = 0.0f;
+        AndroidText::measure(codepoint, px, bold, advance);
+
+        return advance_cache_.emplace(key,
+                                      static_cast<int16_t>(std::lround(advance))).first->second;
+    }
+
+    const GraphicsGL::GlyphRaster &
+    GraphicsGL::get_raster(uint32_t codepoint, Text::Font id, AtlasState &atlas) {
+        uint64_t key = (static_cast<uint64_t>(id) << 32) | codepoint;
+
+        auto cached = atlas.rasters.find(key);
+
+        if (cached != atlas.rasters.end()) {
+            return cached->second;
+        }
+
+        float px;
+        bool bold;
+        font_metrics(id, px, bold);
+
+        const float density = atlas.text_scale;
+
         GlyphBitmap bmp;
-        AndroidText::rasterize(codepoint, px * text_scale_, bold, bmp);
+        AndroidText::rasterize(codepoint, px * density, bold, bmp);
 
         GlyphRaster raster;
 
-        // Advance is always meaningful, even for blank glyphs (a space has no ink but still moves
-        // the pen). Convert back to logical pixels so layout stays density independent.
-        raster.ax = static_cast<GLshort>(std::lround(bmp.advance / text_scale_));
+        // The advance is shared by every atlas so a layout counted in one pass still fits the glyph
+        // drawn in the other. Blank glyphs (a space) have no ink but still move the pen.
+        raster.ax = glyph_advance(codepoint, id);
 
         if (bmp.width > 0 && bmp.height > 0) {
-            raster.bl = static_cast<GLshort>(std::lround(bmp.bearing_x / text_scale_));
-            raster.bt = static_cast<GLshort>(std::lround(bmp.bearing_y / text_scale_));
-            raster.bw = static_cast<GLshort>(std::lround(static_cast<float>(bmp.width) / text_scale_));
-            raster.bh = static_cast<GLshort>(std::lround(static_cast<float>(bmp.height) / text_scale_));
-            raster.nw = bmp.width;
-            raster.nh = bmp.height;
+            // The device box is the truth the glyph is drawn from: its bearings and size exactly as
+            // the rasteriser produced them. The logical box is only ever used to measure a plate
+            // around the ink, where a rounding difference of one pixel is invisible.
+            raster.dx = static_cast<GLshort>(std::lround(bmp.bearing_x));
+            raster.dy = static_cast<GLshort>(std::lround(bmp.bearing_y));
+            raster.nw = static_cast<GLshort>(bmp.width);
+            raster.nh = static_cast<GLshort>(bmp.height);
+            raster.bl = static_cast<GLshort>(std::lround(bmp.bearing_x / density));
+            raster.bt = static_cast<GLshort>(std::lround(bmp.bearing_y / density));
+            raster.bw = static_cast<GLshort>(std::lround(static_cast<float>(bmp.width) / density));
+            raster.bh = static_cast<GLshort>(std::lround(static_cast<float>(bmp.height) / density));
             raster.alpha = std::move(bmp.alpha);
         }
 
-        return rasters_.emplace(key, std::move(raster)).first->second;
+        return atlas.rasters.emplace(key, std::move(raster)).first->second;
     }
 
     const GraphicsGL::Glyph &GraphicsGL::get_glyph(uint32_t codepoint, Text::Font id) {
-        const GlyphRaster &raster = get_raster(codepoint, id);
-        uint64_t key = (static_cast<uint64_t>(id) << 32) | codepoint;
         AtlasState &atlas = active_atlas();
+        const GlyphRaster &raster = get_raster(codepoint, id, atlas);
+        uint64_t key = (static_cast<uint64_t>(id) << 32) | codepoint;
 
         auto cached = atlas.glyphs.find(key);
 
@@ -456,33 +501,53 @@ namespace ms {
         glyph.bt = raster.bt;
         glyph.bw = raster.bw;
         glyph.bh = raster.bh;
+        glyph.dx = raster.dx;
+        glyph.dy = raster.dy;
+        glyph.nw = raster.nw;
+        glyph.nh = raster.nh;
 
         if (raster.nw > 0 && raster.nh > 0) {
-            GLshort w = static_cast<GLshort>(raster.nw);
-            GLshort h = static_cast<GLshort>(raster.nh);
+            const GLshort w = raster.nw;
+            const GLshort h = raster.nh;
+
+            // Every upload carries a frame of transparent texels around the bitmap, so the gutter the
+            // shelf leaves between two glyphs is painted rather than left as whatever the driver put
+            // there. A glyph that is misaligned by a fraction of a pixel can then only ever blend
+            // with nothing, never with its neighbour.
+            const GLshort fw = static_cast<GLshort>(w + 2);
+            const GLshort fh = static_cast<GLshort>(h + 2);
 
             // Shelf-pack into this atlas's glyph strip. A glyph too wide for the rest of the row
             // starts a new row; running off the bottom throws the strip away and starts over, which
             // is cheap because the raster is already cached and only the upload is redone.
-            if (atlas.glyph_x + w + 1 > ATLASW) {
+            if (atlas.glyph_x + fw + 1 > ATLASW) {
                 atlas.glyph_y = static_cast<int16_t>(atlas.glyph_y + atlas.glyph_row_h + 1);
                 atlas.glyph_x = 1;
                 atlas.glyph_row_h = 0;
             }
 
-            if (atlas.glyph_y + h + 1 > atlas.glyph_region_bottom) {
+            if (atlas.glyph_y + fh + 1 > atlas.glyph_region_bottom) {
                 atlas.glyphs.clear();
                 reset_glyph_region(atlas);
             }
 
-            std::vector<uint8_t> rgba(static_cast<size_t>(w) * h * 4);
+            glyph_scratch_.assign(static_cast<size_t>(fw) * fh * 4, 0);
+            uint8_t *dst = glyph_scratch_.data();
 
-            for (size_t i = 0; i < static_cast<size_t>(w) * h; i++) {
-                uint8_t coverage = raster.alpha[i];
-                rgba[i * 4 + 0] = coverage;
-                rgba[i * 4 + 1] = coverage;
-                rgba[i * 4 + 2] = coverage;
-                rgba[i * 4 + 3] = 255;
+            for (GLshort row = 0; row < h; row++) {
+                uint8_t *drow = dst + (static_cast<size_t>(row) + 1) * fw * 4;
+
+                for (GLshort col = 0; col < w; col++) {
+                    const uint8_t coverage = raster.alpha[static_cast<size_t>(row) * w + col];
+                    uint8_t *texel = drow + (static_cast<size_t>(col) + 1) * 4;
+
+                    // Only the coverage channel is ever read back, by the shader's text branch; the
+                    // rest is filled the way a sprite texel would be so the atlas stays uniform.
+                    texel[0] = coverage;
+                    texel[1] = coverage;
+                    texel[2] = coverage;
+                    texel[3] = 255;
+                }
             }
 
             glBindTexture(GL_TEXTURE_2D, atlas.texture);
@@ -491,18 +556,21 @@ namespace ms {
                             0,
                             atlas.glyph_x,
                             atlas.glyph_y,
-                            w,
-                            h,
+                            fw,
+                            fh,
                             GL_RGBA,
                             GL_UNSIGNED_BYTE,
-                            rgba.data());
+                            dst);
 
-            glyph.offset = Offset(atlas.glyph_x, atlas.glyph_y, w, h);
+            glyph.offset = Offset(static_cast<GLshort>(atlas.glyph_x + 1),
+                                  static_cast<GLshort>(atlas.glyph_y + 1),
+                                  w,
+                                  h);
 
-            atlas.glyph_x = static_cast<int16_t>(atlas.glyph_x + w + 1);
+            atlas.glyph_x = static_cast<int16_t>(atlas.glyph_x + fw + 1);
 
-            if (h > atlas.glyph_row_h) {
-                atlas.glyph_row_h = h;
+            if (fh > atlas.glyph_row_h) {
+                atlas.glyph_row_h = fh;
             }
         }
 
@@ -921,7 +989,7 @@ namespace ms {
                     continue;
                 }
 
-                wordwidth += graphics_.get_raster(c, id_).ax;
+                wordwidth += graphics_.glyph_advance(c, id_);
 
                 if (wordwidth > max_width_) {
                     if (last - first == 1) {
@@ -955,7 +1023,7 @@ namespace ms {
 
         for (size_t pos = first; pos < last; pos++) {
             auto c = text[pos];
-            const GlyphRaster &ch = graphics_.get_raster(c, id_);
+            const int16_t advance = graphics_.glyph_advance(c, id_);
 
             advances_.push_back(ax_);
 
@@ -967,7 +1035,7 @@ namespace ms {
                 continue;
             }
 
-            ax_ += ch.ax;
+            ax_ += advance;
 
             if (width_ < ax_) {
                 width_ = ax_;
@@ -1336,6 +1404,33 @@ namespace ms {
         GLshort maxheight =
                 vertical.second() > 0 ? vertical.second() : SCREEN.bottom();
 
+        // Text is submitted in the device pixels of the target it is composited onto, at the density
+        // the glyphs were rasterised for. Everything else in the same pass is still in logical pixels
+        // and gets magnified, but a letter that goes through that magnification arrives as a blurred
+        // average of itself - and, because the squeeze is not the same at every position, the strokes
+        // of one word come out a shade heavier than the strokes of the next.
+        const float density = active_atlas().text_scale;
+
+        auto to_device = [density](int32_t logical) {
+            return static_cast<GLshort>(std::lround(logical * density));
+        };
+
+        const GLshort dev_min = to_device(minheight);
+        const GLshort dev_max = to_device(maxheight);
+        // The old limit was ten logical pixels of overhang before a glyph was dropped outright; in
+        // device pixels it is that many times the density.
+        const int32_t max_trim = std::lround(10 * density);
+
+        // Interface lettering is queued with the rest of the interface, in the order the windows drew
+        // it, and only flagged, so that a window opened later still covers an earlier one's text.
+        auto emit_text = [this](GLshort left, GLshort right, GLshort top, GLshort bottom,
+                                const Offset &offset, const Color &color) {
+            std::vector<Quad> &batch = batch_text_quads();
+
+            batch.emplace_back(left, right, top, bottom, offset, color, 0.0f);
+            batch.back().text = true;
+        };
+
         switch (background) {
             case Text::Background::NAMETAG: {
                 // If ever changing code in here confirm placements with map 10000
@@ -1398,27 +1493,26 @@ namespace ms {
                     GLshort right = ink_right + NAMETAG_PAD;
                     Color ntcolor = Color(0.0f, 0.0f, 0.0f, 0.6f);
 
-                    batch_quads().emplace_back(left,
-                                               right,
-                                               ink_top,
-                                               ink_bottom,
-                                               null_offset_,
-                                               ntcolor,
-                                               0.0f);
-                    batch_quads().emplace_back(left - 1,
-                                               left,
-                                               ink_top + 1,
-                                               ink_bottom - 1,
-                                               null_offset_,
-                                               ntcolor,
-                                               0.0f);
-                    batch_quads().emplace_back(right,
-                                               right + 1,
-                                               ink_top + 1,
-                                               ink_bottom - 1,
-                                               null_offset_,
-                                               ntcolor,
-                                               0.0f);
+                    // The plate rides with the ink it is behind, so it is submitted in the same
+                    // device-pixel batch instead of being squeezed into the stretched picture.
+                    emit_text(to_device(left),
+                              to_device(right),
+                              to_device(ink_top),
+                              to_device(ink_bottom),
+                              null_offset_,
+                              ntcolor);
+                    emit_text(to_device(left - 1),
+                              to_device(left),
+                              to_device(ink_top + 1),
+                              to_device(ink_bottom - 1),
+                              null_offset_,
+                              ntcolor);
+                    emit_text(to_device(right),
+                              to_device(right + 1),
+                              to_device(ink_top + 1),
+                              to_device(ink_bottom - 1),
+                              null_offset_,
+                              ntcolor);
                 }
 
                 break;
@@ -1447,46 +1541,43 @@ namespace ms {
                     auto c = text[pos];
                     const Glyph &ch = get_glyph(c, id);
 
-                    GLshort char_x = x + ax + ch.bl;
-                    GLshort char_y = y + ay - ch.bt;
-                    GLshort char_width = ch.bw;
-                    GLshort char_height = ch.bh;
-                    GLshort char_bottom = char_y + char_height;
-
-                    Offset offset = ch.offset;
-
-                    if (char_bottom > maxheight) {
-                        GLshort bottom_adjust = char_bottom - maxheight;
-
-                        if (bottom_adjust < 10) {
-                            offset.bottom -= bottom_adjust;
-                            char_bottom -= bottom_adjust;
-                        } else {
-                            continue;
-                        }
-                    }
-
-                    if (char_y < minheight) {
-                        continue;
-                    }
-
                     if (ax == 0 && c == ' ') {
                         continue;
                     }
 
                     ax += ch.ax;
 
-                    if (char_width <= 0 || char_height <= 0) {
+                    if (ch.nw <= 0 || ch.nh <= 0) {
                         continue;
                     }
 
-                    batch_quads().emplace_back(char_x,
-                                               char_x + char_width,
-                                               char_y,
-                                               char_bottom,
-                                               offset,
-                                               abscolor,
-                                               0.0f);
+                    // The pen is advanced in logical pixels, because that is what the layout counts
+                    // in, and only the pen itself is snapped. Where the ink starts inside it and how
+                    // far it reaches are taken from the bitmap's own device box, so the glyph is
+                    // painted with the exact pixels the platform renderer produced.
+                    const GLshort char_x = to_device(static_cast<int32_t>(x) + ax - ch.ax) + ch.dx;
+                    const GLshort char_y = to_device(static_cast<int32_t>(y) + ay) - ch.dy;
+                    GLshort char_right = static_cast<GLshort>(char_x + ch.nw);
+                    GLshort char_bottom = static_cast<GLshort>(char_y + ch.nh);
+
+                    Offset offset = ch.offset;
+
+                    if (char_bottom > dev_max) {
+                        const GLshort bottom_adjust = char_bottom - dev_max;
+
+                        if (bottom_adjust < max_trim) {
+                            offset.bottom = static_cast<GLshort>(offset.bottom - bottom_adjust);
+                            char_bottom = static_cast<GLshort>(char_bottom - bottom_adjust);
+                        } else {
+                            continue;
+                        }
+                    }
+
+                    if (char_y < dev_min) {
+                        continue;
+                    }
+
+                    emit_text(char_x, char_right, char_y, char_bottom, offset, abscolor);
                 }
             }
         }
@@ -1641,6 +1732,18 @@ namespace ms {
         draw_filter(scene_tex_);
         glEnable(GL_BLEND);
 
+        // World lettering goes onto the surface, not into the picture that was just stretched over
+        // it: the scene has to be magnified to fit the box and text that rides along comes out of it
+        // soft. Its coordinates are the box's own pixels, so it is one texel per pixel and as sharp
+        // as the interface's.
+        if (!text_quads_.empty()) {
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            set_scene_attribs();
+            flush_batch(text_quads_,
+                        static_cast<int16_t>(box_width),
+                        static_cast<int16_t>(box_height));
+        }
+
         if (!UIRenderer::get().empty()) {
             // The interface goes onto the surface through the same single stretch the scene just
             // went through, never into the scene texture first - being resampled twice is what
@@ -1701,23 +1804,87 @@ namespace ms {
         return UIRenderer::get().active() ? UIRenderer::get().circles() : circles_;
     }
 
+    std::vector<GraphicsGL::Quad> &GraphicsGL::batch_text_quads() {
+        // The interface keeps its lettering in the same ordered batch as its geometry, so the two
+        // still cover each other the way they were drawn; the scene has to hold its lettering aside
+        // because that one is not composited until the stretched picture is already on the surface.
+        return UIRenderer::get().active() ? UIRenderer::get().quads() : text_quads_;
+    }
+
+    void GraphicsGL::flush_batch(const std::vector<Quad> &quads,
+                                  int16_t screen_width,
+                                  int16_t screen_height) {
+        static const std::vector<Circle> no_circles;
+
+        flush_batch(quads, no_circles, screen_width, screen_height);
+    }
+
     void GraphicsGL::flush_batch(const std::vector<Quad> &quads,
                                   const std::vector<Circle> &circles,
                                   int16_t screen_width,
                                   int16_t screen_height) {
-        if (quads.empty() && circles.empty()) {
+        submit(quads.data(), quads.size(), circles, screen_width, screen_height);
+    }
+
+    void GraphicsGL::flush_ui(const std::vector<Quad> &quads,
+                              const std::vector<Circle> &circles,
+                              int16_t layout_width,
+                              int16_t layout_height,
+                              int16_t target_width,
+                              int16_t target_height) {
+        size_t first = 0;
+        bool circles_sent = circles.empty();
+
+        while (first < quads.size()) {
+            const bool text = quads[first].text;
+            size_t last = first + 1;
+
+            while (last < quads.size() && quads[last].text == text) {
+                ++last;
+            }
+
+            const bool with_circles = !text && !circles_sent;
+            circles_sent = circles_sent || with_circles;
+
+            static const std::vector<Circle> no_circles;
+
+            submit(quads.data() + first,
+                   last - first,
+                   with_circles ? circles : no_circles,
+                   text ? target_width : layout_width,
+                   text ? target_height : layout_height);
+
+            first = last;
+        }
+
+        if (!circles_sent) {
+            // A pass with nothing but lettering in it still has to draw its circles somewhere.
+            submit(nullptr, 0, circles, layout_width, layout_height);
+        }
+    }
+
+    void GraphicsGL::submit(const Quad *quads,
+                            size_t count,
+                            const std::vector<Circle> &circles,
+                            int16_t screen_width,
+                            int16_t screen_height) {
+        if (count == 0 && circles.empty()) {
             return;
         }
 
         // A batch's coordinates are divided by this size to land in clip space, so drawing the
-        // interface against a smaller screen is what magnifies every window, button and letter of
+        // interface against a smaller screen is what magnifies every window, button and picture of
         // it together. Nothing else about the submission changes.
         glUseProgram(shader_program_);
         glUniform2f(uniform_screen_size_, screen_width, screen_height);
 
         std::vector<Quad::Vertex> triangles;
         std::vector<Circle::Vertex> circle_vertices;
-        for (const Quad &quad: quads) {
+
+        triangles.reserve(count * 6);
+        for (size_t i = 0; i < count; ++i) {
+            const Quad &quad = quads[i];
+
             triangles.push_back(quad.vertices[0]);
             triangles.push_back(quad.vertices[1]);
             triangles.push_back(quad.vertices[2]);
@@ -1768,6 +1935,7 @@ namespace ms {
         if (!locked_) {
             quads_.clear();
             circles_.clear();
+            text_quads_.clear();
             UIRenderer::get().clear();
         }
     }

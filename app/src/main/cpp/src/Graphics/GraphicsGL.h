@@ -127,10 +127,12 @@ namespace ms {
         // the coordinates it was drawn at, so the size only changes once the scene is live again.
         void sync_screen_size();
 
-        // Tell the text layer how many device pixels one logical pixel of interface covers. Glyphs
-        // are rasterised at exactly that density so they land one-to-one on the interface target and
-        // stay as sharp as the rest of the OS. A change throws the glyph cache away.
-        void set_text_scale(float scale);
+        // Adopt the size, in real surface pixels, of the letterboxed view box this frame is
+        // composited onto. Each pass draws its text into a target of its own size, so the two text
+        // densities come straight from this: the scene is stretched by box/view, the interface by
+        // box/(view/UI_SCALE). A pass whose density moved throws its glyphs away, since the bitmaps
+        // were rasterised for the old one.
+        void set_output_size(int32_t box_width, int32_t box_height);
 
         // Start the pass the scene is drawn into. Filtering has to happen after the picture is
         // composited: every bitmap sits in one atlas with nothing between them, so smoothing a
@@ -241,6 +243,12 @@ namespace ms {
                     }
                 }
             }
+
+            // Set for lettering, whose vertices are already in the target's own device pixels while
+            // every other quad is laid out on the pass's smaller logical screen. The interface batch
+            // keeps both in one vector so windows still cover each other in the order they drew, and
+            // splits it into runs by this flag at submission.
+            bool text = false;
         };
 
         struct Circle {
@@ -277,8 +285,10 @@ namespace ms {
             }
         };
 
-        // One glyph's metrics in logical pixels plus the rect of its native-resolution bitmap in
-        // whichever atlas it was packed into.
+        // One glyph's metrics plus the rect of its device-pixel bitmap in the atlas it was packed
+        // into. The logical box (bw/bh/bl/bt) is what the layout and the nametag plate are measured
+        // with; the device box (dx/dy/nw/nh) is what the glyph is actually drawn with, because a
+        // glyph is rasterised at the exact density of the target it lands on and never stretched.
         struct Glyph {
             GLshort ax = 0;
             GLshort ay = 0;
@@ -286,19 +296,26 @@ namespace ms {
             GLshort bh = 0;
             GLshort bl = 0;
             GLshort bt = 0;
+            GLshort dx = 0;
+            GLshort dy = 0;
+            GLshort nw = 0;
+            GLshort nh = 0;
             Offset offset;
         };
 
-        // The platform-rendered bitmap a Glyph's metrics were derived from, kept so the same raster
-        // can be packed into either atlas without going back over JNI.
+        // The platform-rendered bitmap a Glyph's metrics were derived from, kept so the strip of one
+        // atlas never has to go back over JNI. It belongs to one atlas because its size is that
+        // atlas's density; the logical fields are the same numbers divided back out of it.
         struct GlyphRaster {
             GLshort ax = 0;
             GLshort bl = 0;
             GLshort bt = 0;
             GLshort bw = 0;
             GLshort bh = 0;
-            int32_t nw = 0;
-            int32_t nh = 0;
+            GLshort dx = 0;
+            GLshort dy = 0;
+            GLshort nw = 0;
+            GLshort nh = 0;
             std::vector<uint8_t> alpha;
         };
 
@@ -314,6 +331,12 @@ namespace ms {
             size_t rlid = 1;
             size_t wasted = 0;
             std::unordered_map<size_t, Offset> offsets;
+
+            // Device pixels one logical pixel of this pass's coordinates covers. Glyphs are
+            // rasterised at exactly this density and drawn in device pixels, so a glyph is one texel
+            // per screen pixel and is never interpolated.
+            float text_scale = 1.0f;
+            std::unordered_map<uint64_t, GlyphRaster> rasters;
 
             // Bottom of the glyph strip; sprites are packed strictly below it so the shader's
             // fontregion test never mistakes one for the other.
@@ -334,15 +357,25 @@ namespace ms {
 
         void reset_glyph_region(AtlasState &atlas);
 
+        // Give one atlas the device pixels per logical pixel it is about to be stretched by, and
+        // rewind its glyph strip if that is not the density its glyphs were made for.
+        void set_atlas_text_scale(AtlasState &atlas, float scale);
+
         // The atlas the current draw call belongs to: the interface while its pass is open, the
         // scene otherwise.
         AtlasState &active_atlas();
 
         const Offset &get_offset(AtlasState &atlas, const img::bitmap &bmp);
 
-        // Metrics (and the raster behind them) for one code point in one face, independent of any
-        // atlas. Rasterises over JNI on first use.
-        const GlyphRaster &get_raster(uint32_t codepoint, Text::Font id);
+        // Metrics and the platform bitmap behind them, rasterised at the density of one atlas and
+        // cached in it. Rasterises over JNI on first use.
+        const GlyphRaster &get_raster(uint32_t codepoint, Text::Font id, AtlasState &atlas);
+
+        // The advance one code point costs in a face, in logical pixels. Measured at the logical
+        // size and shared by both atlases, because this is the one text metric that must not depend
+        // on density: a layout counts in it, while the glyph is drawn from whichever atlas it ends
+        // up in.
+        int16_t glyph_advance(uint32_t codepoint, Text::Font id);
 
         // get_raster plus the glyph packed into the active atlas, ready to draw.
         const Glyph &get_glyph(uint32_t codepoint, Text::Font id);
@@ -418,11 +451,37 @@ namespace ms {
 
         std::vector<Circle>& batch_circles();
 
+        std::vector<Quad>& batch_text_quads();
+
         // Submit one batch, mapping its coordinates onto a screen of the given size.
         void flush_batch(const std::vector<Quad> &quads,
                          const std::vector<Circle> &circles,
                          int16_t screen_width,
                          int16_t screen_height);
+
+        // The same with no circles, for a text batch.
+        void flush_batch(const std::vector<Quad> &quads,
+                         int16_t screen_width,
+                         int16_t screen_height);
+
+        // Submit the interface batch. Geometry is mapped from the UI_SCALE-smaller layout screen and
+        // lettering from the target's own pixels, so the batch is walked in submission order and
+        // broken into runs of the two; keeping the order is what lets a window drawn later cover a
+        // window drawn earlier. Circles are logical-space and ride with the first geometry run.
+        void flush_ui(const std::vector<Quad> &quads,
+                      const std::vector<Circle> &circles,
+                      int16_t layout_width,
+                      int16_t layout_height,
+                      int16_t target_width,
+                      int16_t target_height);
+
+        // One glDrawArrays of quads, with the vertices held in a vector rather than a batch, so a run
+        // of a mixed batch can be submitted on its own.
+        void submit(const Quad *quads,
+                    size_t count,
+                    const std::vector<Circle> &circles,
+                    int16_t screen_width,
+                    int16_t screen_height);
 
         // Leave the scene program, its atlas and its attribute pointers bound, as the next batch
         // submission and the bitmaps packed outside the frame both expect.
@@ -433,6 +492,13 @@ namespace ms {
 
         std::vector<Quad> quads_;
         std::vector<Circle> circles_;
+
+        // Text is batched apart from everything else. Its vertices are in the target's own device
+        // pixels while every other quad is in the pass's logical pixels, so the two need a different
+        // screensize uniform and the scene's share has to wait for the surface rather than go into
+        // the scene texture that gets stretched.
+        std::vector<Quad> text_quads_;
+
         GLuint VBO_;
 
         GLint shader_program_;
@@ -467,11 +533,12 @@ namespace ms {
         // that packing a picture never has to allocate and zero a fresh buffer for it.
         std::vector<uint8_t> atlas_scratch_;
 
-        // Platform-rendered glyph bitmaps, shared by both atlases: metrics are density independent
-        // and the raster is packed into whichever atlas asks for it.
-        std::unordered_map<uint64_t, GlyphRaster> rasters_;
+        // Scratch for a glyph upload: its bitmap inside a frame of transparent texels, so the gutter
+        // the packer leaves around it is defined instead of whatever the driver left there.
+        std::vector<uint8_t> glyph_scratch_;
 
-        // Device pixels per logical interface pixel; glyphs are rasterised at exactly this density.
-        float text_scale_;
+        // Logical advances, keyed by face and code point. Survives a density change: it is the one
+        // metric a layout already built has to keep agreeing with.
+        std::unordered_map<uint64_t, int16_t> advance_cache_;
     };
 }  // namespace ms

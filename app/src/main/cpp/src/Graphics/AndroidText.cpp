@@ -27,6 +27,7 @@ namespace {
 JavaVM *g_vm = nullptr;
 jclass g_class = nullptr;          // global ref to openMapleClient/NativeText
 jmethodID g_rasterize = nullptr;   // static Bitmap rasterize(int, float, boolean, float[])
+jmethodID g_measure = nullptr;     // static float measure(int, float, boolean)
 
 JNIEnv *current_env() {
     if (!g_vm) {
@@ -98,7 +99,7 @@ jclass load_helper_class(JNIEnv *env, ANativeActivity *activity) {
 }  // namespace
 
 bool AndroidText::init(GLFMDisplay *display) {
-    if (g_class && g_rasterize) {
+    if (g_class && g_rasterize && g_measure) {
         return true;
     }
 
@@ -135,12 +136,45 @@ bool AndroidText::init(GLFMDisplay *display) {
         return false;
     }
 
+    g_measure = env->GetStaticMethodID(g_class, "measure", "(IFZ)F");
+
+    if (!g_measure) {
+        env->ExceptionClear();
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "measure method not found");
+        return false;
+    }
+
     __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "bridge ready");
     return true;
 }
 
 bool AndroidText::available() {
-    return g_class != nullptr && g_rasterize != nullptr;
+    return g_class != nullptr && g_rasterize != nullptr && g_measure != nullptr;
+}
+
+bool AndroidText::measure(uint32_t codepoint, float px_size, bool bold, float &advance) {
+    if (!available()) {
+        return false;
+    }
+
+    JNIEnv *env = current_env();
+
+    if (!env) {
+        return false;
+    }
+
+    jfloat result = env->CallStaticFloatMethod(g_class, g_measure,
+                                               static_cast<jint>(codepoint),
+                                               static_cast<jfloat>(px_size),
+                                               static_cast<jboolean>(bold));
+
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        return false;
+    }
+
+    advance = result;
+    return true;
 }
 
 bool AndroidText::rasterize(uint32_t codepoint, float px_size, bool bold, GlyphBitmap &out) {
