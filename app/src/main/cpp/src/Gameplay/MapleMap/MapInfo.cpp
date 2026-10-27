@@ -83,9 +83,10 @@ std::optional<std::reference_wrapper<const Seat>> MapInfo::findseat(
 
 std::optional<std::reference_wrapper<const Ladder>> MapInfo::findladder(
     Point<int16_t> position,
-    bool upwards) const {
+    bool upwards,
+    bool onground) const {
     for (const auto &ladder : ladders_) {
-        if (ladder.inrange(position, upwards)) {
+        if (ladder.inrange(position, upwards, onground)) {
             return ladder;
         }
     }
@@ -119,24 +120,36 @@ bool Ladder::is_ladder() const {
     return ladder_;
 }
 
-bool Ladder::inrange(Point<int16_t> position, bool upwards) const {
-    auto hor =
-        Range<int16_t>::symmetric(position.x(), GameAttributes::CLIMB_RANGE_X);
+bool Ladder::inrange(Point<int16_t> position,
+                     bool upwards,
+                     bool onground) const {
+    // A rope reached from a platform and a rope passed in mid-air are aimed differently. Standing at
+    // a ropehead with a joystick wants a forgiving window; leaping across one is not aimed at all,
+    // and the forgiving window grabs it by accident. Only the airborne upward approach is held
+    // narrow, because a grab may reach less far past the rope's end than Ladder::felloff measures
+    // with, but never further.
+    const bool narrow = upwards && !onground;
+    const int16_t range_x = narrow ? GameAttributes::CLIMB_RANGE_X_AIR
+                                   : GameAttributes::CLIMB_RANGE_X;
+    const int16_t margin_y = narrow ? GameAttributes::CLIMB_MARGIN_Y_AIR
+                                    : GameAttributes::CLIMB_MARGIN_Y;
+
+    auto hor = Range<int16_t>::symmetric(position.x(), range_x);
     auto ver = Range<int16_t>(y1_, y2_);
 
-    int16_t y = upwards ? position.y() - GameAttributes::CLIMB_MARGIN_Y
-                        : position.y() + GameAttributes::CLIMB_MARGIN_Y;
+    int16_t y = upwards ? position.y() - margin_y : position.y() + margin_y;
 
     return hor.contains(x_) && ver.contains(y);
 }
 
 bool Ladder::felloff(int16_t y, bool downwards) const {
-    // The same margin the grab is measured with, and it has to be the same one: in every one of the
-    // shipped maps the rope's top sits exactly two pixels below the platform it hangs from, so a
-    // character standing at the top is two pixels above y1. Asked whether it has fallen off with a
-    // narrower margin than the grab used, the answer is yes on the very frame the grab lands, which
-    // cancels the climb before it can move - the grab then arrives again next frame, so the body
-    // plays the climbing animation without ever leaving the platform.
+    // The margin the grab downwards from a platform is measured with, and it has to be at least as
+    // wide as any grab's: in every one of the shipped maps the rope's top sits exactly two pixels
+    // below the platform it hangs from, so a character standing at the top is two pixels above y1.
+    // Asked whether it has fallen off with a narrower margin than the grab used, the answer is yes
+    // on the very frame the grab lands, which cancels the climb before it can move - the grab then
+    // arrives again next frame, so the body plays the climbing animation without ever leaving the
+    // platform.
     constexpr int16_t margin = GameAttributes::CLIMB_MARGIN_Y;
 
     int16_t dy = downwards ? y + margin : y - margin;

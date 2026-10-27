@@ -41,7 +41,7 @@ public:
 
     bool is_ladder() const;
 
-    bool inrange(Point<int16_t> position, bool upwards) const;
+    bool inrange(Point<int16_t> position, bool upwards, bool onground) const;
 
     bool felloff(int16_t y, bool downwards) const;
 
@@ -73,9 +73,11 @@ public:
         Point<int16_t> position) const;
     // Find a ladder at the player's position
     // !upwards - implies downwards
+    // onground - whether the character is standing on terrain rather than flying past
     std::optional<std::reference_wrapper<const Ladder>> findladder(
         Point<int16_t> position,
-        bool upwards) const;
+        bool upwards,
+        bool onground) const;
 
 private:
     int32_t field_limit_;

@@ -153,6 +153,6 @@ public:
     void update_state(Player &player) const override;
 
 private:
-    void cancel_ladder(Player &player) const;
+    void cancel_ladder(Player &player, bool cooldown) const;
 };
 }  // namespace ms

@@ -32,11 +32,20 @@ namespace ms::GameAttributes {
     // snapped onto the rope's own x, so a wide window cannot make it drift.
     constexpr int16_t CLIMB_RANGE_X = 16;
 
-    // The vertical margin a rope's two ends are measured with. One number serves both the grab and
-    // the release test, and it has to stay one: a grab allowed inside a wider band than the release
-    // is tested with is cancelled on the next tick, and with the climb cooldown that reads as being
-    // dropped off the rope.
+    // The vertical margin a climb is measured with: both the grab downwards from a platform and the
+    // release test read this one number, and for those two it cannot be two numbers - a downward
+    // grab reaches further past the rope's bottom than a release tested with a narrower margin
+    // allows, so it would be cancelled on the frame it landed and, with the climb cooldown behind
+    // it, read as being dropped off the rope. A grab may use a narrower margin than this.
     constexpr int16_t CLIMB_MARGIN_Y = 8;
+
+    // A character in mid-air that drags up past a rope is not aiming at it, and the window above is
+    // wide enough that every leap across a rope snatched the character onto it. Only that one
+    // approach - airborne, upwards - keeps the reference client's own bands; the grabs made from a
+    // platform, and the downward ones, stay as forgiving as a joystick needs. Nothing here may make
+    // the vertical reach exceed CLIMB_MARGIN_Y, which is what the release test is measured with.
+    constexpr int16_t CLIMB_RANGE_X_AIR = 10;
+    constexpr int16_t CLIMB_MARGIN_Y_AIR = 5;
 
     // The size the login and character selection screens are designed around.
     constexpr int16_t LOGIN_WIDTH = 800;
