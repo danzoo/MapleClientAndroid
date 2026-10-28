@@ -44,6 +44,7 @@
 
 // Set by the app to receive controller axes; glfm has no other use for them.
 void (*glfmJoystickAxisFunc)(GLFMDisplay *display, double x, double y) = NULL;
+void (*glfmJoystickAxis2Func)(GLFMDisplay *display, double x, double y) = NULL;
 
 // MARK: - Platform data (global singleton)
 
@@ -1131,6 +1132,14 @@ static bool glfm__handleBackButton(GLFMPlatformData *platformData) {
     return !glfm__wasJavaExceptionThrown(jni) && handled;
 }
 
+// Whether a key event came off a controller rather than a keyboard. A gamepad reports its d-pad
+// under AKEYCODE_DPAD_*, the same codes a keyboard's arrows use, and only the source tells them
+// apart.
+static bool glfm__is_gamepad_key(AInputEvent *event) {
+    const int32_t source = AInputEvent_getSource(event);
+    return (source & AINPUT_SOURCE_GAMEPAD) == AINPUT_SOURCE_GAMEPAD;
+}
+
 static bool glfm__onKeyEvent(GLFMPlatformData *platformData, AInputEvent *event) {
     if (!platformData || !platformData->display) {
         return false;
@@ -1294,6 +1303,16 @@ static bool glfm__onKeyEvent(GLFMPlatformData *platformData, AInputEvent *event)
             keyCode = AKEYCODE_MAP[aKeyCode];
         }
 
+        if (keyCode != GLFMKeyCodeUnknown && glfm__is_gamepad_key(event)) {
+            switch (aKeyCode) {
+                case AKEYCODE_DPAD_UP:    keyCode = GLFMKeyCodeGamepadDpadUp; break;
+                case AKEYCODE_DPAD_DOWN:  keyCode = GLFMKeyCodeGamepadDpadDown; break;
+                case AKEYCODE_DPAD_LEFT:  keyCode = GLFMKeyCodeGamepadDpadLeft; break;
+                case AKEYCODE_DPAD_RIGHT: keyCode = GLFMKeyCodeGamepadDpadRight; break;
+                default: break;
+            }
+        }
+
         int modifiers = 0;
         if ((aMetaState & AMETA_SHIFT_ON) != 0) {
             modifiers |= GLFMKeyModifierShift;
@@ -1366,10 +1385,17 @@ static bool glfm__onTouchEvent(GLFMPlatformData *platformData, AInputEvent *even
 
     // Controller axes are not touches; reporting them as one would click at the screen's origin.
     if ((AInputEvent_getSource(event) & AINPUT_SOURCE_CLASS_JOYSTICK) != 0) {
-        if (glfmJoystickAxisFunc != NULL && AMotionEvent_getPointerCount(event) > 0) {
-            glfmJoystickAxisFunc(display,
-                                 AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_X, 0),
-                                 AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_Y, 0));
+        if (AMotionEvent_getPointerCount(event) > 0) {
+            if (glfmJoystickAxisFunc != NULL) {
+                glfmJoystickAxisFunc(display,
+                                     AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_X, 0),
+                                     AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_Y, 0));
+            }
+            if (glfmJoystickAxis2Func != NULL) {
+                glfmJoystickAxis2Func(display,
+                                      AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_Z, 0),
+                                      AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_RZ, 0));
+            }
         }
         return true;
     }

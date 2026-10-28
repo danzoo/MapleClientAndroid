@@ -64,6 +64,7 @@ public:
         JOYPAD,
         EVENT,
         KEY_CONFIG,
+        GAMEPAD_CONFIG,
         OPTION_MENU,
         QUIT,
         CHAR_INFO,

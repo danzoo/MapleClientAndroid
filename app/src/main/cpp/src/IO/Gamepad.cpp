@@ -20,6 +20,7 @@
 #include <optional>
 
 #include "../Constants.h"
+#include "GamepadConfig.h"
 #include "KeyType.h"
 #include "Stage.h"
 #include "UI.h"
@@ -28,56 +29,70 @@
 
 namespace ms {
     namespace {
-        std::optional<Gamepad::Button> to_button(int32_t keycode) {
+        // The four directions in the order a stick is walked through them, low bit first.
+        constexpr Gamepad::Direction kDirections[4] = {
+            Gamepad::Direction::LEFT,
+            Gamepad::Direction::RIGHT,
+            Gamepad::Direction::UP,
+            Gamepad::Direction::DOWN,
+        };
+
+        // Which slot a raw controller code belongs to. A code with no place on the binding window
+        // - the controller's home key - has no slot and so no binding.
+        std::optional<GamepadConfig::Slot> to_slot(int32_t keycode) {
+            using Slot = GamepadConfig::Slot;
+
             switch (keycode) {
                 case GLFMKeyCodeGamepadA:
-                    return Gamepad::Button::A;
+                    return Slot::A;
                 case GLFMKeyCodeGamepadB:
-                    return Gamepad::Button::B;
+                    return Slot::B;
                 case GLFMKeyCodeGamepadX:
-                    return Gamepad::Button::X;
+                    return Slot::X;
                 case GLFMKeyCodeGamepadY:
-                    return Gamepad::Button::Y;
+                    return Slot::Y;
                 case GLFMKeyCodeGamepadLeftShoulder:
-                    return Gamepad::Button::LEFT_SHOULDER;
+                    return Slot::L1;
                 case GLFMKeyCodeGamepadRightShoulder:
-                    return Gamepad::Button::RIGHT_SHOULDER;
+                    return Slot::R1;
                 case GLFMKeyCodeGamepadLeftTrigger:
-                    return Gamepad::Button::LEFT_TRIGGER;
+                    return Slot::L2;
                 case GLFMKeyCodeGamepadRightTrigger:
-                    return Gamepad::Button::RIGHT_TRIGGER;
+                    return Slot::R2;
                 case GLFMKeyCodeGamepadSelect:
-                    return Gamepad::Button::SELECT;
+                    return Slot::SELECT;
                 case GLFMKeyCodeGamepadStart:
-                    return Gamepad::Button::START;
+                    return Slot::START;
                 case GLFMKeyCodeGamepadLeftStick:
-                    return Gamepad::Button::LEFT_STICK;
+                    return Slot::LS_PRESS;
                 case GLFMKeyCodeGamepadRightStick:
-                    return Gamepad::Button::RIGHT_STICK;
-                case GLFMKeyCodeGamepadMode:
-                    return Gamepad::Button::MODE;
+                    return Slot::RS_PRESS;
+                case GLFMKeyCodeGamepadDpadUp:
+                    return Slot::DPAD_UP;
+                case GLFMKeyCodeGamepadDpadRight:
+                    return Slot::DPAD_RIGHT;
+                case GLFMKeyCodeGamepadDpadDown:
+                    return Slot::DPAD_DOWN;
+                case GLFMKeyCodeGamepadDpadLeft:
+                    return Slot::DPAD_LEFT;
                 default:
                     return std::nullopt;
             }
         }
     }  // namespace
 
-    uint32_t Gamepad::bit(Button button) {
-        return 1u << static_cast<uint8_t>(button);
-    }
-
-    bool Gamepad::is_connected() const {
-        return connected_;
+    uint32_t Gamepad::bit(GamepadConfig::Slot slot) {
+        return 1u << static_cast<uint8_t>(slot);
     }
 
     bool Gamepad::on_key(int32_t keycode, bool pressed) {
-        const auto button = to_button(keycode);
+        const auto slot = to_slot(keycode);
 
-        if (!button) {
+        if (!slot) {
             return false;
         }
 
-        const uint32_t held = bit(*button);
+        const uint32_t held = bit(*slot);
         connect_expiry_ = clock::now() + CONNECT_TIMEOUT;
         connected_ = true;
 
@@ -88,7 +103,7 @@ namespace ms {
             }
 
             state_ |= held;
-            press(*button);
+            press(*slot);
         }
         else {
             if (!(state_ & held)) {
@@ -96,109 +111,184 @@ namespace ms {
             }
 
             state_ &= ~held;
-            release(*button);
+            release(*slot);
         }
 
         return true;
     }
 
-    void Gamepad::press(Button button) {
-        const bool in_game = UI::get().get_state_type() == typeid(UIStateGame);
-        const bool modal = in_game && UI::get().is_modal_active();
-        const auto now = clock::now();
-
-        switch (button) {
-            case Button::A:
-                // A jumps, and confirms while a dialog or the menu is open.
-                confirm_held_ = modal;
-
-                if (modal) {
-                    UI::get().send_key(GLFMKeyCodeEnter, true);
-                }
-                else if (in_game) {
-                    Stage::get().send_key(KeyType::Id::ACTION, KeyAction::Id::JUMP, true);
-                }
-                break;
-            case Button::B:
-                // B attacks, and cancels while a dialog or the menu is open.
-                if (modal) {
-                    cancel_held_ = true;
-                    UI::get().send_key(GLFMKeyCodeEscape, true);
-                }
-                else if (in_game) {
-                    tap(KeyAction::Id::ATTACK);
-                    attack_repeat_ = now;
-                }
-                break;
-            case Button::X:
-                if (in_game) {
-                    Stage::get().get_npcs().talk_to_nearest(
-                            Stage::get().get_player().get_position(),
-                            Constants::TALK_RANGE);
-                    talk_repeat_ = now;
-                }
-                break;
-            case Button::Y:
-                if (in_game) {
-                    Stage::get().pick_up_near(Constants::PICKUP_RANGE);
-                    pickup_repeat_ = now;
-                }
-                break;
-            case Button::SELECT:
-                UI::get().send_key(GLFMKeyCodeEscape, true);
-                break;
-            case Button::START:
-                UI::get().send_action(KeyAction::Id::MENU);
-                break;
-            case Button::LEFT_SHOULDER:
-                UI::get().send_action(KeyAction::Id::ITEMS);
-                break;
-            case Button::RIGHT_SHOULDER:
-                UI::get().send_action(KeyAction::Id::SKILLS);
-                break;
-            case Button::LEFT_TRIGGER:
-                UI::get().send_action(KeyAction::Id::STATS);
-                break;
-            case Button::RIGHT_TRIGGER:
-                UI::get().send_action(KeyAction::Id::QUICK_SLOTS);
-                break;
-            case Button::LEFT_STICK:
-                UI::get().send_action(KeyAction::Id::WORLD_MAP);
-                break;
-            case Button::RIGHT_STICK:
-                UI::get().send_action(KeyAction::Id::MINI_MAP);
-                break;
-            case Button::MODE:
-                break;
+    Gamepad::Direction Gamepad::to_direction(int32_t action) {
+        switch (action) {
+            case KeyAction::Id::LEFT:
+                return Direction::LEFT;
+            case KeyAction::Id::RIGHT:
+                return Direction::RIGHT;
+            case KeyAction::Id::UP:
+                return Direction::UP;
+            case KeyAction::Id::DOWN:
+                return Direction::DOWN;
+            default:
+                return Direction::NONE;
         }
     }
 
-    void Gamepad::release(Button button) {
-        const bool in_game = UI::get().get_state_type() == typeid(UIStateGame);
+    GamepadConfig::Slot Gamepad::stick_slot(int stick, Direction direction) {
+        const bool left = stick == 0;
 
-        switch (button) {
-            case Button::A:
-                if (confirm_held_) {
-                    UI::get().send_key(GLFMKeyCodeEnter, false);
-                }
-                else if (in_game) {
-                    Stage::get().send_key(KeyType::Id::ACTION, KeyAction::Id::JUMP, false);
-                }
-
-                confirm_held_ = false;
-                break;
-            case Button::B:
-                if (cancel_held_) {
-                    UI::get().send_key(GLFMKeyCodeEscape, false);
-                    cancel_held_ = false;
-                }
-                break;
-            case Button::SELECT:
-                UI::get().send_key(GLFMKeyCodeEscape, false);
-                break;
+        switch (direction) {
+            case Direction::LEFT:
+                return left ? GamepadConfig::Slot::LS_LEFT
+                            : GamepadConfig::Slot::RS_LEFT;
+            case Direction::RIGHT:
+                return left ? GamepadConfig::Slot::LS_RIGHT
+                            : GamepadConfig::Slot::RS_RIGHT;
+            case Direction::UP:
+                return left ? GamepadConfig::Slot::LS_UP : GamepadConfig::Slot::RS_UP;
+            case Direction::DOWN:
+                return left ? GamepadConfig::Slot::LS_DOWN : GamepadConfig::Slot::RS_DOWN;
             default:
-                break;
+                return GamepadConfig::Slot::LENGTH;
         }
+    }
+
+    void Gamepad::press(GamepadConfig::Slot slot) {
+        const Keyboard::Mapping mapping = GamepadConfig::get().mapping(slot);
+
+        if (mapping.type == KeyType::Id::NONE) {
+            return;
+        }
+
+        const bool in_game = UI::get().get_state_type() == typeid(UIStateGame);
+        const bool modal = in_game && UI::get().is_modal_active();
+
+        if (mapping.type == KeyType::Id::ACTION) {
+            const Direction direction = to_direction(mapping.action);
+
+            if (direction != Direction::NONE) {
+                press_direction(direction, slot);
+                return;
+            }
+        }
+
+        // Jumping and attacking are how a player answers a dialog, so while one owns the screen
+        // those two bindings answer it instead of doing their own job.
+        if (modal && mapping.type == KeyType::Id::ACTION
+            && mapping.action == KeyAction::Id::JUMP) {
+            confirm_ |= bit(slot);
+            UI::get().send_key(GLFMKeyCodeEnter, true);
+            return;
+        }
+
+        if (modal && mapping.type == KeyType::Id::ACTION
+            && mapping.action == KeyAction::Id::ATTACK) {
+            cancel_ |= bit(slot);
+            UI::get().send_key(GLFMKeyCodeEscape, true);
+            return;
+        }
+
+        if (mapping.action == KeyAction::Id::ATTACK
+            || mapping.action == KeyAction::Id::PICKUP
+            || mapping.action == KeyAction::Id::INTERACT_HARVEST) {
+            // These three are what a controller is actually held down for, and each is something
+            // you do to the world rather than to a window, so they are carried out here and kept
+            // going by update() rather than left to a key Android only reports once.
+            if (!in_game) {
+                return;
+            }
+
+            if (mapping.action == KeyAction::Id::ATTACK) {
+                tap(KeyAction::Id::ATTACK);
+                attack_repeat_ = clock::now();
+            }
+            else if (mapping.action == KeyAction::Id::PICKUP) {
+                Stage::get().pick_up_near(Constants::PICKUP_RANGE);
+                pickup_repeat_ = clock::now();
+            }
+            else {
+                Stage::get().get_npcs().talk_to_nearest(
+                        Stage::get().get_player().get_position(),
+                        Constants::TALK_RANGE);
+                talk_repeat_ = clock::now();
+            }
+
+            return;
+        }
+
+        UI::get().send_key(GamepadConfig::keycode(slot), true);
+    }
+
+    void Gamepad::release(GamepadConfig::Slot slot) {
+        if (confirm_ & bit(slot)) {
+            confirm_ &= ~bit(slot);
+            UI::get().send_key(GLFMKeyCodeEnter, false);
+            return;
+        }
+
+        if (cancel_ & bit(slot)) {
+            cancel_ &= ~bit(slot);
+            UI::get().send_key(GLFMKeyCodeEscape, false);
+            return;
+        }
+
+        const Keyboard::Mapping mapping = GamepadConfig::get().mapping(slot);
+
+        if (mapping.type == KeyType::Id::NONE) {
+            return;
+        }
+
+        if (mapping.type == KeyType::Id::ACTION) {
+            const Direction direction = to_direction(mapping.action);
+
+            if (direction != Direction::NONE) {
+                release_direction(direction, slot);
+                return;
+            }
+        }
+
+        if (mapping.action == KeyAction::Id::ATTACK
+            || mapping.action == KeyAction::Id::PICKUP
+            || mapping.action == KeyAction::Id::INTERACT_HARVEST) {
+            return;
+        }
+
+        UI::get().send_key(GamepadConfig::keycode(slot), false);
+    }
+
+    void Gamepad::press_direction(Direction direction, GamepadConfig::Slot slot) {
+        DirectionState &held = directions_[direction];
+
+        if (held.holders++ == 0) {
+            held.slot = slot;
+            UI::get().send_key(GamepadConfig::keycode(slot), true);
+        }
+    }
+
+    void Gamepad::release_direction(Direction direction, GamepadConfig::Slot slot) {
+        DirectionState &held = directions_[direction];
+
+        if (held.holders == 0) {
+            return;
+        }
+
+        if (--held.holders == 0) {
+            UI::get().send_key(GamepadConfig::keycode(held.slot), false);
+            held.slot = GamepadConfig::Slot::LENGTH;
+        }
+    }
+
+    void Gamepad::clear_directions() {
+        for (Direction direction : kDirections) {
+            DirectionState &held = directions_[direction];
+
+            if (held.holders > 0) {
+                UI::get().send_key(GamepadConfig::keycode(held.slot), false);
+                held.holders = 0;
+                held.slot = GamepadConfig::Slot::LENGTH;
+            }
+        }
+
+        stick_dirs_[0] = NONE;
+        stick_dirs_[1] = NONE;
     }
 
     void Gamepad::update() {
@@ -208,10 +298,10 @@ namespace ms {
 
         const auto now = clock::now();
 
-        // A stick pushed to a constant reading reports nothing more, so silence while something is
+        // A stick held to a constant reading reports nothing more, so silence while something is
         // still engaged isn't taken for the controller having gone away.
         if (now > connect_expiry_) {
-            if (stick_dirs_ == NONE && state_ == 0) {
+            if (state_ == 0 && stick_dirs_[0] == NONE && stick_dirs_[1] == NONE) {
                 disconnect();
                 return;
             }
@@ -224,22 +314,34 @@ namespace ms {
         }
 
         // Held buttons keep their action going; Android doesn't report them again.
-        if ((state_ & bit(Button::B)) && !cancel_held_
-            && now - attack_repeat_ >= ATTACK_REPEAT) {
-            tap(KeyAction::Id::ATTACK);
-            attack_repeat_ = now;
-        }
+        const auto &mappings = GamepadConfig::get().mappings();
 
-        if ((state_ & bit(Button::Y)) && now - pickup_repeat_ >= PICKUP_REPEAT) {
-            Stage::get().pick_up_near(Constants::PICKUP_RANGE);
-            pickup_repeat_ = now;
-        }
+        for (uint8_t slot = 0; slot < GamepadConfig::Slot::LENGTH; ++slot) {
+            const uint32_t held = 1u << slot;
 
-        if ((state_ & bit(Button::X)) && now - talk_repeat_ >= TALK_REPEAT) {
-            Stage::get().get_npcs().talk_to_nearest(
-                    Stage::get().get_player().get_position(),
-                    Constants::TALK_RANGE);
-            talk_repeat_ = now;
+            if (!(state_ & held)) {
+                continue;
+            }
+
+            const Keyboard::Mapping &mapping = mappings[slot];
+
+            if (mapping.action == KeyAction::Id::ATTACK
+                && !(cancel_ & held) && now - attack_repeat_ >= ATTACK_REPEAT) {
+                tap(KeyAction::Id::ATTACK);
+                attack_repeat_ = now;
+            }
+            else if (mapping.action == KeyAction::Id::PICKUP
+                     && now - pickup_repeat_ >= PICKUP_REPEAT) {
+                Stage::get().pick_up_near(Constants::PICKUP_RANGE);
+                pickup_repeat_ = now;
+            }
+            else if (mapping.action == KeyAction::Id::INTERACT_HARVEST
+                     && now - talk_repeat_ >= TALK_REPEAT) {
+                Stage::get().get_npcs().talk_to_nearest(
+                        Stage::get().get_player().get_position(),
+                        Constants::TALK_RANGE);
+                talk_repeat_ = now;
+            }
         }
     }
 
@@ -248,28 +350,14 @@ namespace ms {
         Stage::get().send_key(KeyType::Id::ACTION, action, false);
     }
 
-    void Gamepad::set_stick(double x, double y) {
-        const double axis_x = std::clamp(x, -1.0, 1.0);
-        const double axis_y = std::clamp(y, -1.0, 1.0);
-
-        // A controller reports its resting stick once when it connects, which must not take the
-        // on-screen controls away from a player using touch.
-        if (!connected_ && std::abs(axis_x) <= STICK_DEADZONE
-            && std::abs(axis_y) <= STICK_DEADZONE) {
-            return;
-        }
-
-        connected_ = true;
-        connect_expiry_ = clock::now() + CONNECT_TIMEOUT;
-
-        // The game moves in four directions only, so the axis the stick is furthest along owns
-        // the direction and the other one is treated as centered. That puts the boundary between
-        // two directions at 45 degrees instead of letting a diagonal push send both keys, which
-        // the game reads as climbing a rope or lying down.
+    uint8_t Gamepad::steer(double axis_x, double axis_y, uint8_t held) {
+        // The axis the stick is furthest along owns the direction and the other one is treated as
+        // centered. That puts the boundary between two directions at 45 degrees instead of letting
+        // a diagonal push send both keys, which the game reads as climbing a rope or lying down.
         const double magnitude_x = std::abs(axis_x);
         const double magnitude_y = std::abs(axis_y);
         const bool use_x = std::abs(magnitude_x - magnitude_y) < STICK_AXIS_MARGIN
-                           ? (stick_dirs_ & (LEFT | RIGHT)) != 0
+                           ? (held & (LEFT | RIGHT)) != 0
                            : magnitude_x > magnitude_y;
         const double push_x = use_x ? axis_x : 0.0;
         const double push_y = use_x ? 0.0 : axis_y;
@@ -277,7 +365,7 @@ namespace ms {
         // A stick held still reports nothing until it moves again, so directions stay engaged
         // until an axis comes back inside STICK_RETURN. Reading a little above the deadzone
         // keeps the direction, since axes commonly jitter by a percent or two around it.
-        uint8_t dirs = stick_dirs_;
+        uint8_t dirs = held;
 
         if (push_x < -STICK_DEADZONE) {
             dirs = static_cast<uint8_t>((dirs & ~RIGHT) | LEFT);
@@ -299,56 +387,62 @@ namespace ms {
             dirs &= ~(UP | DOWN);
         }
 
-        if (dirs == stick_dirs_) {
+        return dirs;
+    }
+
+    void Gamepad::apply_stick(int stick, double x, double y) {
+        const double axis_x = std::clamp(x, -1.0, 1.0);
+        const double axis_y = std::clamp(y, -1.0, 1.0);
+
+        // A controller reports its resting stick once when it connects, which must not take the
+        // on-screen controls away from a player using touch.
+        if (!connected_ && std::abs(axis_x) <= STICK_DEADZONE
+            && std::abs(axis_y) <= STICK_DEADZONE) {
             return;
         }
 
-        const uint8_t changed = dirs ^ stick_dirs_;
-        const struct {
-            uint8_t dir;
-            int32_t key;
-        } directions[] = {
-            {LEFT, GLFMKeyCodeArrowLeft},
-            {RIGHT, GLFMKeyCodeArrowRight},
-            {UP, GLFMKeyCodeArrowUp},
-            {DOWN, GLFMKeyCodeArrowDown},
-        };
+        connected_ = true;
+        connect_expiry_ = clock::now() + CONNECT_TIMEOUT;
+
+        const uint8_t dirs = steer(axis_x, axis_y, stick_dirs_[stick]);
+
+        if (dirs == stick_dirs_[stick]) {
+            return;
+        }
+
+        const uint8_t changed = dirs ^ stick_dirs_[stick];
 
         // Releases go out before presses. Every state reacts only to a press, and a press landing
         // while the old direction still has the character prone or climbing is dropped, which would
         // leave the character standing still until the stick was centred and pushed again.
-        for (const auto &direction : directions) {
-            if (changed & direction.dir) {
-                UI::get().send_key(direction.key, false);
+        for (Direction direction : kDirections) {
+            if ((changed & direction) && !(dirs & direction)) {
+                release(stick_slot(stick, direction));
             }
         }
 
-        for (const auto &direction : directions) {
-            if (changed & direction.dir) {
-                UI::get().send_key(direction.key, (dirs & direction.dir) != 0);
+        for (Direction direction : kDirections) {
+            if (changed & direction && (dirs & direction)) {
+                press(stick_slot(stick, direction));
             }
         }
 
-        stick_dirs_ = dirs;
+        stick_dirs_[stick] = dirs;
     }
 
-    void Gamepad::clear_directions() {
-        if (stick_dirs_ == NONE) {
-            return;
-        }
+    void Gamepad::set_left_stick(double x, double y) {
+        apply_stick(0, x, y);
+    }
 
-        stick_dirs_ = NONE;
-        UI::get().send_key(GLFMKeyCodeArrowLeft, false);
-        UI::get().send_key(GLFMKeyCodeArrowRight, false);
-        UI::get().send_key(GLFMKeyCodeArrowUp, false);
-        UI::get().send_key(GLFMKeyCodeArrowDown, false);
+    void Gamepad::set_right_stick(double x, double y) {
+        apply_stick(1, x, y);
     }
 
     void Gamepad::disconnect() {
         connected_ = false;
         state_ = 0;
-        confirm_held_ = false;
-        cancel_held_ = false;
+        confirm_ = 0;
+        cancel_ = 0;
         clear_directions();
     }
 }  // namespace ms

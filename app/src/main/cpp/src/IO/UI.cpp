@@ -232,12 +232,21 @@ namespace ms {
             bool sent = false;
             std::list<UIElement::Type> types;
 
-            bool escape = keycode == GLFMKeyCodeEscape;
-            bool tab = keycode == GLFMKeyCodeTab;
-            bool enter = keycode == GLFMKeyCodeEnter || keycode == GLFMKeyCodeNumpadEnter;
-            bool up_down = keycode == GLFMKeyCodeArrowUp || keycode == GLFMKeyCodeArrowDown;
-            bool left_right = keycode == GLFMKeyCodeArrowLeft || keycode == GLFMKeyCodeArrowRight;
-            bool arrows = up_down || left_right;
+            // Escape, Enter, Tab and the arrows do more than carry a mapping: they close, confirm
+            // and move focus between windows. A controller slot is dispatched under a code of its
+            // own, so those behaviours follow the binding rather than the code that produced it -
+            // a slot bound to the same action a keyboard key has is handled the same way.
+            auto bound_to = [&mapping](KeyAction::Id action) {
+                return mapping.type != KeyType::Id::NONE && mapping.action == action;
+            };
+
+            bool escape = keycode == GLFMKeyCodeEscape || bound_to(KeyAction::Id::MAIN_MENU);
+            bool tab = keycode == GLFMKeyCodeTab || bound_to(KeyAction::Id::TAB);
+            bool enter = keycode == GLFMKeyCodeEnter || keycode == GLFMKeyCodeNumpadEnter
+                         || bound_to(KeyAction::Id::RETURN);
+            bool arrows = bound_to(KeyAction::Id::UP) || bound_to(KeyAction::Id::DOWN)
+                          || bound_to(KeyAction::Id::LEFT)
+                          || bound_to(KeyAction::Id::RIGHT);
 
             auto statusbar = UI::get().get_element<UIStatusBar>();
             auto channel = UI::get().get_element<UIChannel>();
@@ -316,6 +325,7 @@ namespace ms {
                     // Game
                     types.emplace_back(UIElement::Type::NOTICE);
                     types.emplace_back(UIElement::Type::KEY_CONFIG);
+                    types.emplace_back(UIElement::Type::GAMEPAD_CONFIG);
                     types.emplace_back(UIElement::Type::CHAT);
                     types.emplace_back(UIElement::Type::EVENT);
                     types.emplace_back(UIElement::Type::STATS_INFO);

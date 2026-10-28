@@ -210,6 +210,10 @@ namespace ms {
         maple_keys_[key] = mapping;
     }
 
+    void Keyboard::map_virtual(int32_t keycode, const Keyboard::Mapping &mapping) {
+        keymap_[keycode] = mapping;
+    }
+
     Keyboard::Mapping Keyboard::get_text_mapping(int32_t keycode,
                                                  bool shift) const {
         if (text_actions_.count(keycode) != 0u) {

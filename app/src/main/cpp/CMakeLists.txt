@@ -81,6 +81,7 @@ add_library(OpenMapleClient SHARED
         src/Game.cpp
         src/IO/Cursor.cpp
         src/IO/Gamepad.cpp
+        src/IO/GamepadConfig.cpp
         src/IO/Keyboard.cpp
         src/IO/Messages.cpp
         src/IO/UI.cpp
@@ -97,6 +98,7 @@ add_library(OpenMapleClient SHARED
         src/IO/UITypes/UIEquipInventory.cpp
         src/IO/UITypes/UIEvent.cpp
         src/IO/UITypes/UIGaugeBoss.cpp
+        src/IO/UITypes/UIGamepadConfig.cpp
         src/IO/UITypes/UIItemInventory.cpp
         src/IO/UITypes/UIJoypad.cpp
         src/IO/UITypes/UIKeyConfig.cpp

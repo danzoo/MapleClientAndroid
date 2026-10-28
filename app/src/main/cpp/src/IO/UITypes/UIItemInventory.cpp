@@ -953,4 +953,15 @@ void UIItemInventory::ItemIcon::drop_on_bindings(Point<int16_t> cursorposition,
         }
     }
 }
+
+std::optional<Keyboard::Mapping> UIItemInventory::ItemIcon::binding() const {
+    // Only the tab that a use or setup item actually lives in can be bound; equipment has no
+    // binding to make.
+    if (source_tab_ != InventoryType::Id::USE
+        && source_tab_ != InventoryType::Id::SETUP) {
+        return std::nullopt;
+    }
+
+    return Keyboard::Mapping(KeyType::Id::ITEM, item_id_);
+}
 }  // namespace ms
