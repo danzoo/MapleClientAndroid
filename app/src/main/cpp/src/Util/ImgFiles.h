@@ -15,6 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <string>
+
 #include "../Error.h"
 #include "glfm.h"
 
@@ -22,4 +24,8 @@ namespace ms::ImgFiles {
 // Points the resource reader at the Data directory of loose .img files and checks
 // that it is a UI tree the rest of the client can use.
 Error init(GLFMDisplay *pApp);
+
+// The directory init was given, which is the only place this app may write a file of its own. Empty
+// until init has run, so anything that needs it reads it when it writes rather than once at startup.
+const std::string &root_path();
 }  // namespace ms::ImgFiles

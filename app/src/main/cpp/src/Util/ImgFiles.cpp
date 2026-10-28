@@ -47,8 +47,17 @@ bool is_directory(const std::string &path) {
 }  // namespace
 
 namespace ms::ImgFiles {
+namespace {
+std::string app_root;
+}
+
+const std::string &root_path() {
+    return app_root;
+}
+
 Error init(GLFMDisplay *pApp) {
     const std::string root = game_path(pApp);
+    app_root = root;
     const std::string data = root + "/Data";
     try {
         img::wz::load_all(is_directory(data) ? data : root);

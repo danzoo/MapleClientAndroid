@@ -158,7 +158,14 @@ void ServerMessageHandler::handle(InPacket &recv) const {
         recv.read_byte();  // channel
         recv.read_bool();  // megaphone
     } else if (type == 4) {
-        UI::get().set_scrollnotice(message + " msclient v0.4.0");
+        // How long the server wants this banner held up, in seconds. Anything that did not say - an
+        // absent field, a zero, a negative - is no time, which the notice reads as its own default.
+        const int32_t seconds =
+            recv.length() >= sizeof(int32_t) ? recv.read_int() : 0;
+        const uint32_t duration_ms =
+            seconds > 0 ? static_cast<uint32_t>(seconds) * 1000u : 0;
+
+        UI::get().set_scrollnotice(message + " msclient v0.4.0", duration_ms);
     } else if (type == 6) {
         recv.read_int();  // server appends an unused int(0) after lightblue notices
 

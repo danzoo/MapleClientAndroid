@@ -210,6 +210,15 @@ void UILogin::login() {
     auto loginwait = UI::get().get_element<UILoginWait>();
 
     if (loginwait && loginwait->get().is_active()) {
+        if (saveid_) {
+            // The id is put away as the attempt is made rather than when the server agrees to it, so
+            // the screen remembers what was typed even when the login came back wrong. Writing it
+            // down is not enough: the app is more often killed than quit, and only a save of the
+            // whole file reaches the next start.
+            Setting<DefaultAccount>::get().save(account_text);
+            Configuration::get().save();
+        }
+
         fn_login(account_text, password_text);
     }
 }
@@ -245,6 +254,9 @@ Button::State UILogin::button_pressed(uint16_t id) {
         case Buttons::BT_SAVEID:
             saveid_ = !saveid_;
             Setting<SaveLogin>::get().save(saveid_);
+            // Whether the box is checked is worth keeping from the next start of the app on, and the
+            // next start may be reached by the process being killed rather than by it shutting down.
+            Configuration::get().save();
 
             return Button::State::MOUSEOVER;
         case Buttons::BT_QUIT: Window::get().terminate(); return Button::State::PRESSED;

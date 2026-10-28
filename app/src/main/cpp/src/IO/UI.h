@@ -82,7 +82,7 @@ namespace ms {
 
         void send_key(uint32_t unicode);
 
-        void set_scrollnotice(const std::string &notice);
+        void set_scrollnotice(const std::string &notice, uint32_t duration_ms);
 
         void focus_textfield(Textfield *textfield);
 

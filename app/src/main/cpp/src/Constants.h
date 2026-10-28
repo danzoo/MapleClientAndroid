@@ -135,6 +135,12 @@ constexpr double BULLET_MAX_SPEED = 750.0;
 constexpr uint16_t CHAR_INFO_LOADING_MS = 2040;
 constexpr uint32_t LOGIN_WAIT_TIMEOUT_MS = 30000;
 
+// How long the notice across the top of the screen stays up when the server asks for a banner but
+// gives no length. The banner is no longer something the client holds on its own - it arrives with a
+// packet and goes when its time is up - so a packet without a time still has to decide one. This is
+// the time a short notice needs to cross the bar once at ScrollingNotice's own speed.
+constexpr uint32_t SCROLL_NOTICE_DEFAULT_MS = 30000;
+
 // The interface artwork and the world-map arrow are both fed a fraction of the tick rather than all
 // of it, because their art was authored to play slower than the game runs: three quarters of a tick
 // for the button and inventory shine and the skill effects, an eighth for the arrow crawling around
@@ -196,7 +202,7 @@ constexpr double STOP_SPEED = 12.5;
 // How much bigger the interface is drawn than the world around it. Everything the UI lays out is
 // measured in a screen that is this much smaller than the real one and then magnified, so raising
 // it grows every window, button and piece of text together while the map stays the same size.
-constexpr float UI_SCALE = 1.6f;
+constexpr float UI_SCALE = 1.3f;
 
 // The interface is laid out on a screen UI_SCALE smaller than the view, so a placement made
 // against the view - a window's stored origin, for instance - has to be brought into that space
@@ -210,6 +216,48 @@ constexpr Point<int16_t> to_view_space(const Point<int16_t> &uipos) {
     return Point<int16_t>(static_cast<int16_t>(uipos.x() * UI_SCALE),
                           static_cast<int16_t>(uipos.y() * UI_SCALE));
 }
+
+// The bands the game itself measures things in - how close you have to be for an action to take -
+// as opposed to how any one input device is driven.
+//
+// Loot has to be right at the feet. Counted to the nearest edge of the item's picture rather than to
+// the point it is stored at, which is what made the reach differ by side.
+constexpr int16_t PICKUP_RANGE = 24;
+constexpr int16_t TALK_RANGE = 350;
+
+// How wide a band around a rope or ladder still counts as standing at it. The reference client's ten
+// pixels are a mouse-width target; on a phone the position is aimed with a joystick, so the grab has
+// to forgive noticeably more. Only the grab reads this - once it lands the character is snapped onto
+// the rope's own x, so a wide window cannot make it drift.
+constexpr int16_t CLIMB_RANGE_X = 16;
+
+// The vertical margin a climb is measured with: both the grab downwards from a platform and the
+// release test read this one number, and for those two it cannot be two numbers - a downward grab
+// reaches further past the rope's bottom than a release tested with a narrower margin allows, so it
+// would be cancelled on the frame it landed and, with the climb cooldown behind it, read as being
+// dropped off the rope. A grab may use a narrower margin than this.
+constexpr int16_t CLIMB_MARGIN_Y = 8;
+
+// A character in mid-air that drags up past a rope is not aiming at it, and the window above is wide
+// enough that every leap across a rope snatched the character onto it. Only that one approach -
+// airborne, upwards - keeps the reference client's own bands; the grabs made from a platform, and the
+// downward ones, stay as forgiving as a joystick needs. Nothing here may make the vertical reach
+// exceed CLIMB_MARGIN_Y, which is what the release test is measured with.
+constexpr int16_t CLIMB_RANGE_X_AIR = 10;
+constexpr int16_t CLIMB_MARGIN_Y_AIR = 5;
+
+// How far above a rope's top end a platform may sit and still count as the ledge that rope is
+// installed on, which is what decides whether the end of an upward climb is the little release-hop
+// onto a platform or a rope that stops in mid-air and holds the climber on it. The climb is let go
+// one pixel past the reach of the release test, which is measured with CLIMB_MARGIN_Y, and a body
+// released that high has to fall onto the platform rather than back down the rope - so the ledge may
+// be at most as far above the rope's end as that release is. Measured in the shipped maps, every
+// rope there hangs exactly two pixels under the platform it belongs to, well inside this.
+constexpr int16_t CLIMB_TOP_MOUNT_Y = CLIMB_MARGIN_Y + 1;
+
+// The size the login and character selection screens are designed around.
+constexpr int16_t LOGIN_WIDTH = 800;
+constexpr int16_t LOGIN_HEIGHT = 600;
 
 class Constants : public Singleton<Constants> {
 public:

@@ -50,6 +50,11 @@ Error Game::init(GLFMDisplay *pApp) {
     }
     std::cout << "ImgFiles init success." << std::endl;
 
+    // The settings file is kept in the directory ImgFiles was just given, so anything read out of it
+    // before now was read from wherever the process happened to start. The file can be gone through
+    // again once that directory is known.
+    Configuration::get().load();
+
     if (Error error = Window::get().init(pApp)) {
         return error;
     }
@@ -67,7 +72,6 @@ Error Game::init(GLFMDisplay *pApp) {
 }
 
 void Game::update() {
-    Window::get().check_events();
     Window::get().update();
     Stage::get().update();
     UI::get().update();
@@ -150,9 +154,7 @@ void Game::frame() {
 }
 
 bool Game::is_running() {
-    return PacketProcessor::get().is_connected() && UI::get().not_quitted()
-           && Window::get().not_closed();
-    return true;
+    return PacketProcessor::get().is_connected() && UI::get().not_quitted();
 }
 
 void Game::start(GLFMDisplay *pApp) {

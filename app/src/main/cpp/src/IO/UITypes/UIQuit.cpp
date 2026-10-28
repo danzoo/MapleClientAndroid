@@ -195,7 +195,7 @@ Button::State UIQuit::button_pressed(uint16_t buttonid) {
                 GraphicsGL::get().clear();
 
                 UI::get().change_state(UI::State::LOGIN);
-                UI::get().set_scrollnotice("");
+                UI::get().set_scrollnotice("", 0);
                 PacketProcessor::get().reconnect();
 
                 UI::get().enable();

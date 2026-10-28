@@ -24,7 +24,9 @@ class ScrollingNotice {
 public:
     ScrollingNotice();
 
-    void set_notice(const std::string &notice);
+    // Show the notice for the given time, measured from the frame it arrives. An empty notice takes
+    // the banner off the screen at once, and a zero time is the default length.
+    void set_notice(const std::string &notice, uint32_t duration_ms);
 
     void draw(float alpha) const;
 
@@ -32,6 +34,8 @@ public:
 
 private:
     bool active_;
+    uint32_t duration_ms_;
+    uint32_t elapsed_ms_;
     int16_t width_;
     ColorBox background_;
     Text notice_;

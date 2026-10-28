@@ -15,8 +15,10 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "MapInfo.h"
 
-#include "../../GameAttributes.h"
-#include "../Constants.h"
+#include <cmath>
+
+#include "../../Constants.h"
+#include "../Physics/Foothold.h"
 
 namespace ms {
 MapInfo::MapInfo(const img::node &src,
@@ -48,7 +50,7 @@ MapInfo::MapInfo(const img::node &src,
     }
 
     for (const auto &ladder : src["ladderRope"]) {
-        ladders_.push_back(ladder);
+        ladders_.emplace_back(ladder, src["foothold"]);
     }
 }
 
@@ -109,11 +111,43 @@ Point<int16_t> Seat::getpos() const {
     return pos_;
 }
 
-Ladder::Ladder(const img::node &src) {
+Ladder::Ladder(const img::node &src, const img::node &footholds) {
     x_ = src["x"];
     y1_ = src["y1"];
     y2_ = src["y2"];
     ladder_ = src["l"].get_bool();
+
+    // The archive hangs a rope's top end a couple of pixels under the platform it is installed on,
+    // and that platform - not the rope's own end - is what a climb finishes on. Which of the two the
+    // top of a given rope has decides what the last pixels of an upward climb mean: a ledge to be
+    // handed on to, or the end of a rope that stops in mid-air.
+    //
+    // Foothold reads an id of zero as "not a foothold at all" and answers false to every question
+    // about its shape, so the ones taken out of the archive are numbered as they go by.
+    uint16_t fhid = 1;
+
+    for (const auto &layer : footholds) {
+        for (const auto &range : layer) {
+            for (const auto &item : range) {
+                const Foothold fh(item, fhid++, 0);
+
+                if (fh.is_wall() || !fh.hcontains(x_)) {
+                    continue;
+                }
+
+                const int16_t ground =
+                    static_cast<int16_t>(std::round(fh.ground_below(x_)));
+
+                if (ground > y1_ || y1_ - ground > Constants::CLIMB_TOP_MOUNT_Y) {
+                    continue;
+                }
+
+                if (top_mount_ == NO_TOP_MOUNT || ground > top_mount_) {
+                    top_mount_ = ground;
+                }
+            }
+        }
+    }
 }
 
 bool Ladder::is_ladder() const {
@@ -129,10 +163,10 @@ bool Ladder::inrange(Point<int16_t> position,
     // narrow, because a grab may reach less far past the rope's end than Ladder::felloff measures
     // with, but never further.
     const bool narrow = upwards && !onground;
-    const int16_t range_x = narrow ? GameAttributes::CLIMB_RANGE_X_AIR
-                                   : GameAttributes::CLIMB_RANGE_X;
-    const int16_t margin_y = narrow ? GameAttributes::CLIMB_MARGIN_Y_AIR
-                                    : GameAttributes::CLIMB_MARGIN_Y;
+    const int16_t range_x = narrow ? Constants::CLIMB_RANGE_X_AIR
+                                   : Constants::CLIMB_RANGE_X;
+    const int16_t margin_y = narrow ? Constants::CLIMB_MARGIN_Y_AIR
+                                    : Constants::CLIMB_MARGIN_Y;
 
     auto hor = Range<int16_t>::symmetric(position.x(), range_x);
     auto ver = Range<int16_t>(y1_, y2_);
@@ -150,7 +184,7 @@ bool Ladder::felloff(int16_t y, bool downwards) const {
     // on the very frame the grab lands, which cancels the climb before it can move - the grab then
     // arrives again next frame, so the body plays the climbing animation without ever leaving the
     // platform.
-    constexpr int16_t margin = GameAttributes::CLIMB_MARGIN_Y;
+    constexpr int16_t margin = Constants::CLIMB_MARGIN_Y;
 
     int16_t dy = downwards ? y + margin : y - margin;
 
@@ -159,5 +193,13 @@ bool Ladder::felloff(int16_t y, bool downwards) const {
 
 int16_t Ladder::get_x() const {
     return x_;
+}
+
+int16_t Ladder::get_top() const {
+    return y1_;
+}
+
+int16_t Ladder::get_top_mount() const {
+    return top_mount_;
 }
 }  // namespace ms
