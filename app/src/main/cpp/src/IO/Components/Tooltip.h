@@ -34,6 +34,7 @@ public:
         EVENT,
         TEXT,
         KEY_CONFIG,
+        GAMEPAD_CONFIG,
         WORLD_MAP,
         MINI_MAP
     };

@@ -97,6 +97,9 @@ private:
         }
         void drop_on_bindings(Point<int16_t> cursorposition,
                               bool remove) const override;
+        std::optional<Keyboard::Mapping> binding() const override {
+            return mapping_;
+        }
         void set_count(int16_t) override {}
         Icon::IconType get_type() override;
 

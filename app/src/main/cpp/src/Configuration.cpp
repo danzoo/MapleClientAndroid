@@ -65,6 +65,8 @@ Configuration::Configuration() {
     settings.emplace<PosJOYPAD>();
     settings.emplace<PosEVENT>();
     settings.emplace<PosKEYCONFIG>();
+    settings.emplace<PosGAMEPADCONFIG>();
+    settings.emplace<GamepadBindings>();
     settings.emplace<PosOPTIONMENU>();
     settings.emplace<PosCHARINFO>();
     settings.emplace<MiniMapType>();

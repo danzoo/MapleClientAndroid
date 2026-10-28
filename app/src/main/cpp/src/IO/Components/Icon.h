@@ -16,14 +16,16 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
 #include "../../Character/Inventory/Inventory.h"
 #include "../../Graphics/Texture.h"
+#include "../Keyboard.h"
 
 namespace ms {
 class Icon {
 public:
-    enum IconType : uint8_t { NONE, SKILL, EQUIP, ITEM, KEY, NUM_TYPES };
+    enum IconType : uint8_t { NONE, SKILL, EQUIP, ITEM, KEY, GAMEPAD, NUM_TYPES };
 
     class Type {
     public:
@@ -40,6 +42,13 @@ public:
 
         virtual void drop_on_bindings(Point<int16_t> cursorposition,
                                       bool remove) const = 0;
+
+        // The binding this icon stands for, when it stands for one. A key, skill or item icon
+        // carries its own, so any window that takes bindings can read it without the icon having
+        // to know which of them it is being dropped onto.
+        virtual std::optional<Keyboard::Mapping> binding() const {
+            return std::nullopt;
+        }
 
         virtual void set_count(int16_t) = 0;
 
@@ -73,6 +82,8 @@ public:
                        int16_t slot,
                        bool equip) const;
     void drop_on_bindings(Point<int16_t> cursorposition, bool remove) const;
+
+    std::optional<Keyboard::Mapping> binding() const;
 
     void set_count(int16_t count);
 

@@ -127,6 +127,7 @@ private:
         { Icon::IconType::EQUIP, UIElement::Type::EQUIP_INVENTORY },
         { Icon::IconType::ITEM, UIElement::Type::ITEM_INVENTORY },
         { Icon::IconType::KEY, UIElement::Type::KEY_CONFIG },
+        { Icon::IconType::GAMEPAD, UIElement::Type::GAMEPAD_CONFIG },
         { Icon::IconType::NUM_TYPES, UIElement::Type::NUM_TYPES }
     };
 

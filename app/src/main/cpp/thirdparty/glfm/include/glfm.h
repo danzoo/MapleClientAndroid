@@ -335,6 +335,13 @@ typedef enum {
     GLFMKeyCodeGamepadMode         = 0x10A,
     GLFMKeyCodeGamepadLeftStick    = 0x10B,
     GLFMKeyCodeGamepadRightStick   = 0x10C,
+
+    // A controller's d-pad arrives under the same four key codes a keyboard's arrows do, so it is
+    // reported apart when the event comes from a gamepad and an app can bind the two separately.
+    GLFMKeyCodeGamepadDpadUp       = 0x10D,
+    GLFMKeyCodeGamepadDpadDown     = 0x10E,
+    GLFMKeyCodeGamepadDpadLeft     = 0x10F,
+    GLFMKeyCodeGamepadDpadRight    = 0x110,
 } GLFMKeyCode;
 
 typedef GLFMKeyCode GLFMKey GLFM_DEPRECATED("Replaced with GLFMKeyCode");
@@ -940,6 +947,13 @@ void *glfmGetAndroidActivity(const GLFMDisplay *display);
 /// Called with the first pointer's AMOTION_EVENT_AXIS_X and AXIS_Y values for every motion event
 /// from a joystick or gamepad source. Assign NULL to discard those events.
 extern void (*glfmJoystickAxisFunc)(GLFMDisplay *display, double x, double y);
+
+/// *Android only*: Receives the second (right) stick of a gamepad.
+///
+/// Called with the first pointer's AMOTION_EVENT_AXIS_Z and AXIS_RZ values, the axes a standard
+/// gamepad maps to its right thumbstick, for every motion event from a joystick or gamepad source.
+/// Assign NULL to discard those events.
+extern void (*glfmJoystickAxis2Func)(GLFMDisplay *display, double x, double y);
 
 /// *Android only*: Holds the render function to the given rate, whatever the panel runs at, and asks
 /// the compositor to present at it as well so that a frame is given the whole `1 / framesPerSecond`

@@ -446,6 +446,17 @@ struct PosKEYCONFIG : public Configuration::PointEntry {
     PosKEYCONFIG() : PointEntry("PosKEYCONFIG", "(65, 50)") {}
 };
 
+// The default position of UIGamepadConfig
+struct PosGAMEPADCONFIG : public Configuration::PointEntry {
+    PosGAMEPADCONFIG() : PointEntry("PosGAMEPADCONFIG", "(65, 50)") {}
+};
+
+// Controller bindings, as the slots whose binding isn't the default one:
+// "slot=type,action;slot=type,action". Empty means every slot does what it does out of the box.
+struct GamepadBindings : public Configuration::StringEntry {
+    GamepadBindings() : StringEntry("GamepadBindings", "") {}
+};
+
 // The default position of UIOptionMenu
 struct PosOPTIONMENU : public Configuration::PointEntry {
     PosOPTIONMENU() : PointEntry("PosUSERLIST", "(170, -1)") {}

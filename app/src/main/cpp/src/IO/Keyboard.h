@@ -48,6 +48,11 @@ public:
 
     void remove(uint8_t key);
 
+    // Bind a code that no physical key produces. A controller slot is dispatched under one of
+    // these, so a press of it travels the whole keyboard path and a window sees it as the key the
+    // binding stands for.
+    void map_virtual(int32_t keycode, const Mapping &mapping);
+
     int32_t left_shift_code() const;
 
     int32_t right_shift_code() const;

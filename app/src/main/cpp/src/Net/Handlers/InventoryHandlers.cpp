@@ -20,12 +20,29 @@
 #include "../IO/Messages.h"
 #include "../IO/UI.h"
 #include "../IO/UITypes/UIEquipInventory.h"
+#include "../IO/UITypes/UIGamepadConfig.h"
 #include "../IO/UITypes/UIItemInventory.h"
 #include "../IO/UITypes/UIKeyConfig.h"
 #include "../IO/UITypes/UIShop.h"
 #include "Helpers/ItemParser.h"
 
 namespace ms {
+namespace {
+    // Both binding windows can carry an item, so a change to the inventory has to reach whichever
+    // of them the player has open.
+    void update_binding_counts(InventoryType::Id type,
+                               int16_t pos,
+                               int16_t change) {
+        if (auto keyconfig = UI::get().get_element<UIKeyConfig>()) {
+            keyconfig->get().update_item_count(type, pos, change);
+        }
+
+        if (auto gamepad = UI::get().get_element<UIGamepadConfig>()) {
+            gamepad->get().update_item_count(type, pos, change);
+        }
+    }
+}  // namespace
+
 void GatherResultHandler::handle(InPacket &) const {
     if (auto iteminventory = UI::get().get_element<UIItemInventory>()) {
         iteminventory->get().set_sort(true);
@@ -67,13 +84,9 @@ void ModifyInventoryHandler::handle(InPacket &recv) const {
             case Inventory::Modification::ADD:
                 ItemParser::parse_item(recv, mod.type, mod.pos, inventory);
 
-                if (auto keyconfig = UI::get().get_element<UIKeyConfig>()) {
-                    int16_t count_now =
-                        inventory.get_item_count(mod.type, mod.pos);
-                    keyconfig->get().update_item_count(mod.type,
-                                                       mod.pos,
-                                                       count_now);
-                }
+                update_binding_counts(mod.type,
+                                      mod.pos,
+                                      inventory.get_item_count(mod.type, mod.pos));
 
                 break;
             case Inventory::Modification::CHANGE_COUNT: {
@@ -89,12 +102,7 @@ void ModifyInventoryHandler::handle(InPacket &recv) const {
                                  mod.arg,
                                  Inventory::Movement::MOVE_NONE);
 
-                if (auto keyconfig = UI::get().get_element<UIKeyConfig>()) {
-                    keyconfig->get().update_item_count(
-                        mod.type,
-                        mod.pos,
-                        count_now - count_before);
-                }
+                update_binding_counts(mod.type, mod.pos, count_now - count_before);
 
                 if (count_before < count_now) {
                     mod.mode = Inventory::Modification::ADD_COUNT;
@@ -104,13 +112,9 @@ void ModifyInventoryHandler::handle(InPacket &recv) const {
                 mod.arg = recv.read_short();
                 break;
             case Inventory::Modification::REMOVE:
-                if (auto keyconfig = UI::get().get_element<UIKeyConfig>()) {
-                    int16_t count_before =
-                        inventory.get_item_count(mod.type, mod.pos);
-                    keyconfig->get().update_item_count(mod.type,
-                                                       mod.pos,
-                                                       -1 * count_before);
-                }
+                update_binding_counts(mod.type,
+                                      mod.pos,
+                                      -1 * inventory.get_item_count(mod.type, mod.pos));
 
                 inventory.modify(mod.type,
                                  mod.pos,

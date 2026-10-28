@@ -107,12 +107,17 @@ namespace ms {
     // window under it, row by row; a finger put down on a window's title strip drags that window
     // right away; holding still for ~500 ms picks up an icon or grabs the slider thumb, exactly as
     // before. Scroll-vs-hold is decided by whichever threshold the finger crosses first.
+    //
+    // A window may opt out of the hold and ask for a plain drag instead, which is what the
+    // controller binding window does: it reports CAN_DRAG under its icons, and a finger that
+    // started on one and then moved picks that icon up instead of scrolling.
     int active_touches = 0;
     int touch_mode = 0;  // 0 undecided, 1 hold-grab/click, 2 scroll, 3 window drag, 4 icon already grabbed
     double touch_start_x = 0.0;
     double touch_start_y = 0.0;
     double scroll_last_y = 0.0;
     double scroll_acc = 0.0;
+    bool touch_draggable = false;
 
     // Surface pixels one finger travels per row scrolled. Rows are the smallest unit there is,
     // so a swipe never leaves a list between two rows.
@@ -123,7 +128,11 @@ namespace ms {
     constexpr double SCROLL_SLOP_PX = 12.0;
 
     void joystick_axis_callback(GLFMDisplay *display, double x, double y) {
-        Gamepad::get().set_stick(x, y);
+        Gamepad::get().set_left_stick(x, y);
+    }
+
+    void joystick_axis2_callback(GLFMDisplay *display, double x, double y) {
+        Gamepad::get().set_right_stick(x, y);
     }
 
     bool mousekey_callback(GLFMDisplay *display, int touch, GLFMTouchPhase phase,
@@ -147,6 +156,7 @@ namespace ms {
                     touch_start_y = y;
                     scroll_last_y = y;
                     scroll_acc = 0.0;
+                    touch_draggable = false;
 
                     if (UI::get().get_cursor_state() == Cursor::State::GRABBING) {
                         // An icon is already picked up from a previous gesture. This finger
@@ -159,10 +169,13 @@ namespace ms {
                     } else {
                         touch_mode = 0;  // wait to see if this is a tap, a swipe or a hold
                         UI::get().send_cursor(false);
+                        touch_draggable = UI::get().get_cursor_state()
+                                          == Cursor::State::CAN_DRAG;
                     }
                 } else {
                     // Scrolling is single-finger only; a second finger cancels the gesture.
                     touch_mode = 0;
+                    touch_draggable = false;
                     UI::get().send_cursor(false);
                 }
                 break;
@@ -212,6 +225,16 @@ namespace ms {
                 double dy = y - touch_start_y;
                 double adx = dx < 0.0 ? -dx : dx;
                 double ady = dy < 0.0 ? -dy : dy;
+
+                if (touch_draggable && (adx > SCROLL_SLOP_PX || ady > SCROLL_SLOP_PX)) {
+                    // The finger landed on an icon a drag may start on, so it means that icon and
+                    // not a scroll. The cursor has since travelled with the finger, so put it back
+                    // where the touch began before pressing.
+                    touch_mode = 1;
+                    Window::get().move_cursor(touch_start_x, touch_start_y);
+                    UI::get().send_cursor(true);
+                    break;
+                }
 
                 if (ady > SCROLL_SLOP_PX && ady > adx) {
                     touch_mode = 2;  // a vertical swipe scrolls
@@ -446,6 +469,7 @@ namespace ms {
         glfmSetRenderFunc(display, onDraw);
         glfmSetTouchFunc(display, mousekey_callback);
         glfmJoystickAxisFunc = joystick_axis_callback;
+        glfmJoystickAxis2Func = joystick_axis2_callback;
         glfmSetAppFocusFunc(display, focus_callback);
         glfmSetSurfaceDestroyedFunc(display, close_callback);
 

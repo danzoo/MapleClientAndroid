@@ -24,6 +24,7 @@
 #include "Configuration.h"
 #include "Constants.h"
 #include "Gameplay/Stage.h"
+#include "IO/GamepadConfig.h"
 #include "IO/UI.h"
 #include "IO/Window.h"
 #include "Net/PacketProcessor.h"
@@ -61,6 +62,10 @@ Error Game::init(GLFMDisplay *pApp) {
     // among them the account id the login screen remembers - have somewhere to be by the time the
     // app is next killed rather than quit.
     Configuration::get().save();
+
+    // A controller slot is dispatched as a key of its own, so the bindings read out of the file
+    // above have to be installed in the keyboard's map before any controller event is handled.
+    GamepadConfig::get();
 
     if (Error error = Window::get().init(pApp)) {
         return error;

@@ -27,6 +27,7 @@
 #include "UIChat.h"
 #include "UIEquipInventory.h"
 #include "UIEvent.h"
+#include "UIGamepadConfig.h"
 #include "UIItemInventory.h"
 #include "UIJoypad.h"
 #include "UIKeyConfig.h"
@@ -674,7 +675,9 @@ Button::State UIStatusBar::button_pressed(uint16_t id) {
             remove_menus();
             break;
         case Buttons::BT_SETTING_JOYPAD:
-            UI::get().emplace<UIJoypad>();
+            UI::get().emplace<UIGamepadConfig>(
+                Stage::get().get_player().get_inventory(),
+                Stage::get().get_player().get_skills());
 
             remove_menus();
             break;

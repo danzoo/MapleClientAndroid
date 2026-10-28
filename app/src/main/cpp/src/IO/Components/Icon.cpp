@@ -83,6 +83,10 @@ void Icon::drop_on_bindings(Point<int16_t> cursorposition, bool remove) const {
     type_->drop_on_bindings(cursorposition, remove);
 }
 
+std::optional<Keyboard::Mapping> Icon::binding() const {
+    return type_->binding();
+}
+
 void Icon::start_drag(Point<int16_t> offset) {
     cursor_offset_ = offset;
     dragged_ = true;

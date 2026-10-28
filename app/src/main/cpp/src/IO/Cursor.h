@@ -30,6 +30,9 @@ public:
         HOUSE,
         CAN_CLICK2,
         CAN_GRAB,
+        // Something the interface will let a drag start on without a held press first. Only the
+        // windows that opt in to it report this, so the touch layer still scrolls everywhere else.
+        CAN_DRAG,
         GIFT,
         VSCROLL,
         HSCROLL,
