@@ -43,7 +43,6 @@
 namespace ms {
     Window::Window() :
             display(nullptr),
-            fullscreen_(true),
             opacity_(1.0f),
             opc_step_(0.0f) {
     }
@@ -51,10 +50,6 @@ namespace ms {
     Window::~Window() {
         display = nullptr;
 //        glfmTerminate();
-    }
-
-    void error_callback(int no, const char *description) {
-        std::cout << "GLFW error [" << no << "]: " << description << std::endl;
     }
 
     bool key_callback(GLFMDisplay *display, GLFMKeyCode keyCode, GLFMKeyAction action,
@@ -352,10 +347,6 @@ namespace ms {
         UI::get().send_focus(focused);
     }
 
-    void scroll_callback(GLFMDisplay *display, double xoffset, double yoffset) {
-        UI::get().send_scroll(yoffset);
-    }
-
     void close_callback(GLFMDisplay *display) {
         UI::get().send_close();
     }
@@ -455,17 +446,10 @@ namespace ms {
         glfmSetRenderFunc(display, onDraw);
         glfmSetTouchFunc(display, mousekey_callback);
         glfmJoystickAxisFunc = joystick_axis_callback;
-//        glfmSetMouseWheelFunc(display, cursor_callback);
         glfmSetAppFocusFunc(display, focus_callback);
-//        glfwSetScrollCallback(pApp, scroll_callback);
         glfmSetSurfaceDestroyedFunc(display, close_callback);
 
         return Error::Code::NONE;
-    }
-
-    bool Window::not_closed() const {
-//        return glfwWindowShouldClose(glwnd_) == 0;
-        return true;
     }
 
     void Window::update() {
@@ -485,17 +469,6 @@ namespace ms {
 
                 fade_procedure_();
             }
-        }
-    }
-
-    void Window::check_events() {
-        int16_t max_width = Configuration::get().get_max_width();
-        int16_t max_height = Configuration::get().get_max_height();
-        int16_t view_width = Constants::Constants::get().get_viewwidth();
-        int16_t view_height = Constants::Constants::get().get_viewheight();
-
-        if (view_width >= max_width || view_height >= max_height) {
-            fullscreen_ = true;
         }
     }
 
@@ -530,18 +503,6 @@ namespace ms {
 
 //        return text != nullptr ? text : "";
         return "";
-    }
-
-    void Window::toggle_fullscreen() {
-        int16_t max_width = Configuration::get().get_max_width();
-        int16_t max_height = Configuration::get().get_max_height();
-        int16_t view_width = Constants::Constants::get().get_viewwidth();
-        int16_t view_height = Constants::Constants::get().get_viewheight();
-
-        if (view_width < max_width && view_height < max_height) {
-            fullscreen_ = !fullscreen_;
-            Setting<Fullscreen>::get().save(fullscreen_);
-        }
     }
 
     void Window::update_viewport() {

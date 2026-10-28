@@ -361,8 +361,45 @@ void PlayerClimbState::send_action(Player &player,
     }
 }
 
+namespace {
+// A rope whose top end has no platform on it ends in mid-air, and that end is as far as a climb
+// goes. Only an upward climb against such a top is stopped by it; a rope installed on a platform is
+// left to the release in Ladder::felloff, which is what hands a climber onto the platform - and the
+// short hop that release leaves the body with, over the ledge and back down onto it, is what he
+// asked to keep: it reads as arriving at the top rather than as being set down there.
+const Ladder *dead_end_top(Player &player) {
+    if (!player.is_key_down(KeyAction::Id::UP)
+        || player.is_key_down(KeyAction::Id::DOWN)) {
+        return nullptr;
+    }
+
+    auto ladder = player.get_ladder();
+
+    if (!ladder) {
+        return nullptr;
+    }
+
+    const Ladder &l = ladder->get();
+
+    if (l.get_top_mount() != Ladder::NO_TOP_MOUNT
+        || player.get_phobj().get_y() > l.get_top()) {
+        return nullptr;
+    }
+
+    return &l;
+}
+}  // namespace
+
 void PlayerClimbState::update(Player &player) const {
     if (player.is_key_down(KeyAction::Id::UP)) {
+        // Past the end there is nothing to hold the body up, so the one thing it must not do is keep
+        // climbing: released there, it falls back down the rope and the next frame's grab pulls it up
+        // again, which reads as the rope snatching the character back and forth.
+        if (dead_end_top(player)) {
+            player.get_phobj().vspeed = 0.0;
+            return;
+        }
+
         player.get_phobj().vspeed = -player.get_climbspeed();
     } else if (player.is_key_down(KeyAction::Id::DOWN)) {
         player.get_phobj().vspeed = player.get_climbspeed();
@@ -375,6 +412,14 @@ void PlayerClimbState::update_state(Player &player) const {
     int16_t y = player.get_phobj().get_y();
     bool downwards = player.is_key_down(KeyAction::Id::DOWN);
     auto ladder = player.get_ladder();
+
+    if (const Ladder *top = dead_end_top(player)) {
+        // The body is left attached to the rope, with its feet on the last pixel of it. Sitting the
+        // feet on the end rather than where the climb happened to stop is what keeps the release
+        // margin away from a rope this short.
+        player.get_phobj().set_y(top->get_top());
+        return;
+    }
 
     if (ladder && ladder->get().felloff(y, downwards)) {
         // Neither end of a rope needs the cooldown, because neither can take itself back on: coming

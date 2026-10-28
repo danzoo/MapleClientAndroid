@@ -18,7 +18,19 @@
 #include <fstream>
 #include <utility>
 
+#include "Util/ImgFiles.h"
+
 namespace ms {
+std::string Configuration::file_name() const {
+    // The settings have to be written where this app is allowed to write, which on Android is its own
+    // external files directory rather than the working directory it is started in. That path is only
+    // known once the resource reader has been given the activity, and the first use of a setting can
+    // and does happen before then, so this is resolved at every open instead of once here.
+    const std::string &root = ImgFiles::root_path();
+
+    return root.empty() ? SETTINGS_NAME : root + "/" + SETTINGS_NAME;
+}
+
 Configuration::Configuration() {
     settings.emplace<ServerIP>();
     settings.emplace<ServerPort>();
@@ -68,7 +80,7 @@ Configuration::~Configuration() {
 
 void Configuration::load() {
     std::unordered_map<std::string, std::string> rawsettings;
-    std::ifstream file(FILENAME);
+    std::ifstream file(file_name());
 
     if (file.is_open()) {
         // Go through the file line by line
@@ -97,7 +109,7 @@ void Configuration::load() {
 
 void Configuration::save() const {
     // Open the settings file
-    std::ofstream config(FILENAME);
+    std::ofstream config(file_name());
 
     if (config.is_open()) {
         // Save settings line by line.

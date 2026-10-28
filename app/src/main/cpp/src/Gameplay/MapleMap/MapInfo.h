@@ -37,7 +37,7 @@ private:
 
 class Ladder {
 public:
-    Ladder(const img::node &source);
+    Ladder(const img::node &source, const img::node &footholds);
 
     bool is_ladder() const;
 
@@ -47,10 +47,19 @@ public:
 
     int16_t get_x() const;
 
+    int16_t get_top() const;
+
+    // The platform which receives a climber at the top end of this rope, or NO_TOP_MOUNT when the
+    // top end hangs in the air.
+    int16_t get_top_mount() const;
+
+    static constexpr int16_t NO_TOP_MOUNT = 0x7FFF;
+
 private:
     int16_t x_;
     int16_t y1_;
     int16_t y2_;
+    int16_t top_mount_ = NO_TOP_MOUNT;
     bool ladder_;
 };
 

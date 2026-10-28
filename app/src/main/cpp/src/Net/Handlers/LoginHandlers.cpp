@@ -113,13 +113,8 @@ void LoginResultHandler::handle(InPacket &recv) const {
             if (account.female == 10) {
                 UI::get().emplace<UIGender>(*okhandler);
             } else {
-                // Save the "Login ID" if the box for it on the login screen is
-                // checked
-                if (Setting<SaveLogin>::get().load()) {
-                    Setting<DefaultAccount>::get().save(account.name);
-                }
-
-                // AfterLoginPacket("1111").dispatch();
+                // The login id was put away on the login screen as this attempt was made, which is
+                // what remembers an attempt the server turned down as well as one it took.
 
                 // Request the list of worlds and channels online.
                 fn_server_req();

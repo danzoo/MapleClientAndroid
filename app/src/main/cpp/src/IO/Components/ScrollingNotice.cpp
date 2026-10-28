@@ -18,6 +18,8 @@
 namespace ms {
 ScrollingNotice::ScrollingNotice() :
     active_(false),
+    duration_ms_(0),
+    elapsed_ms_(0),
     width_(800),
     background_(width_, 23, Color::Name::BLACK, 0.535f),
     notice_(Text::Font::A12M, Text::Alignment::LEFT, Color::Name::YELLOW),
@@ -25,9 +27,13 @@ ScrollingNotice::ScrollingNotice() :
     xpos_.set(0.0);
 }
 
-void ScrollingNotice::set_notice(const std::string &n) {
+void ScrollingNotice::set_notice(const std::string &n, uint32_t duration_ms) {
     notice_.change_text(n);
     xpos_.set(static_cast<double>(width_));
+    // A notice with no time given is still meant to be read, so it is held long enough to cross the
+    // bar rather than not at all.
+    duration_ms_ = duration_ms != 0 ? duration_ms : Constants::SCROLL_NOTICE_DEFAULT_MS;
+    elapsed_ms_ = 0;
     active_ = !n.empty();
 }
 
@@ -59,6 +65,12 @@ void ScrollingNotice::update() {
 
         if (xpos_.last() < xmin) {
             xpos_.set(static_cast<double>(width_));
+        }
+
+        elapsed_ms_ += Constants::TIMESTEP;
+
+        if (elapsed_ms_ >= duration_ms_) {
+            active_ = false;
         }
     }
 }

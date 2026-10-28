@@ -239,7 +239,11 @@ private:
     template<typename T>
     friend struct Setting;
 
-    const char *FILENAME = "Settings";
+    // The settings file, found in the directory this app is allowed to write. Resolved whenever the
+    // file is opened, because that directory is not known yet when the first setting is read.
+    std::string file_name() const;
+
+    const char *SETTINGS_NAME = "Settings";
     const char *TITLE = "msclient";
     const char *VERSION = "0.4.0";
     const char *JOINLINK = "https://www.nexon.com/account/en/create";

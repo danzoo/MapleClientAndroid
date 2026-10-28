@@ -37,8 +37,6 @@ namespace ms {
 
         Error init_window();
 
-        bool not_closed() const;
-
         void update();
 
         void begin();
@@ -48,13 +46,9 @@ namespace ms {
         // Fade the whole screen out over the given number of milliseconds, then run the procedure.
         void fadeout(uint16_t millis, std::function<void()> fadeprocedure);
 
-        void check_events();
-
         void set_clipboard(const std::string &text) const;
 
         std::string get_clipboard() const;
-
-        void toggle_fullscreen();
 
         // Ends the application for good. glfm owns the render loop on its own thread, so unlike
         // the desktop build there is no loop condition to return from: the activity is asked to
@@ -76,7 +70,6 @@ namespace ms {
         void update_viewport();
 
         GLFMDisplay *display;
-        bool fullscreen_;
         float opacity_;
         float opc_step_;
         // Surface pixels per game unit, and the centring offsets of the view box.

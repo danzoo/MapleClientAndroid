@@ -19,7 +19,6 @@
 #include <utility>
 
 #include "../Constants.h"
-#include "../GameAttributes.h"
 #include "../Gameplay/Stage.h"
 #include "../Graphics/GraphicsGL.h"
 #include "../Graphics/UIRenderer.h"
@@ -87,10 +86,10 @@ namespace ms {
                 // magnified by UI_SCALE on the way to the frame - so the view it fills has to be
                 // that much bigger than the art, or the screens would hang off the bottom right.
                 Constants::Constants::get().set_viewwidth(
-                        static_cast<int16_t>(GameAttributes::LOGIN_WIDTH *
+                        static_cast<int16_t>(Constants::LOGIN_WIDTH *
                                              Constants::UI_SCALE));
                 Constants::Constants::get().set_viewheight(
-                        static_cast<int16_t>(GameAttributes::LOGIN_HEIGHT *
+                        static_cast<int16_t>(Constants::LOGIN_HEIGHT *
                                              Constants::UI_SCALE));
                 state_ = std::make_unique<UIStateLogin>();
                 break;
@@ -192,18 +191,6 @@ namespace ms {
     }
 
     void UI::send_key(int32_t keycode, bool pressed) {
-        if ((is_key_down_[GLFMKeyCodeAltLeft] || is_key_down_[GLFMKeyCodeAltRight])
-            && (is_key_down_[GLFMKeyCodeEnter] || is_key_down_[GLFMKeyCodeNumpadEnter])) {
-            Window::get().toggle_fullscreen();
-
-            is_key_down_[GLFMKeyCodeAltLeft] = false;
-            is_key_down_[GLFMKeyCodeAltRight] = false;
-            is_key_down_[GLFMKeyCodeEnter] = false;
-            is_key_down_[GLFMKeyCodeNumpadEnter] = false;
-
-            return;
-        }
-
         if (is_key_down_[keyboard_.capslock_code()]) {
             caps_lock_enabled_ = !caps_lock_enabled_;
         }
@@ -403,8 +390,8 @@ namespace ms {
         is_key_down_[unicode] = true;  // maybe remove
     }
 
-    void UI::set_scrollnotice(const std::string &notice) {
-        scrolling_notice_.set_notice(notice);
+    void UI::set_scrollnotice(const std::string &notice, uint32_t duration_ms) {
+        scrolling_notice_.set_notice(notice, duration_ms);
     }
 
     void UI::focus_textfield(Textfield *tofocus) {
