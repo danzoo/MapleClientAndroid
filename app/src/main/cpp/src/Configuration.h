@@ -330,8 +330,10 @@ struct SFXVolume : public Configuration::ByteEntry {
 };
 
 // Whether to save the last used account name
+// Remembering the id is the behavior a phone player expects from the start, so this begins on; the
+// checkbox on the login screen is what turns it back off.
 struct SaveLogin : public Configuration::BoolEntry {
-    SaveLogin() : BoolEntry("SaveLogin", "false") {}
+    SaveLogin() : BoolEntry("SaveLogin", "true") {}
 };
 
 // The last used account name

@@ -130,11 +130,17 @@ UILogin::UILogin() : UIElement(Point<int16_t>(0, 0), Point<int16_t>(800, 600)) {
 
     saveid_ = Setting<SaveLogin>::get().load();
 
-    if (saveid_) {
-        account_.change_text(Setting<DefaultAccount>::get().load());
-        password_.set_state(Textfield::State::FOCUSED);
-    } else {
+    // Whichever field is still blank is the one to put the cursor in. Remembering is on by default,
+    // so a first run - or a start where the box was unticked - reads back an empty id, and that must
+    // leave the focus on the account field rather than skipping past it to the password.
+    const std::string remembered =
+        saveid_ ? Setting<DefaultAccount>::get().load() : std::string();
+
+    if (remembered.empty()) {
         account_.set_state(Textfield::State::FOCUSED);
+    } else {
+        account_.change_text(remembered);
+        password_.set_state(Textfield::State::FOCUSED);
     }
 
     if (Configuration::get().get_auto_login()) {

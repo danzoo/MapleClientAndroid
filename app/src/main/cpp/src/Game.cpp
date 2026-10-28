@@ -55,6 +55,13 @@ Error Game::init(GLFMDisplay *pApp) {
     // again once that directory is known.
     Configuration::get().load();
 
+    // And written back straight away, so that the very first start leaves a file behind in that
+    // directory instead of waiting for something to be changed. Every later start reads it again and
+    // saves the same values, so nothing is lost by this; what it guarantees is that the settings -
+    // among them the account id the login screen remembers - have somewhere to be by the time the
+    // app is next killed rather than quit.
+    Configuration::get().save();
+
     if (Error error = Window::get().init(pApp)) {
         return error;
     }

@@ -165,7 +165,7 @@ void ServerMessageHandler::handle(InPacket &recv) const {
         const uint32_t duration_ms =
             seconds > 0 ? static_cast<uint32_t>(seconds) * 1000u : 0;
 
-        UI::get().set_scrollnotice(message + " msclient v0.4.0", duration_ms);
+        UI::get().set_scrollnotice(message, duration_ms);
     } else if (type == 6) {
         recv.read_int();  // server appends an unused int(0) after lightblue notices
 
