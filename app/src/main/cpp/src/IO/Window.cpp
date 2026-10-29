@@ -119,6 +119,10 @@ namespace ms {
     double scroll_acc = 0.0;
     bool touch_draggable = false;
 
+    // Set while the press being sent is the one a hold or a drag commits to, and clear for the press
+    // a tap synthesises on the way up. See Window::is_hold_press().
+    bool hold_press = false;
+
     // Surface pixels one finger travels per row scrolled. Rows are the smallest unit there is,
     // so a swipe never leaves a list between two rows.
     constexpr double SCROLL_ROW_PX = 60.0;
@@ -157,6 +161,7 @@ namespace ms {
                     scroll_last_y = y;
                     scroll_acc = 0.0;
                     touch_draggable = false;
+                    hold_press = false;
 
                     if (UI::get().get_cursor_state() == Cursor::State::GRABBING) {
                         // An icon is already picked up from a previous gesture. This finger
@@ -165,6 +170,7 @@ namespace ms {
                         touch_mode = 4;
                     } else if (UI::get().cursor_in_drag_area()) {
                         touch_mode = 3;  // title strip: drag the window immediately
+                        hold_press = true;
                         UI::get().send_cursor(true);
                     } else {
                         touch_mode = 0;  // wait to see if this is a tap, a swipe or a hold
@@ -231,6 +237,7 @@ namespace ms {
                     // not a scroll. The cursor has since travelled with the finger, so put it back
                     // where the touch began before pressing.
                     touch_mode = 1;
+                    hold_press = true;
                     Window::get().move_cursor(touch_start_x, touch_start_y);
                     UI::get().send_cursor(true);
                     break;
@@ -250,6 +257,7 @@ namespace ms {
                         std::chrono::steady_clock::now() - click_start_time).count();
                 if (diff_ms > 500) {
                     touch_mode = 1;  // held still: pick up the icon / grab the slider thumb once
+                    hold_press = true;
                     UI::get().send_cursor(true);
                     break;
                 }
@@ -283,6 +291,14 @@ namespace ms {
                 bool stationary = (adx > ady ? adx : ady) <= SCROLL_SLOP_PX;
 
                 if (cancelled) {
+                    // A drag the system stole mid-flight (a home gesture taking the touch stream)
+                    // must not leave the icon glued to a finger that is gone: put it back. A hold
+                    // that never moved keeps its sticky grab, exactly as a normal release would.
+                    if (!stationary
+                        && UI::get().get_cursor_state() == Cursor::State::GRABBING) {
+                        UI::get().cancel_drag();
+                        UI::get().send_cursor(false);
+                    }
                     touch_mode = 0;
                     break;  // a cancelled finger neither taps nor drops anything
                 }
@@ -323,9 +339,14 @@ namespace ms {
                     touch_mode = 0;
 
                     if (stationary && down_ms > 500
-                        && UI::get().get_cursor_state() == Cursor::State::CAN_GRAB) {
+                        && (UI::get().get_cursor_state() == Cursor::State::CAN_GRAB
+                            || UI::get().get_cursor_state()
+                               == Cursor::State::CAN_DRAG)) {
                         // A long press that never moved (no Moved events to trip the timeout
-                        // above): pick the item up now and keep holding it, same sticky grab.
+                        // above): pick the item up now and keep holding it, same sticky grab. An
+                        // icon that only a hold picks up (CAN_DRAG) has to be caught here too, or a
+                        // finger that holds without jittering would read as a tap.
+                        hold_press = true;
                         UI::get().send_cursor(true);
                         break;
                     }
@@ -357,6 +378,10 @@ namespace ms {
         }
 
         return true;
+    }
+
+    bool Window::is_hold_press() const {
+        return hold_press;
     }
 
     void Window::move_cursor(double x, double y) {
@@ -459,6 +484,11 @@ namespace ms {
                              GLFMStencilFormatNone,
                              GLFMMultisampleNone);
         glfmSetMultitouchEnabled(display, true);
+        // The bottom row of the quick-slot strip lies in the last pixels of the screen, which Android
+        // keeps for the swipe-up home gesture even while the navigation bar is only hidden: a touch
+        // that starts or ends down there is taken by the system, so a drag into that row never
+        // finishes. Immersive chrome hands the whole surface, gestures included, to the game.
+        glfmSetDisplayChrome(display, GLFMUserInterfaceChromeNone);
         return init_window();
     }
 

@@ -22,6 +22,7 @@
 #include "../../Net/Packets/GameplayPackets.h"
 #include "../Components/MapleButton.h"
 #include "../UI.h"
+#include "../Window.h"
 #include "UIChannel.h"
 #include "UICharInfo.h"
 #include "UIChat.h"
@@ -486,14 +487,13 @@ void UIStatusBar::draw(float alpha) const {
     buttons_.at(Buttons::BT_EXTEND_QS)
         ->draw(position_ + quickslot_adj_ - quickslot_qs_adj_);
 
-    if (VWIDTH_ > 800 && VWIDTH_ < 1366) {
-        quickslot_[0].draw(position_ + quickslot_pos_ + Point<int16_t>(-1, 0)
-                           + quickslot_adj_);
-        quickslot_[1].draw(position_ + quickslot_pos_ + Point<int16_t>(-1, 0)
-                           + quickslot_adj_);
-    } else {
-        quickslot_[0].draw(position_ + quickslot_pos_ + quickslot_adj_);
-        quickslot_[1].draw(position_ + quickslot_pos_ + quickslot_adj_);
+    quickslot_[0].draw(quickslot_art_pos());
+    quickslot_[1].draw(quickslot_art_pos());
+
+    for (int16_t slot = 0; slot < QuickSlots::LENGTH; ++slot) {
+        if (const Icon *icon = quickslot_icons_[slot].get()) {
+            icon->draw(quickslot_cell(slot));
+        }
     }
 
 #pragma region Menu
@@ -571,6 +571,8 @@ void UIStatusBar::update() {
     mp_bar_.update(getmppercent());
 
     name_label_.change_text(stats_.get_name());
+
+    refresh_quickslots();
 
     Point<int16_t> pos_adj = get_quickslot_pos();
 
@@ -835,6 +837,12 @@ bool UIStatusBar::is_in_range(Point<int16_t> cursorpos) const {
     Point<int16_t> pos;
     Rectangle<int16_t> bounds;
 
+    // A slot is part of the bar wherever it sits, including the top row, which reaches two pixels
+    // above the box the meters are measured with.
+    if (quickslot_by_position(cursorpos) >= 0) {
+        return true;
+    }
+
     if (!character_active_ && !community_active_ && !event_active_
         && !menu_active_ && !setting_active_) {
         pos = Point<int16_t>(position_x_, position_y_);
@@ -1041,6 +1049,183 @@ Point<int16_t> UIStatusBar::get_quickslot_pos() const {
     }
 
     return Point<int16_t>(0, 0);
+}
+
+Point<int16_t> UIStatusBar::quickslot_art_pos() const {
+    Point<int16_t> pos = position_ + quickslot_pos_ + quickslot_adj_;
+
+    if (VWIDTH_ > 800 && VWIDTH_ < 1366) {
+        pos += Point<int16_t>(-1, 0);
+    }
+
+    return pos;
+}
+
+Point<int16_t> UIStatusBar::quickslot_cell(int16_t slot) const {
+    const int16_t column = slot % Constants::QUICKSLOT_COLS;
+    const int16_t row = slot / Constants::QUICKSLOT_COLS;
+
+    return quickslot_art_pos() + Constants::QUICKSLOT_ART_ORIGIN
+           + Point<int16_t>(column * Constants::QUICKSLOT_PITCH,
+                            row * Constants::QUICKSLOT_PITCH);
+}
+
+int16_t UIStatusBar::quickslot_by_position(Point<int16_t> cursorpos) const {
+    for (int16_t slot = 0; slot < QuickSlots::LENGTH; ++slot) {
+        const Point<int16_t> cell = quickslot_cell(slot);
+        // The whole pitch, not just the picture inside it: the 3px frame between two cells would
+        // otherwise belong to no slot, and a drop landing on it would be swallowed.
+        const Rectangle<int16_t> bounds(
+            cell, cell + Point<int16_t>(Constants::QUICKSLOT_PITCH,
+                                        Constants::QUICKSLOT_PITCH));
+
+        if (bounds.contains(cursorpos)) {
+            return slot;
+        }
+    }
+
+    return -1;
+}
+
+bool UIStatusBar::over_quickslot(Point<int16_t> cursorpos) const {
+    return quickslot_by_position(cursorpos) >= 0;
+}
+
+bool UIStatusBar::over_filled_quickslot(Point<int16_t> cursorpos) const {
+    const int16_t slot = quickslot_by_position(cursorpos);
+
+    return slot >= 0 && QuickSlots::at(slot).type != KeyType::Id::NONE;
+}
+
+void UIStatusBar::refresh_quickslots() {
+    const Inventory &inventory = Stage::get().get_player().get_inventory();
+
+    // A keymap saved before the one-item-one-slot rule can still hold the same consumable in two
+    // cells, and it does not tell the bar so on its own; once this has cleared the extras it has
+    // nothing left to do and stops sending anything.
+    QuickSlots::prune_duplicate_items();
+
+    for (int16_t slot = 0; slot < QuickSlots::LENGTH; ++slot) {
+        const Keyboard::Mapping mapping = QuickSlots::at(slot);
+
+        if (mapping != quickslot_drawn_[slot]) {
+            quickslot_drawn_[slot] = mapping;
+
+            if (mapping.type == KeyType::Id::NONE) {
+                quickslot_icons_[slot].reset();
+            } else {
+                quickslot_icons_[slot] = std::make_unique<Icon>(
+                    std::make_unique<Icon::Binding>(mapping, slot),
+                    QuickSlots::icon(mapping),
+                    mapping.type == KeyType::Id::ITEM
+                        ? inventory.get_total_item_count(mapping.action)
+                        : -1);
+            }
+        }
+
+        // The picture stays put while a stack is being eaten, so the number under it is the only
+        // part that has to be followed.
+        if (mapping.type == KeyType::Id::ITEM && quickslot_icons_[slot]) {
+            quickslot_icons_[slot]->set_count(
+                inventory.get_total_item_count(mapping.action));
+        }
+    }
+}
+
+bool UIStatusBar::takes_binding(Keyboard::Mapping mapping) {
+    switch (mapping.type) {
+        case KeyType::Id::ITEM: {
+            const auto inventory = UI::get().get_element<UIItemInventory>();
+
+            return inventory && inventory->get().is_active();
+        }
+        case KeyType::Id::SKILL: {
+            const auto skillbook = UI::get().get_element<UISkillBook>();
+
+            return skillbook && skillbook->get().is_active();
+        }
+        default: {
+            const auto keyconfig = UI::get().get_element<UIKeyConfig>();
+            const auto gamepad = UI::get().get_element<UIGamepadConfig>();
+
+            return (keyconfig && keyconfig->get().is_active())
+                   || (gamepad && gamepad->get().is_active());
+        }
+    }
+}
+
+Cursor::State UIStatusBar::grab_quickslot(int16_t slot,
+                                         Point<int16_t> cursorpos) {
+    Icon *icon = quickslot_icons_[slot].get();
+
+    if (!icon) {
+        return UIElement::send_cursor(true, cursorpos);
+    }
+
+    // The drag layer holds a reference to this icon rather than a copy, so it has to be the one the
+    // bar keeps, and it stays grabbed until something takes it.
+    icon->start_drag(cursorpos - quickslot_cell(slot));
+    UI::get().drag_icon(icon);
+
+    return Cursor::State::GRABBING;
+}
+
+bool UIStatusBar::send_icon(const Icon &icon, Point<int16_t> cursorpos) {
+    const int16_t slot = quickslot_by_position(cursorpos);
+    const std::optional<Keyboard::Mapping> mapping = icon.binding();
+
+    if (slot < 0 || !mapping) {
+        // Either not a cell, or something that has no binding to make (an piece of equipment, say).
+        // The bar takes nothing and the gesture ends with the icon back where it came from, rather
+        // than left stuck to the finger.
+        return UIElement::send_icon(icon, cursorpos);
+    }
+
+    // Dragging a slot's icon onto another slot moves it, so the cell it came from gives it up.
+    const int16_t from = icon.quick_slot();
+
+    if (from >= 0 && from != slot) {
+        QuickSlots::commit(from, Keyboard::Mapping(KeyType::Id::NONE, 0));
+    }
+
+    QuickSlots::commit(slot, *mapping);
+
+    return true;
+}
+
+Cursor::State UIStatusBar::send_cursor(bool clicked,
+                                      Point<int16_t> cursorpos) {
+    const int16_t slot = quickslot_by_position(cursorpos);
+
+    if (slot >= 0) {
+        const Keyboard::Mapping mapping = QuickSlots::at(slot);
+
+        if (mapping.type != KeyType::Id::NONE) {
+            if (!clicked) {
+                // Telling the touch layer that this can start a drag is what lets a finger that
+                // never paused pick the icon up, instead of reading the move as a swipe of
+                // whatever is behind the bar. A slot is offered this way whether or not a window is
+                // open to take it: a hold is always a pick-up, and only a tap is a trigger.
+                return Cursor::State::CAN_DRAG;
+            }
+
+            if (takes_binding(mapping) || Window::get().is_hold_press()) {
+                return grab_quickslot(slot, cursorpos);
+            }
+
+            // A tap while nothing is open to take the icon: fire the slot's own key rather than the
+            // action behind it, which makes the tap mean exactly what the same binding pressed on a
+            // keyboard means - including the ones the game only recognises by key. The lift is sent
+            // in the same breath because a tap is all the touch layer reports; every action a quick
+            // slot can hold starts on the press and takes nothing from holding it.
+            QuickSlots::press(slot, true);
+            QuickSlots::press(slot, false);
+
+            return Cursor::State::CLICKING;
+        }
+    }
+
+    return UIElement::send_cursor(clicked, cursorpos);
 }
 
 bool UIStatusBar::is_menu_active() {

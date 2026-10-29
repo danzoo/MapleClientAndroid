@@ -428,6 +428,10 @@ namespace ms {
         state_->drag_icon(icon);
     }
 
+    void UI::cancel_drag() {
+        state_->cancel_drag();
+    }
+
     void UI::add_keymapping(uint8_t no, uint8_t type, int32_t action) {
         keyboard_.assign(no, type, action);
     }

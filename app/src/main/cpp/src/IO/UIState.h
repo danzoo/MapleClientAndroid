@@ -59,6 +59,11 @@ public:
 
     virtual void drag_icon(Icon *icon) = 0;
 
+    // A gesture the system took away (a swipe-up home gesture stealing the touch stream, a shade
+    // pulled down mid-drag) ends without a release the player meant. Whatever was picked up goes
+    // back rather than staying glued to a finger that is no longer there.
+    virtual void cancel_drag() {}
+
     virtual void clear_tooltip(Tooltip::Parent parent) = 0;
 
     // Clear whichever tooltip is currently raised, whatever its parent. Used by the touch layer

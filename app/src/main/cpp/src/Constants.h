@@ -259,6 +259,23 @@ constexpr int16_t CLIMB_TOP_MOUNT_Y = CLIMB_MARGIN_Y + 1;
 constexpr int16_t LOGIN_WIDTH = 800;
 constexpr int16_t LOGIN_HEIGHT = 600;
 
+// The shortcut strip along the bottom of the status bar is a single piece of art holding a grid of
+// empty cells, and the quick slots are laid into that grid rather than drawn over it. So the bar's
+// own art decides where a slot is: the frame lines sit on a 35px pitch both ways and enclose 32x32
+// cells, and measured against the point the art is drawn at the first cell begins 12 in from the
+// left and 3 down.
+//
+// Every cell of the art is a slot: 16 columns by 2 rows. The first twelve are F1-F12 and the rest
+// stand for virtual key ids (QuickSlots::keycode). Folded, the strip shows only the leftmost ten
+// columns; the fold button opens it to reach the rest, exactly as the original bar works.
+// The distance from one cell's top-left to the next, horizontally and vertically: a 32x32 picture
+// inside a 3px frame line. Hit testing uses this rather than the picture, so a finger on a border
+// still belongs to a slot instead of falling between two of them.
+constexpr int16_t QUICKSLOT_PITCH = 35;
+constexpr int16_t QUICKSLOT_COLS = 16;
+// From the point the art is drawn at to the top-left of the first cell.
+constexpr Point<int16_t> QUICKSLOT_ART_ORIGIN(12, 3);
+
 // How a controller is read. These are not the game's own bands but one device's translation of a
 // player's hand into them, and every number here was measured off the device rather than taken from
 // a specification.

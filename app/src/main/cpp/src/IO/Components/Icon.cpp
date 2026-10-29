@@ -16,12 +16,37 @@
 #include "Icon.h"
 
 #include <imgwz/wz.hpp>
-#include <android/log.h>
 
 #include "../../Audio/Audio.h"
+#include "../QuickSlots.h"
 #include "Charset.h"
 
 namespace ms {
+// An icon picked up out of the persistent bar leaves that bar empty wherever it lands that isn't
+// another bar slot: the slot it came from gives the binding back, which is how a slot is cleared
+// without a second control for it.
+void Icon::Binding::drop_on_stage() const {
+    if (slot_ >= 0) {
+        QuickSlots::commit(slot_, Keyboard::Mapping(KeyType::Id::NONE, 0));
+    }
+}
+
+void Icon::Binding::drop_on_equips(EquipSlot::Id) const {
+    drop_on_stage();
+}
+
+bool Icon::Binding::drop_on_items(InventoryType::Id,
+                                  EquipSlot::Id,
+                                  int16_t,
+                                  bool) const {
+    drop_on_stage();
+    return true;
+}
+
+void Icon::Binding::drop_on_bindings(Point<int16_t>, bool) const {
+    drop_on_stage();
+}
+
 Icon::Icon(std::unique_ptr<Type> t, Texture tx, int16_t c) :
     type_(std::move(t)),
     show_count_(c > -1),
@@ -85,6 +110,10 @@ void Icon::drop_on_bindings(Point<int16_t> cursorposition, bool remove) const {
 
 std::optional<Keyboard::Mapping> Icon::binding() const {
     return type_->binding();
+}
+
+int16_t Icon::quick_slot() const {
+    return type_->quick_slot();
 }
 
 void Icon::start_drag(Point<int16_t> offset) {

@@ -50,6 +50,12 @@ public:
             return std::nullopt;
         }
 
+        // The persistent bar slot this icon was picked up out of, or -1. Wherever such an icon
+        // lands that isn't a slot, that slot gives the binding up.
+        virtual int16_t quick_slot() const {
+            return -1;
+        }
+
         virtual void set_count(int16_t) = 0;
 
         virtual IconType get_type() = 0;
@@ -69,6 +75,40 @@ public:
         IconType get_type() override { return IconType::NONE; }
     };
 
+    // An icon that stands for a binding and asks for nothing where it lands. The persistent
+    // quick-slot bar shows one of these per bound key and hands it out when it is picked up: every
+    // window that takes bindings reads it through binding(), so the icon never has to know which of
+    // them it is being dropped onto, and dropping it anywhere else simply leaves it where it was.
+    //
+    // An icon that came out of a bar slot says which one, and then the rule flips: anywhere that
+    // isn't a slot gives that slot back its emptiness, which is how a slot is cleared.
+    class Binding : public Type {
+    public:
+        explicit Binding(Keyboard::Mapping mapping, int16_t slot = -1) :
+            mapping_(mapping),
+            slot_(slot) {}
+
+        void drop_on_stage() const override;
+        void drop_on_equips(EquipSlot::Id) const override;
+        bool drop_on_items(InventoryType::Id,
+                           EquipSlot::Id,
+                           int16_t,
+                           bool) const override;
+        void drop_on_bindings(Point<int16_t>, bool) const override;
+        std::optional<Keyboard::Mapping> binding() const override {
+            return mapping_;
+        }
+        int16_t quick_slot() const override {
+            return slot_;
+        }
+        void set_count(int16_t) override {}
+        IconType get_type() override { return IconType::KEY; }
+
+    private:
+        Keyboard::Mapping mapping_;
+        int16_t slot_;
+    };
+
     Icon(std::unique_ptr<Type> type, Texture texture, int16_t count);
 
     Icon();
@@ -84,6 +124,8 @@ public:
     void drop_on_bindings(Point<int16_t> cursorposition, bool remove) const;
 
     std::optional<Keyboard::Mapping> binding() const;
+
+    int16_t quick_slot() const;
 
     void set_count(int16_t count);
 

@@ -18,7 +18,10 @@
 #include <android/input.h>
 
 namespace ms {
-    constexpr int32_t Keytable[90] = {0,
+    // Indexed by the Maple key id. Ids 100-119 are the quick-slot bar's cells past F12: no physical
+    // key produces them, so they dispatch under virtual platform codes (0x220+, above everything
+    // glfm and the gamepad's 0x200 range emit) and travel the same keyboard path as a real key.
+    constexpr int32_t Keytable[128] = {0,
                                       0,  // 1
                                       GLFMKeyCode0,
                                       GLFMKeyCode1,
@@ -106,7 +109,14 @@ namespace ms {
                                       GLFMKeyCodeControlRight,
                                       GLFMKeyCodeShiftRight,
                                       GLFMKeyCodeAltRight,
-                                      GLFMKeyCodeScrollLock};
+                                      GLFMKeyCodeScrollLock,
+                                      0,  // 89
+                                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 99
+                                      0x220, 0x221, 0x222, 0x223, 0x224,  // 104
+                                      0x225, 0x226, 0x227, 0x228, 0x229,  // 109
+                                      0x22A, 0x22B, 0x22C, 0x22D, 0x22E,  // 114
+                                      0x22F, 0x230, 0x231, 0x232, 0x233,  // 119
+                                      0, 0, 0, 0, 0, 0, 0, 0};  // 127
 
     constexpr int32_t Shifttable[126] = {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    //  10
@@ -212,6 +222,10 @@ namespace ms {
 
     void Keyboard::map_virtual(int32_t keycode, const Keyboard::Mapping &mapping) {
         keymap_[keycode] = mapping;
+    }
+
+    int32_t Keyboard::get_keycode(uint8_t key) const {
+        return Keytable[key];
     }
 
     Keyboard::Mapping Keyboard::get_text_mapping(int32_t keycode,
