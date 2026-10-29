@@ -153,8 +153,6 @@ namespace ms {
         // icon or one dragged in from the skill book or the inventory.
         GamepadConfig::Slot grabbed_;
 
-        img::node action_icon_;
-        img::node tray_icon_;
 
         // The plate's own key labels, which have to stay readable through whatever is bound to the
         // input they name, so they are the last thing drawn instead of part of the background.

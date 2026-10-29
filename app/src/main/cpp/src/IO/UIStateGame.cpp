@@ -119,6 +119,20 @@ namespace ms {
     }
 
     bool UIStateGame::drop_icon(const Icon &icon, Point<int16_t> pos) {
+        // An icon that can become a key binding belongs to the quick-slot strip whenever it is let go
+        // over one of its cells, empty or not. The strip is drawn at the bottom of the screen, where
+        // any window can be laid over it, and a window's send_icon answers "taken" to everything it
+        // has no cell for - which ended the drag and lost the binding without a trace.
+        if (icon.binding()) {
+            if (auto *bar = get(UIStatusBar::TYPE)) {
+                auto *status = static_cast<UIStatusBar *>(bar);
+
+                if (status->is_active() && status->over_quickslot(pos)) {
+                    return status->send_icon(icon, pos);
+                }
+            }
+        }
+
         if (UIElement *front = get_front(pos)) {
             return front->send_icon(icon, pos);
         }
@@ -435,6 +449,12 @@ namespace ms {
         dragged_icon_ = create_optional<Icon>(drgic);
     }
 
+    void UIStateGame::cancel_drag() {
+        if (dragged_icon_) {
+            remove_icon();
+        }
+    }
+
     void UIStateGame::clear_tooltip(Tooltip::Parent parent) {
         if (parent == tooltip_parent_) {
             eq_tooltip_.set_equip(Tooltip::Parent::NONE, 0);
@@ -625,6 +645,17 @@ namespace ms {
 // TODO: (rich) fix
 
     UIElement *UIStateGame::get_front(Point<int16_t> pos) {
+        // A cell that is showing an icon is part of the HUD, so it answers the finger before any
+        // window laid over it does. Without this, opening a window over the bottom of the screen put
+        // its own widgets in front of the strip and a slot could no longer be picked up.
+        if (auto *bar = get(UIStatusBar::TYPE)) {
+            auto *status = static_cast<UIStatusBar *>(bar);
+
+            if (status->is_active() && status->over_filled_quickslot(pos)) {
+                return status;
+            }
+        }
+
         auto begin = element_order_.rbegin();
         auto end = element_order_.rend();
 

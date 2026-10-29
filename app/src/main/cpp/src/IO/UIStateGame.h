@@ -56,6 +56,8 @@ public:
 
     void drag_icon(Icon *icon) override;
 
+    void cancel_drag() override;
+
     void clear_tooltip(Tooltip::Parent parent) override;
 
     void clear_tooltip() override;

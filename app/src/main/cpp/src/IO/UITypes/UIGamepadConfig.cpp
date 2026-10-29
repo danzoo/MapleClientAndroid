@@ -24,6 +24,7 @@
 #include "../../Data/SkillData.h"
 #include "../Components/MapleButton.h"
 #include "../GamepadConfig.h"
+#include "../QuickSlots.h"
 #include "../UI.h"
 #include "UINotice.h"
 
@@ -36,105 +37,6 @@ namespace ms {
         constexpr int16_t kTrayColumns = 17;
         constexpr int16_t kTrayPitch = 36;
 
-        // Which keytype a function needs to be recognised as, copied from the keyboard editor so a
-        // binding made here behaves exactly like the same one made there.
-        KeyType::Id key_type(KeyAction::Id action) {
-            switch (action) {
-                case KeyAction::Id::PICKUP:
-                case KeyAction::Id::SIT:
-                case KeyAction::Id::ATTACK:
-                case KeyAction::Id::JUMP:
-                case KeyAction::Id::LEFT:
-                case KeyAction::Id::RIGHT:
-                case KeyAction::Id::UP:
-                case KeyAction::Id::DOWN:
-                    return KeyType::Id::ACTION;
-                case KeyAction::Id::FACE1:
-                case KeyAction::Id::FACE2:
-                case KeyAction::Id::FACE3:
-                case KeyAction::Id::FACE4:
-                case KeyAction::Id::FACE5:
-                case KeyAction::Id::FACE6:
-                case KeyAction::Id::FACE7:
-                    return KeyType::Id::FACE;
-                default:
-                    return KeyType::Id::MENU;
-            }
-        }
-
-        // One icon of the tray. A function whose lettering was drawn in Chinese for this window is
-        // named in the controller sheet and takes its glyph from there; every other one borrows the
-        // keyboard editor's own art by index, which is also the fallback if the named glyph is
-        // missing from the file.
-        struct TraySpec {
-            KeyAction::Id action;
-            const char *const glyph;
-            int16_t index;
-        };
-
-        const TraySpec kTray[] = {
-            {KeyAction::Id::EQUIPMENT, "equipment", 0},
-            {KeyAction::Id::ITEMS, "items", 1},
-            {KeyAction::Id::STATS, "stats", 2},
-            {KeyAction::Id::SKILLS, "skills", 3},
-            {KeyAction::Id::FRIENDS, "friends", 4},
-            {KeyAction::Id::WORLD_MAP, "worldmap", 5},
-            {KeyAction::Id::MAPLE_CHAT, "maplechat", 6},
-            {KeyAction::Id::MINI_MAP, "minimap", 7},
-            {KeyAction::Id::QUEST_LOG, "questlog", 8},
-            {KeyAction::Id::KEY_BINDINGS, "keybindings", 9},
-            {KeyAction::Id::SAY, "say", 10},
-            {KeyAction::Id::WHISPER, "whisper", 11},
-            {KeyAction::Id::PARTY_CHAT, "partychat", 12},
-            {KeyAction::Id::FRIENDS_CHAT, "friendschat", 13},
-            {KeyAction::Id::MENU, "menu", 14},
-            {KeyAction::Id::QUICK_SLOTS, "quickslots", 15},
-            {KeyAction::Id::TOGGLE_CHAT, "togglechat", 16},
-            {KeyAction::Id::GUILD, "guild", 17},
-            {KeyAction::Id::GUILD_CHAT, "guildchat", 18},
-            {KeyAction::Id::PARTY, "party", 19},
-            {KeyAction::Id::NOTIFIER, "notifier", 20},
-            {KeyAction::Id::MAPLE_NEWS, nullptr, 21},
-            {KeyAction::Id::CASHSHOP, "cashshop", 22},
-            {KeyAction::Id::ALLIANCE_CHAT, "alliancechat", 23},
-            {KeyAction::Id::MANAGE_LEGION, nullptr, 25},
-            {KeyAction::Id::MEDALS, "medals", 26},
-            {KeyAction::Id::BOSS_PARTY, "bossparty", 27},
-            {KeyAction::Id::PROFESSION, "profession", 29},
-            {KeyAction::Id::ITEM_POT, nullptr, 30},
-            {KeyAction::Id::EVENT, nullptr, 31},
-            {KeyAction::Id::SILENT_CRUSADE, nullptr, 33},
-            {KeyAction::Id::BATTLE_ANALYSIS, nullptr, 35},
-            {KeyAction::Id::GUIDE, nullptr, 39},
-            {KeyAction::Id::ENHANCE_EQUIP, nullptr, 41},
-            {KeyAction::Id::MONSTER_COLLECTION, nullptr, 42},
-            {KeyAction::Id::SOUL_WEAPON, nullptr, 43},
-            {KeyAction::Id::CHAR_INFO, nullptr, 44},
-            {KeyAction::Id::CHANGE_CHANNEL, nullptr, 45},
-            {KeyAction::Id::MAIN_MENU, nullptr, 46},
-            {KeyAction::Id::SCREENSHOT, nullptr, 47},
-            {KeyAction::Id::PICTURE_MODE, nullptr, 48},
-            {KeyAction::Id::MAPLE_ACHIEVEMENT, nullptr, 49},
-            {KeyAction::Id::PICKUP, "pickup", 50},
-            {KeyAction::Id::SIT, "sit", 51},
-            {KeyAction::Id::ATTACK, "attack", 52},
-            {KeyAction::Id::JUMP, "jump", 53},
-            {KeyAction::Id::INTERACT_HARVEST, "interact", 54},
-            {KeyAction::Id::LEFT, "left", -1},
-            {KeyAction::Id::RIGHT, "right", -1},
-            {KeyAction::Id::UP, "up", -1},
-            {KeyAction::Id::DOWN, "down", -1},
-            {KeyAction::Id::FACE1, nullptr, 100},
-            {KeyAction::Id::FACE2, nullptr, 101},
-            {KeyAction::Id::FACE3, nullptr, 102},
-            {KeyAction::Id::FACE4, nullptr, 103},
-            {KeyAction::Id::FACE5, nullptr, 104},
-            {KeyAction::Id::FACE6, nullptr, 105},
-            {KeyAction::Id::FACE7, nullptr, 106},
-            {KeyAction::Id::MUTE, nullptr, 202},
-            {KeyAction::Id::MONSTER_BOOK, "monsterbook", 1000},
-            {KeyAction::Id::TO_SPOUSE, "tospouse", 1001},
-        };
     }  // namespace
 
     UIGamepadConfig::UIGamepadConfig(const Inventory &in_inventory,
@@ -147,8 +49,7 @@ namespace ms {
         img::node KeyConfig = img::wz::ui["StatusBar3.img"]["KeyConfig"];
         img::node Controller = img::wz::ui["Controller.img"];
 
-        action_icon_ = KeyConfig["icon"];
-        tray_icon_ = Controller["icon"];
+
 
         img::node backgrnd = KeyConfig["backgrnd"];
         Texture bg = backgrnd;
@@ -188,17 +89,13 @@ namespace ms {
     }
 
     void UIGamepadConfig::load_tray() {
-        for (const TraySpec &spec: kTray) {
+        for (const QuickSlots::Function &function: QuickSlots::tray()) {
             // Every glyph in this window is authored with the same origin the keyboard editor's is,
             // so an Icon's own lift cancels it out and each one is drawn where it is put.
-            Texture texture = spec.glyph
-                                  ? tray_icon_[spec.glyph]
-                                  : action_icon_[spec.index];
+            Texture texture = QuickSlots::function_icon(function.action);
+            Keyboard::Mapping mapping = QuickSlots::function_mapping(function.action);
 
-            Keyboard::Mapping mapping = Keyboard::Mapping(key_type(spec.action),
-                                                          spec.action);
-
-            tray_.push_back({spec.action,
+            tray_.push_back({function.action,
                              mapping,
                              texture,
                              std::make_unique<Icon>(

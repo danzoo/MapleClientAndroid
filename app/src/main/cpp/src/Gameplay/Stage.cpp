@@ -303,9 +303,23 @@ void Stage::send_key(KeyType::Id type, int32_t action, bool down) {
             playable_->get().send_action(KeyAction::get_action_by_id(action),
                                          down);
             break;
-        case KeyType::Id::SKILL: combat_.use_move(action); break;
-        case KeyType::Id::ITEM: player_.use_item(action); break;
-        case KeyType::Id::FACE: player_.set_expression(action); break;
+        // One-shot actions fire on the press edge only. A tap of a virtual key is a press and a
+        // release inside one frame, so reading the release too would drink two potions per tap.
+        case KeyType::Id::SKILL:
+            if (down) {
+                combat_.use_move(action);
+            }
+            break;
+        case KeyType::Id::ITEM:
+            if (down) {
+                player_.use_item(action);
+            }
+            break;
+        case KeyType::Id::FACE:
+            if (down) {
+                player_.set_expression(action);
+            }
+            break;
     }
 }
 

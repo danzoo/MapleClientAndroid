@@ -53,6 +53,11 @@ public:
     // binding stands for.
     void map_virtual(int32_t keycode, const Mapping &mapping);
 
+    // The code a physical key is dispatched under. A binding is read back by a window that has the
+    // Maple id of its slot, but a press is sent as the platform code, so the two have to be turned
+    // into each other somewhere.
+    int32_t get_keycode(uint8_t key) const;
+
     int32_t left_shift_code() const;
 
     int32_t right_shift_code() const;

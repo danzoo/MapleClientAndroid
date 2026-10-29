@@ -57,6 +57,13 @@ namespace ms {
 
         void move_cursor(double x, double y);
 
+        // Whether the press being delivered right now came out of a committed hold or drag rather
+        // than out of a tap. Only this layer knows the difference — a tap sends its press and its
+        // lift inside one event, a hold sends the press while the finger is still down — and a
+        // widget that does both with one icon, like a quick-slot button that triggers on a tap and
+        // picks up on a hold, cannot tell them apart on its own.
+        bool is_hold_press() const;
+
         // Translate a touch position in surface pixels from the top left into the space the
         // interface is laid out in, undoing the letterbox offset and the interface's own scale.
         Point<double_t> to_ui(double x, double y) const;
