@@ -175,10 +175,15 @@ namespace ms {
             if (focusedelement->is_active()) {
                 return focusedelement->send_key(action, pressed, escape);
             }
-            focused_ = UIElement::NONE;
 
-            return;
+            // The window that had the focus has gone away on its own rather than being closed, so
+            // forgetting it is the whole response to that - the key itself still belongs to the
+            // game. Returning here threw the first key of every session away, because a window that
+            // is created at the same time as the screen and left closed - the shop - is what holds
+            // the focus at that point.
+            focused_ = UIElement::NONE;
         }
+
         switch (type) {
             case KeyType::Id::MENU:
                 if (pressed) {
@@ -343,9 +348,12 @@ namespace ms {
                 remove_cursor(focusedelement->get_type());
                 return focusedelement->send_cursor(clicked, cursorpos);
             }
+
+            // As with the key above: the window that owned the cursor has gone, but the tap still
+            // means what it means. Dropping it here cost the first tap of every session too.
             focused_ = UIElement::Type::NONE;
-            return cursorstate;
         }
+
         if (!clicked) {
             dragged_ = nullptr;
 

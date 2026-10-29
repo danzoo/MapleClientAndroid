@@ -181,7 +181,7 @@ namespace ms {
                 std::make_unique<MapleButton>(buttons["Cancel"],
                                               Point<int16_t>(582, 460));
 
-        drag_area_ = Point<int16_t>(dimension_.x(), 20);
+        drag_area_ = dimension_;
 
         load_tray();
         reset();
@@ -575,6 +575,14 @@ namespace ms {
         GamepadConfig::Slot slot = slot_by_position(cursorpos);
 
         return slot < GamepadConfig::Slot::LENGTH && slot_icons_[slot];
+    }
+
+    bool UIGamepadConfig::is_in_drag_range(Point<int16_t> cursorpos) const {
+        uint16_t buttonid;
+
+        return !can_drag(cursorpos) && !button_at(cursorpos, buttonid)
+               && Rectangle<int16_t>(position_, position_ + drag_area_).contains(
+                   cursorpos);
     }
 
 /// Tooltip

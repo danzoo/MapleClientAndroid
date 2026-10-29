@@ -51,20 +51,8 @@ namespace ms {
         void update();
 
     private:
-        static constexpr double STICK_DEADZONE = 0.3;
-        // Directions stay engaged until the stick returns inside this threshold, so that holding
-        // it near the edge of the deadzone doesn't flicker between walking and standing.
-        static constexpr double STICK_RETURN = 0.15;
-        // Around the diagonal the axis that already owns the direction keeps owning it, so a stick
-        // parked near 45 degrees doesn't flicker between the two keys as the axes jitter.
-        static constexpr double STICK_AXIS_MARGIN = 0.06;
-        // No disconnect event reaches the app, so a controller is forgotten once it stays quiet.
-        // A stick or button held at a constant reading reports nothing either, so that silence is
-        // not treated as the controller going away while it is still being used.
-        static constexpr std::chrono::milliseconds CONNECT_TIMEOUT{5000};
-        static constexpr std::chrono::milliseconds ATTACK_REPEAT{250};
-        static constexpr std::chrono::milliseconds PICKUP_REPEAT{100};
-        static constexpr std::chrono::milliseconds TALK_REPEAT{500};
+        // How far the stick has to be travelled to do anything, and how long a held input keeps
+        // asking for its press, all live in Constants.h next to the rest of the tunables.
 
         using clock = std::chrono::steady_clock;
 
@@ -85,7 +73,8 @@ namespace ms {
 
         // Resolve one stick's axes into a direction and send the edges between the old and the new
         // one. The game moves in four directions only, so the boundary between two of them sits at
-        // 45 degrees rather than letting a diagonal push send both keys.
+        // 45 degrees rather than letting a diagonal push send both keys, and reaching a direction
+        // takes travelling Constants::STICK_DEADZONE away from its centre.
         uint8_t steer(double x, double y, uint8_t held);
 
         void apply_stick(int stick, double x, double y);
@@ -113,6 +102,8 @@ namespace ms {
             // The slot that first asked for the direction, and so the one whose binding the release
             // has to undo.
             GamepadConfig::Slot slot = GamepadConfig::Slot::LENGTH;
+            // When the press for this direction last went out, so a held one can be re-asserted.
+            clock::time_point pressed = clock::now();
         };
 
         // Indexed by the Direction bit, which runs from 1 to 8.
