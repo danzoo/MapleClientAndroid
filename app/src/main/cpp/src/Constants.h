@@ -259,6 +259,51 @@ constexpr int16_t CLIMB_TOP_MOUNT_Y = CLIMB_MARGIN_Y + 1;
 constexpr int16_t LOGIN_WIDTH = 800;
 constexpr int16_t LOGIN_HEIGHT = 600;
 
+// How a controller is read. These are not the game's own bands but one device's translation of a
+// player's hand into them, and every number here was measured off the device rather than taken from
+// a specification.
+//
+// How far from its centre a thumbstick has to be travelled, as a fraction of its own range, before
+// it does anything at all. Travel rather than the two axes separately, so pushing diagonally asks
+// for the same effort as pushing straight.
+//
+// It is high because the axis is not a straight reading of the stick: the driver applies its own
+// curve on the way, and on the device this was measured on half the axis range was already spent by
+// the time the stick had moved a fifth of its physical throw. A threshold that reads as a proper
+// deadzone on one axis is therefore crossed before the hand has noticed anything on another. At rest
+// the axes read a thousandth, and full deflection reads one, so the whole range is usable.
+constexpr double STICK_DEADZONE = 0.75;
+
+// A direction being held doesn't need the stick to stay out at the deadzone edge, since a stick held
+// still reports nothing and axes jitter by a percent or two: it is kept down to here, but only while
+// the stick still points the same way. Half the engage point rather than a number of its own, so the
+// band a direction carries through stays the same share of the stick's travel as the deadzone grows.
+constexpr double STICK_RETURN = STICK_DEADZONE * 0.5;
+
+// Around the diagonal the axis that already owns the direction keeps owning it, so a stick parked
+// near forty-five degrees doesn't flicker between the two keys as the axes jitter.
+constexpr double STICK_AXIS_MARGIN = 0.06;
+
+// No disconnect event reaches the app, so a controller is forgotten once it stays quiet. A stick or
+// button held at a constant reading reports nothing either, which is why holding on past this point
+// isn't taken for the controller having gone away while it is still being used.
+constexpr uint16_t GAMEPAD_CONNECT_TIMEOUT_MS = 5000;
+
+// A controller gives one press for a held input, and the client has no key repeat of its own, so
+// anything that has to go on while something is held is renewed on these clocks instead. A keyboard
+// arrow hides the same hole because Android repeats it.
+//
+// Walking is renewed because a press that lands while the character can't take it - mid attack,
+// before the map has gone active - would otherwise be lost until the stick was centred and pushed
+// again. Attacking because it is what a controller is actually held down for. Picking up is fast
+// because loot is picked one item at a time and a pile is worked through. Talking is slow because an
+// answer arrives from the server and a second request while the first is outstanding reads as a
+// stutter.
+constexpr uint16_t GAMEPAD_WALK_REPEAT_MS = 100;
+constexpr uint16_t GAMEPAD_ATTACK_REPEAT_MS = 250;
+constexpr uint16_t GAMEPAD_PICKUP_REPEAT_MS = 100;
+constexpr uint16_t GAMEPAD_TALK_REPEAT_MS = 500;
+
 class Constants : public Singleton<Constants> {
 public:
     Constants() : VIEWWIDTH(1280), VIEWHEIGHT(720) {}

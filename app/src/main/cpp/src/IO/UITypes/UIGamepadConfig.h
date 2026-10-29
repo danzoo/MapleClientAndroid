@@ -121,6 +121,10 @@ namespace ms {
         // how a quick drag rather than a held press grabs an icon.
         bool can_drag(Point<int16_t> cursorpos) const;
 
+        // The whole panel moves the window, not just its title strip: the plate is one picture with
+        // nothing to click on it. Only the spots that mean something else keep their own behaviour.
+        bool is_in_drag_range(Point<int16_t> cursorpos) const override;
+
         void stage(GamepadConfig::Slot slot, Keyboard::Mapping mapping);
 
         Cursor::State grab(Icon &icon, Point<int16_t> offset);

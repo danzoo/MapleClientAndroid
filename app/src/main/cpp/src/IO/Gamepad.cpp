@@ -29,6 +29,18 @@
 
 namespace ms {
     namespace {
+        // Constants.h holds these as the number of milliseconds they each measure; the controller's
+        // whole notion of time is steady_clock, so they are turned into durations once here rather
+        // than at every use.
+        constexpr auto CONNECT_TIMEOUT =
+                std::chrono::milliseconds(Constants::GAMEPAD_CONNECT_TIMEOUT_MS);
+        constexpr auto WALK_REPEAT = std::chrono::milliseconds(Constants::GAMEPAD_WALK_REPEAT_MS);
+        constexpr auto ATTACK_REPEAT =
+                std::chrono::milliseconds(Constants::GAMEPAD_ATTACK_REPEAT_MS);
+        constexpr auto PICKUP_REPEAT =
+                std::chrono::milliseconds(Constants::GAMEPAD_PICKUP_REPEAT_MS);
+        constexpr auto TALK_REPEAT = std::chrono::milliseconds(Constants::GAMEPAD_TALK_REPEAT_MS);
+
         // The four directions in the order a stick is walked through them, low bit first.
         constexpr Gamepad::Direction kDirections[4] = {
             Gamepad::Direction::LEFT,
@@ -259,8 +271,10 @@ namespace ms {
 
         if (held.holders++ == 0) {
             held.slot = slot;
-            UI::get().send_key(GamepadConfig::keycode(slot), true);
         }
+
+        held.pressed = clock::now();
+        UI::get().send_key(GamepadConfig::keycode(slot), true);
     }
 
     void Gamepad::release_direction(Direction direction, GamepadConfig::Slot slot) {
@@ -343,6 +357,23 @@ namespace ms {
                 talk_repeat_ = now;
             }
         }
+
+        // Walking is re-asserted for the same reason attacking is: a held stick gives exactly one
+        // press, and a press that arrives while the character can't take it - mid attack, before
+        // the map has gone active - is then lost until the stick is centred and pushed again. A
+        // keyboard arrow hides the same hole because Android repeats it. Only the two axes that
+        // just change direction are renewed; up and down grab ladders and portals, which has to
+        // stay a single press, and a window that owns the screen answers keys itself.
+        if (!UI::get().is_modal_active()) {
+            for (Direction direction : {LEFT, RIGHT}) {
+                DirectionState &held = directions_[direction];
+
+                if (held.holders > 0 && now - held.pressed >= WALK_REPEAT) {
+                    UI::get().send_key(GamepadConfig::keycode(held.slot), true);
+                    held.pressed = now;
+                }
+            }
+        }
     }
 
     void Gamepad::tap(KeyAction::Id action) {
@@ -356,38 +387,33 @@ namespace ms {
         // a diagonal push send both keys, which the game reads as climbing a rope or lying down.
         const double magnitude_x = std::abs(axis_x);
         const double magnitude_y = std::abs(axis_y);
-        const bool use_x = std::abs(magnitude_x - magnitude_y) < STICK_AXIS_MARGIN
-                           ? (held & (LEFT | RIGHT)) != 0
-                           : magnitude_x > magnitude_y;
-        const double push_x = use_x ? axis_x : 0.0;
-        const double push_y = use_x ? 0.0 : axis_y;
+        const bool use_x =
+                std::abs(magnitude_x - magnitude_y) < Constants::STICK_AXIS_MARGIN
+                ? (held & (LEFT | RIGHT)) != 0
+                : magnitude_x > magnitude_y;
+        const uint8_t resolved =
+            use_x ? (axis_x < 0 ? LEFT : RIGHT) : (axis_y < 0 ? UP : DOWN);
 
-        // A stick held still reports nothing until it moves again, so directions stay engaged
-        // until an axis comes back inside STICK_RETURN. Reading a little above the deadzone
-        // keeps the direction, since axes commonly jitter by a percent or two around it.
-        uint8_t dirs = held;
+        // How far the stick has travelled from its centre, which is what the deadzone is measured
+        // against. Judging the two axes separately would make a diagonal push have to travel forty
+        // two percent to do what a straight one gets away with at the deadzone itself.
+        const double travel = std::hypot(axis_x, axis_y);
 
-        if (push_x < -STICK_DEADZONE) {
-            dirs = static_cast<uint8_t>((dirs & ~RIGHT) | LEFT);
-        }
-        else if (push_x > STICK_DEADZONE) {
-            dirs = static_cast<uint8_t>((dirs & ~LEFT) | RIGHT);
-        }
-        else if (std::abs(push_x) < STICK_RETURN) {
-            dirs &= ~(LEFT | RIGHT);
+        if (travel >= Constants::STICK_DEADZONE) {
+            return resolved;
         }
 
-        if (push_y < -STICK_DEADZONE) {
-            dirs = static_cast<uint8_t>((dirs & ~DOWN) | UP);
-        }
-        else if (push_y > STICK_DEADZONE) {
-            dirs = static_cast<uint8_t>((dirs & ~UP) | DOWN);
-        }
-        else if (std::abs(push_y) < STICK_RETURN) {
-            dirs &= ~(UP | DOWN);
+        // Below the deadzone a direction is kept only while the stick still points at it. Keeping
+        // any direction that was held would leave the one the stick just came from engaged all the
+        // way back through the band, so the next direction would have to cross the deadzone from
+        // wherever the stick happened to stop rather than from its centre - and a swing straight
+        // across to the opposite side would take the new direction as soon as it passed the low
+        // threshold, which is what makes the deadzone look like it only works one way.
+        if (travel >= Constants::STICK_RETURN && resolved == held) {
+            return held;
         }
 
-        return dirs;
+        return NONE;
     }
 
     void Gamepad::apply_stick(int stick, double x, double y) {
@@ -396,8 +422,7 @@ namespace ms {
 
         // A controller reports its resting stick once when it connects, which must not take the
         // on-screen controls away from a player using touch.
-        if (!connected_ && std::abs(axis_x) <= STICK_DEADZONE
-            && std::abs(axis_y) <= STICK_DEADZONE) {
+        if (!connected_ && std::hypot(axis_x, axis_y) <= Constants::STICK_DEADZONE) {
             return;
         }
 
