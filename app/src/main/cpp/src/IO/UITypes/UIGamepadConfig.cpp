@@ -46,24 +46,24 @@ namespace ms {
             skillbook_(in_skillbook),
             dirty_(false),
             grabbed_(GamepadConfig::Slot::LENGTH) {
-        img::node KeyConfig = img::wz::ui["StatusBar3.img"]["KeyConfig"];
         img::node Controller = img::wz::ui["Controller.img"];
+        // The whole picture this window paints comes out of window/: the controller plate plus the
+        // panel and title strip copied over from the keyboard editor's sheet.
+        img::node window = Controller["window"];
 
-
-
-        img::node backgrnd = KeyConfig["backgrnd"];
+        img::node backgrnd = window["backgrnd"];
         Texture bg = backgrnd;
         dimension_ = bg.get_dimensions();
 
         sprites_.emplace_back(backgrnd);
-        sprites_.emplace_back(KeyConfig["backgrnd2"]);
-        sprites_.emplace_back(Controller["backgrnd"], DrawArgument(kPlateOrigin));
+        sprites_.emplace_back(window["backgrnd2"]);
+        sprites_.emplace_back(window["plate"], DrawArgument(kPlateOrigin));
 
         // The plate's key labels belong on top of the bound icons, not under them, so they are not
         // one of the background sprites.
         key_overlay_ = Controller["key"];
 
-        img::node BtClose3 = img::wz::ui["Basic.img"]["BtClose3"];
+        img::node BtClose3 = window["BtClose3"];
         img::node buttons = Controller["button"];
 
         buttons_[Buttons::CLOSE] = std::make_unique<MapleButton>(

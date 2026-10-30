@@ -31,8 +31,7 @@ namespace ms {
         // The functions offered for binding, and what each is drawn with. One icon of this list is
         // what a binding tray hands out; a function whose lettering was drawn in Chinese for this
         // client is named in the controller sheet and takes its glyph from there, and every other
-        // one borrows the keyboard editor's own art by index, which is also the fallback if the
-        // named glyph is missing from the file.
+        // one takes the keyboard editor's art, copied into the same sheet under its index there.
         const std::vector<QuickSlots::Function> kTray = {
             {KeyAction::Id::EQUIPMENT, "equipment", 0},
             {KeyAction::Id::ITEMS, "items", 1},
@@ -216,7 +215,7 @@ namespace ms {
                 return img::wz::ui["Controller.img"]["icon"][function.glyph];
             }
 
-            return img::wz::ui["StatusBar3.img"]["KeyConfig"]["icon"][function.index];
+            return img::wz::ui["Controller.img"]["icon"][function.index];
         }
 
         return Texture();

@@ -84,7 +84,7 @@ namespace ms {
 
         // The picture a function is drawn with, everywhere a function is drawn. A named glyph comes
         // from the controller sheet, whose lettering was authored for this client; anything without
-        // one falls back to the keyboard editor's art by index.
+        // one takes the keyboard editor's art, which is copied into the same sheet under its index.
         static Texture function_icon(KeyAction::Id action);
 
         // The picture whatever a slot is bound to is drawn with - an item's own art, a skill's, or
