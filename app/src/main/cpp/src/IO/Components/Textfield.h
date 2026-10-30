@@ -57,6 +57,12 @@ public:
 
     Cursor::State send_cursor(Point<int16_t> cursorpos, bool clicked);
 
+    // Which pass the window owning this field draws on. A field's bounds live in that window's own
+    // units, and the panel magnifies, so a pointer arriving in the interface's units only lines up
+    // once it has been brought across. UI::send_cursor pokes the focused field directly instead of
+    // going through the window that owns it, so the field has to remember this much about itself.
+    void set_panel_space(bool on_panel);
+
     bool empty() const;
 
     State get_state() const;
@@ -79,6 +85,7 @@ private:
     size_t marker_pos_;
     Rectangle<int16_t> bounds_;
     Point<int16_t> parent_pos_;
+    bool on_panel_ = false;
     size_t limit_;
     int8_t crypt_;
     State state_;

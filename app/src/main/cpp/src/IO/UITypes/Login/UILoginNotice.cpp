@@ -18,6 +18,8 @@
 #include <imgwz/wz.hpp>
 #include <utility>
 
+#include "../../../Constants.h"
+#include "../../../Graphics/PanelRenderer.h"
 #include "../Audio/Audio.h"
 #include "../Components/MapleButton.h"
 #include "../UI.h"
@@ -63,6 +65,32 @@ UILoginNotice::UILoginNotice(uint16_t message,
 
     position_ = Point<int16_t>(275, 209);
     dimension_ = Texture(backgrnd).get_dimensions();
+
+    // The dialog this notice stands over is on the panel, and that pass is composited over the
+    // interface, so the notice goes onto it too - grown about its own centre, the same way the
+    // dialog is. Being drawn after the dialog, it lands on top of it inside that pass.
+    Point<int16_t> centre =
+        position_ + Point<int16_t>(dimension_.x() / 2, dimension_.y() / 2);
+
+    position_ = position_ + Constants::to_panel_space(centre) - centre;
+}
+
+void UILoginNotice::draw(float inter) const {
+    PanelRenderer::get().begin();
+
+    UIElement::draw(inter);
+
+    PanelRenderer::get().end();
+}
+
+Cursor::State UILoginNotice::send_cursor(bool clicked,
+                                        Point<int16_t> cursorpos) {
+    return UIElement::send_cursor(clicked,
+                                  Constants::to_panel_space(cursorpos));
+}
+
+bool UILoginNotice::is_in_range(Point<int16_t> cursorpos) const {
+    return UIElement::is_in_range(Constants::to_panel_space(cursorpos));
 }
 
 UILoginNotice::UILoginNotice(uint16_t message,

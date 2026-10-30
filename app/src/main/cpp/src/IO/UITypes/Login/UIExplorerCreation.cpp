@@ -16,6 +16,7 @@
 #include "UIExplorerCreation.h"
 
 #include <algorithm>
+#include <map>
 
 #include <imgwz/wz.hpp>
 
@@ -54,15 +55,60 @@ Point<int16_t> board_shift() {
 
     return Point<int16_t>(centred.x(), -BOARD_LIFT);
 }
+
+// What colours a hair style can be dyed is whichever ids its art carries: a style is the id with the
+// last digit zeroed and each colour is one more, so one walk over the art files gives every style its
+// palette. The server's tables decide which styles may be created; the colour is only a rendering
+// question, so it comes off the client's own files rather than a third table.
+const std::vector<uint8_t> &hair_palette(int32_t style) {
+    static const std::map<int32_t, std::vector<uint8_t>> palettes = [] {
+        std::map<int32_t, std::vector<uint8_t>> found;
+
+        for (const img::node &file : img::wz::character["Hair"]) {
+            int32_t id = 0;
+
+            for (char digit : file.name()) {
+                if (digit < '0' || digit > '9') {
+                    break;
+                }
+
+                id = id * 10 + (digit - '0');
+            }
+
+            if (id != 0) {
+                found[id - id % 10].push_back(id % 10);
+            }
+        }
+
+        return found;
+    }();
+
+    static const std::vector<uint8_t> empty;
+
+    auto palette = palettes.find(style);
+
+    return palette != palettes.end() ? palette->second : empty;
+}
 }  // namespace
 
 auto fn_name_char = [](auto name) { NameCharPacket(name).dispatch(); };
+
+BoolPair<std::vector<int32_t>> UIExplorerCreation::available_faces_;
+BoolPair<std::vector<int32_t>> UIExplorerCreation::available_hairs_;
+
+void UIExplorerCreation::set_available_styles(
+    BoolPair<std::vector<int32_t>> faces,
+    BoolPair<std::vector<int32_t>> hairs) {
+    available_faces_ = std::move(faces);
+    available_hairs_ = std::move(hairs);
+}
 
 UIExplorerCreation::UIExplorerCreation() :
     UIElement(board_shift(), Point<int16_t>(800, 600)) {
     gender_ = false;
     charset_ = false;
     named_ = false;
+    haircolor_ = 0;
 
     std::string version_text = Configuration::get().get_version();
     version_ = Text(Text::Font::A11M,
@@ -180,6 +226,9 @@ UIExplorerCreation::UIExplorerCreation() :
         Rectangle<int16_t>(Point<int16_t>(522, 195), Point<int16_t>(630, 253)),
         12);
 
+    // The board is composited on the panel, so the field is hit-tested in the panel's units.
+    namechar_.set_panel_space(true);
+
     sprites_pinned_.emplace_back(Common["frame"], Point<int16_t>(400, 300));
     sprites_pinned_.emplace_back(Common["step"]["3"], Point<int16_t>(40, 0));
 
@@ -210,8 +259,15 @@ UIExplorerCreation::UIExplorerCreation() :
     wepname_ =
         Text(Text::Font::A11M, Text::Alignment::CENTER, Color::Name::BLACK);
 
-    // Info is the Adventurer set, Premium was the Noblesse set and Orient the
-    // Legend set; every look they offered is selectable here.
+    // The faces and hairs come from the server: which styles may be created is its decision, held in
+    // two tables and sent with the character list. MakeCharInfo.img no longer has any say here.
+    faces_[false] = available_faces_[false];
+    faces_[true] = available_faces_[true];
+    hairs_[false] = available_hairs_[false];
+    hairs_[true] = available_hairs_[true];
+
+    // Skin and clothes are still the Adventurer set; Premium was the Noblesse set and Orient the
+    // Legend set, and every look they offered is selectable here too.
     img::node mkinfo = img::wz::etc["MakeCharInfo.img"];
 
     for (size_t i = 0; i < 2; i++) {
@@ -233,16 +289,14 @@ UIExplorerCreation::UIExplorerCreation() :
             for (const auto &node : CharGender) {
                 int num = stoi(node.name());
 
+                if (num < 3) {
+                    continue;
+                }
+
                 for (const auto &idnode : node) {
                     int32_t value = idnode;
 
                     switch (num) {
-                        case 0: add_unique(faces_[f], value); break;
-                        case 1: add_unique(hairs_[f], value); break;
-                        case 2:
-                            add_unique(haircolors_[f],
-                                       static_cast<uint8_t>(value));
-                            break;
                         case 3:
                             add_unique(skins_[f], static_cast<uint8_t>(value));
                             break;
@@ -425,21 +479,17 @@ Cursor::State UIExplorerCreation::send_cursor(bool clicked,
         back_button_->set_state(Button::State::NORMAL);
     }
 
-    // The pointer arrives in the interface's units and everything on the board is laid out on the
-    // panel, so the tap is brought into that space before anything else is asked what it covers.
-    Point<int16_t> panelpos = Constants::to_panel_space(cursorpos);
-
-    if (namechar_.get_state() == Textfield::State::NORMAL) {
-        if (namechar_.get_bounds().contains(panelpos)) {
-            if (clicked) {
-                namechar_.set_state(Textfield::State::FOCUSED);
-
-                return Cursor::State::CLICKING;
-            }
-
-            return Cursor::State::IDLE;
-        }
+    // The field converts the pointer itself, because UI::send_cursor pokes the focused one without
+    // coming through this window. Going through Textfield::send_cursor rather than testing its
+    // bounds by hand is also what re-raises the soft keyboard when an already focused field is
+    // tapped again after the keyboard was dismissed.
+    if (Cursor::State new_state = namechar_.send_cursor(cursorpos, clicked)) {
+        return new_state;
     }
+
+    // The pointer arrives in the interface's units and everything else on the board is laid out on
+    // the panel, so those units are converted before the buttons are asked what they cover.
+    Point<int16_t> panelpos = Constants::to_panel_space(cursorpos);
 
     return UIElement::send_cursor(clicked, panelpos);
 }
@@ -466,7 +516,7 @@ void UIExplorerCreation::send_naming_result(bool nameused) {
             std::string cname = namechar_.get_text();
             int32_t cface = faces_[female_][face_];
             int32_t chair = hairs_[female_][hair_];
-            uint8_t chairc = haircolors_[female_][haircolor_];
+            uint8_t chairc = haircolor_;
             uint8_t cskin = skins_[female_][skin_];
             int32_t ctop = tops_[female_][top_];
             int32_t cbot = bots_[female_][bot_];
@@ -534,9 +584,7 @@ Button::State UIExplorerCreation::button_pressed(uint16_t buttonid) {
                 buttons_[Buttons::BT_CHARC_WEPL]->set_active(true);
                 buttons_[Buttons::BT_CHARC_WEPR]->set_active(true);
 
-                for (size_t i = 0; i <= 7; i++) {
-                    buttons_[Buttons::BT_CHARC_HAIRC0 + i]->set_active(true);
-                }
+                show_hair_colors(true);
 
                 buttons_[Buttons::BT_CHARC_OK]->set_position(
                     Point<int16_t>(523, 425));
@@ -562,10 +610,7 @@ Button::State UIExplorerCreation::button_pressed(uint16_t buttonid) {
                     buttons_[Buttons::BT_CHARC_WEPL]->set_active(false);
                     buttons_[Buttons::BT_CHARC_WEPR]->set_active(false);
 
-                    for (size_t i = 0; i <= 7; i++) {
-                        buttons_[Buttons::BT_CHARC_HAIRC0 + i]->set_active(
-                            false);
-                    }
+                    show_hair_colors(false);
 
                     buttons_[Buttons::BT_CHARC_OK]->set_position(
                         Point<int16_t>(513, 273));
@@ -667,9 +712,7 @@ Button::State UIExplorerCreation::button_pressed(uint16_t buttonid) {
                 buttons_[Buttons::BT_CHARC_WEPL]->set_active(true);
                 buttons_[Buttons::BT_CHARC_WEPR]->set_active(true);
 
-                for (size_t i = 0; i <= 7; i++) {
-                    buttons_[Buttons::BT_CHARC_HAIRC0 + i]->set_active(true);
-                }
+                show_hair_colors(true);
 
                 buttons_[Buttons::BT_CHARC_OK]->set_position(
                     Point<int16_t>(523, 425));
@@ -700,10 +743,7 @@ Button::State UIExplorerCreation::button_pressed(uint16_t buttonid) {
                     buttons_[Buttons::BT_CHARC_WEPL]->set_active(false);
                     buttons_[Buttons::BT_CHARC_WEPR]->set_active(false);
 
-                    for (size_t i = 0; i <= 7; i++) {
-                        buttons_[Buttons::BT_CHARC_HAIRC0 + i]->set_active(
-                            false);
-                    }
+                    show_hair_colors(false);
 
                     buttons_[Buttons::BT_CHARC_OK]->set_position(
                         Point<int16_t>(514, 394));
@@ -730,17 +770,11 @@ Button::State UIExplorerCreation::button_pressed(uint16_t buttonid) {
 
             return Button::State::NORMAL;
         case Buttons::BT_CHARC_HAIRL:
-            hair_ = (hair_ > 0) ? hair_ - 1 : hairs_[female_].size() - 1;
-            newchar_.set_hair(hairs_[female_][hair_]
-                              + haircolors_[female_][haircolor_]);
-            hairname_.change_text(newchar_.get_hair()->get_name());
+            set_hair((hair_ > 0) ? hair_ - 1 : hairs_[female_].size() - 1);
 
             return Button::State::NORMAL;
         case Buttons::BT_CHARC_HAIRR:
-            hair_ = (hair_ < hairs_[female_].size() - 1) ? hair_ + 1 : 0;
-            newchar_.set_hair(hairs_[female_][hair_]
-                              + haircolors_[female_][haircolor_]);
-            hairname_.change_text(newchar_.get_hair()->get_name());
+            set_hair((hair_ < hairs_[female_].size() - 1) ? hair_ + 1 : 0);
 
             return Button::State::NORMAL;
         case Buttons::BT_CHARC_HAIRC0:
@@ -751,12 +785,10 @@ Button::State UIExplorerCreation::button_pressed(uint16_t buttonid) {
         case Buttons::BT_CHARC_HAIRC5:
         case Buttons::BT_CHARC_HAIRC6:
         case Buttons::BT_CHARC_HAIRC7:
-            // TODO: These need to be changed so when you click the color it
-            // only assigns the color, not the next in the series
-            haircolor_ = (haircolor_ > 0) ? haircolor_ - 1
-                                          : haircolors_[female_].size() - 1;
-            newchar_.set_hair(hairs_[female_][hair_]
-                              + haircolors_[female_][haircolor_]);
+            // Each chip carries the colour it shows, so the button is the offset itself and not a
+            // step through a shared series.
+            set_hair_color(static_cast<uint8_t>(buttonid
+                                                - Buttons::BT_CHARC_HAIRC0));
 
             return Button::State::NORMAL;
         case Buttons::BT_CHARC_SKINL:
@@ -839,10 +871,15 @@ Button::State UIExplorerCreation::button_pressed(uint16_t buttonid) {
 }
 
 void UIExplorerCreation::randomize_look() {
-    hair_ = randomizer_.next_int(hairs_[female_].size());
-    face_ = randomizer_.next_int(faces_[female_].size());
+    if (faces_[female_].empty() || hairs_[female_].empty()
+        || skins_[female_].empty()) {
+        // A table emptied on purpose leaves nothing to offer; the page stays on whatever look it
+        // already had rather than picking out of an empty list.
+        return;
+    }
+
     skin_ = randomizer_.next_int(skins_[female_].size());
-    haircolor_ = randomizer_.next_int(haircolors_[female_].size());
+    face_ = randomizer_.next_int(faces_[female_].size());
     top_ = randomizer_.next_int(tops_[female_].size());
     bot_ = 0;
     shoe_ = randomizer_.next_int(shoes_[female_].size());
@@ -850,8 +887,7 @@ void UIExplorerCreation::randomize_look() {
 
     newchar_.set_body(skins_[female_][skin_]);
     newchar_.set_face(faces_[female_][face_]);
-    newchar_.set_hair(hairs_[female_][hair_]
-                      + haircolors_[female_][haircolor_]);
+    set_hair(randomizer_.next_int(hairs_[female_].size()));
     newchar_.add_equip(tops_[female_][top_]);
     newchar_.add_equip(bots_[female_][bot_]);
     newchar_.add_equip(shoes_[female_][shoe_]);
@@ -859,10 +895,52 @@ void UIExplorerCreation::randomize_look() {
 
     bodyname_.change_text(newchar_.get_body()->get_name());
     facename_.change_text(newchar_.get_face()->get_name());
-    hairname_.change_text(newchar_.get_hair()->get_name());
     topname_.change_text(get_equipname(EquipSlot::Id::TOP));
     shoename_.change_text(get_equipname(EquipSlot::Id::SHOES));
     wepname_.change_text(get_equipname(EquipSlot::Id::WEAPON));
+}
+
+void UIExplorerCreation::set_hair(size_t hair_index) {
+    hair_ = hair_index;
+
+    int32_t style = hairs_[female_][hair_];
+
+    hair_offsets_ = hair_palette(style);
+
+    if (std::find(hair_offsets_.begin(), hair_offsets_.end(), haircolor_)
+        == hair_offsets_.end()) {
+        haircolor_ = hair_offsets_.empty() ? 0 : hair_offsets_.front();
+    }
+
+    newchar_.set_hair(style + haircolor_);
+    hairname_.change_text(newchar_.get_hair()->get_name());
+
+    // The chips only stand for anything while the look step is on screen; picking a style decides
+    // which of them are there at all.
+    show_hair_colors(gender_ && !charset_);
+}
+
+void UIExplorerCreation::set_hair_color(uint8_t color) {
+    if (std::find(hair_offsets_.begin(), hair_offsets_.end(), color)
+        == hair_offsets_.end()) {
+        return;
+    }
+
+    haircolor_ = color;
+
+    newchar_.set_hair(hairs_[female_][hair_] + color);
+}
+
+void UIExplorerCreation::show_hair_colors(bool show) {
+    for (uint8_t color = 0; color < 8; color++) {
+        bool has_color = std::find(hair_offsets_.begin(),
+                                   hair_offsets_.end(),
+                                   color)
+                         != hair_offsets_.end();
+
+        buttons_[Buttons::BT_CHARC_HAIRC0 + color]->set_active(show
+                                                              && has_color);
+    }
 }
 
 bool UIExplorerCreation::check_name(const std::string &name) const {

@@ -219,6 +219,28 @@ void CharlistHandler::handle(InPacket &recv) const {
         int8_t pic = recv.read_byte();
         int32_t slots = recv.read_int();
 
+        // The faces and hairs the creation page is allowed to offer. Which style may be created is
+        // the server's decision, kept in two tables; the order here is the order they are written.
+        auto read_styles = [&](std::vector<int32_t> &ids) {
+            ids.clear();
+
+            int32_t count = recv.read_int();
+
+            for (int32_t i = 0; i < count; i++) {
+                ids.push_back(recv.read_int());
+            }
+        };
+
+        BoolPair<std::vector<int32_t>> faces;
+        BoolPair<std::vector<int32_t>> hairs;
+
+        read_styles(faces[false]);
+        read_styles(faces[true]);
+        read_styles(hairs[false]);
+        read_styles(hairs[true]);
+
+        UIExplorerCreation::set_available_styles(faces, hairs);
+
         // Remove previous UIs
         UI::get().remove(UIElement::Type::LOGIN_NOTICE);
         UI::get().remove(UIElement::Type::LOGIN_WAIT);

@@ -30,7 +30,13 @@ public:
 
     UIElement::Type get_type() const override;
 
+    void draw(float inter) const override;
+
     void update() override;
+
+    Cursor::State send_cursor(bool clicked, Point<int16_t> cursorpos) override;
+
+    bool is_in_range(Point<int16_t> cursorpos) const override;
 
     void close();
 

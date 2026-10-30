@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "../../Util/StringHandling.h"
+#include "../../Constants.h"
 #include "../UI.h"
 #include "IO/Window.h"
 
@@ -217,6 +218,10 @@ Cursor::State Textfield::send_cursor(Point<int16_t> cursorpos, bool clicked) {
         return Cursor::State::IDLE;
     }
 
+    if (on_panel_) {
+        cursorpos = Constants::to_panel_space(cursorpos);
+    }
+
     if (get_bounds().contains(cursorpos)) {
         if (clicked) {
             if (state_ == State::NORMAL) {
@@ -247,6 +252,10 @@ void Textfield::change_text(const std::string &t) {
 
 void Textfield::set_cryptchar(int8_t character) {
     crypt_ = character;
+}
+
+void Textfield::set_panel_space(bool on_panel) {
+    on_panel_ = on_panel;
 }
 
 bool Textfield::below_limit() const {
