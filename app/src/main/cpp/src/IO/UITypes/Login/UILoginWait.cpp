@@ -19,6 +19,7 @@
 #include <utility>
 #define _SILENCE_CXX17_RESULT_OF_DEPRECATION_WARNING
 #include "../../../Constants.h"
+#include "../../../Graphics/PanelRenderer.h"
 #include "../../Net/PacketProcessor.h"
 #include "../Components/MapleButton.h"
 #include "../UI.h"
@@ -41,6 +42,32 @@ UILoginWait::UILoginWait(std::function<void()> okhandler) :
 
     position_ = Point<int16_t>(276, 229);
     dimension_ = Texture(backgrnd).get_dimensions();
+
+    // This box covers the login dialog while it is up, and that dialog is on the panel - the pass
+    // that is composited over the interface - so the box belongs there too. It is drawn after the
+    // dialog, which puts it on top inside the pass, and it grows about its own centre like the
+    // dialog does.
+    Point<int16_t> centre =
+        position_ + Point<int16_t>(dimension_.x() / 2, dimension_.y() / 2);
+
+    position_ = position_ + Constants::to_panel_space(centre) - centre;
+}
+
+void UILoginWait::draw(float inter) const {
+    PanelRenderer::get().begin();
+
+    UIElement::draw(inter);
+
+    PanelRenderer::get().end();
+}
+
+Cursor::State UILoginWait::send_cursor(bool clicked, Point<int16_t> cursorpos) {
+    return UIElement::send_cursor(clicked,
+                                  Constants::to_panel_space(cursorpos));
+}
+
+bool UILoginWait::is_in_range(Point<int16_t> cursorpos) const {
+    return UIElement::is_in_range(Constants::to_panel_space(cursorpos));
 }
 
 UIElement::Type UILoginWait::get_type() const {

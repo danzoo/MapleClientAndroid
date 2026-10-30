@@ -34,12 +34,19 @@ public:
 
     Cursor::State send_cursor(bool clicked, Point<int16_t> cursor_pos) override;
 
+    bool is_in_range(Point<int16_t> cursorpos) const override;
+
     UIElement::Type get_type() const override;
 
 protected:
     Button::State button_pressed(uint16_t id) override;
 
 private:
+    // Out of sprites_ because that list now goes onto the panel: this is the picture behind the
+    // dialog and the screen's own frame, which stay on the interface under it. They are updated by
+    // hand since they are no longer in the base list that UIElement::update() walks.
+    std::vector<Sprite> sprites_backdrop_;
+
     void login();
 
     void open_url(uint16_t id);

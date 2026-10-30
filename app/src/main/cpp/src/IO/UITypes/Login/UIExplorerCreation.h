@@ -41,11 +41,24 @@ public:
 
     void send_naming_result(bool nameused);
 
+    // The styles the server will accept for this account, sent along with the character list. The
+    // creation page can be built at any time after that, so the lists outlive any one instance.
+    static void set_available_styles(BoolPair<std::vector<int32_t>> faces,
+                                     BoolPair<std::vector<int32_t>> hairs);
+
 protected:
     Button::State button_pressed(uint16_t buttonid) override;
 
 private:
     void randomize_look();
+
+    // Taking a style also takes its palette: the colours one style has art for are not the colours
+    // the next has, and the chip buttons are numbered after the colour offset in the art's id.
+    void set_hair(size_t hair_index);
+
+    void set_hair_color(uint8_t color);
+
+    void show_hair_colors(bool show);
 
     const std::string &get_equipname(EquipSlot::Id slot) const;
 
@@ -113,7 +126,6 @@ private:
     Randomizer randomizer_;
 
     BoolPair<std::vector<uint8_t>> skins_;
-    BoolPair<std::vector<uint8_t>> haircolors_;
     BoolPair<std::vector<int32_t>> faces_;
     BoolPair<std::vector<int32_t>> hairs_;
     BoolPair<std::vector<int32_t>> tops_;
@@ -121,12 +133,16 @@ private:
     BoolPair<std::vector<int32_t>> shoes_;
     BoolPair<std::vector<int32_t>> weapons_;
 
+    // The colour offsets the currently selected style has art for, and which of them is on. The
+    // offset is the last digit of the hair id, so this is the value the preview and the packet take.
+    std::vector<uint8_t> hair_offsets_;
+    uint8_t haircolor_;
+
     bool gender_;
     bool charset_;
     bool named_;
     bool female_;
     size_t skin_;
-    size_t haircolor_;
     size_t face_;
     size_t hair_;
     size_t top_;
@@ -140,5 +156,8 @@ private:
     Text shoename_;
     Text wepname_;
     Text version_;
+
+    static BoolPair<std::vector<int32_t>> available_faces_;
+    static BoolPair<std::vector<int32_t>> available_hairs_;
 };
 }  // namespace ms

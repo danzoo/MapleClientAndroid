@@ -17,6 +17,7 @@
 
 #include "../../Audio/Audio.h"
 #include "../../Configuration.h"
+#include "../../Graphics/PanelRenderer.h"
 #include "../../Net/Packets/LoginPackets.h"
 #include "../Components/MapleButton.h"
 #include "../UI.h"
@@ -37,9 +38,22 @@ auto fn_login_start = []() { LoginStartPacket().dispatch(); };
 auto fn_login = []<typename... T>(T && ...args) {
     LoginPacket(std::forward<T>(args)...).dispatch();
 };
+
+// The centre of the dialog - the plate, the two fields, the buttons under them and the tick box - in
+// the interface's own coordinates. The dialog is grown about this point, which keeps it centred on
+// the picture it has always sat on instead of drifting towards a corner.
+constexpr Point<int16_t> DIALOG_CENTRE(400, 321);
+
+// The translation from the interface's coordinates into the panel's for everything on the dialog.
+// Growing about the centre is done by making the element's origin the shift, since a child is drawn
+// at origin + its own layout point; the layout points themselves stay in the interface's units and
+// the panel pass is what magnifies them.
+Point<int16_t> dialog_shift() {
+    return Constants::to_panel_space(DIALOG_CENTRE) - DIALOG_CENTRE;
+}
 }  // namespace
 
-UILogin::UILogin() : UIElement(Point<int16_t>(0, 0), Point<int16_t>(800, 600)) {
+UILogin::UILogin() : UIElement(dialog_shift(), Point<int16_t>(800, 600)) {
     fn_login_start();
 
     Music("BgmUI.img/Title").play();
@@ -60,14 +74,18 @@ UILogin::UILogin() : UIElement(Point<int16_t>(0, 0), Point<int16_t>(800, 600)) {
 
     img::node prettyLogo = img::wz::mapPretty["Back"]["login.img"]["ani"]["16"];
 
-    sprites_.emplace_back(back["11"], Point<int16_t>(400, 300));
-    sprites_.emplace_back(ani["17"], Point<int16_t>(129, 283));
-    sprites_.emplace_back(ani["18"], Point<int16_t>(306, 252));
-    sprites_.emplace_back(ani["19"], Point<int16_t>(379, 207));
-    sprites_.emplace_back(back["35"], Point<int16_t>(399, 260));
-    sprites_.emplace_back(prettyLogo, Point<int16_t>(394, 173));
+    // Only the dialog goes onto the panel, so everything else - the picture behind it and the
+    // screen's own frame, which every login screen draws at the same size - stays on the interface
+    // under that pass. They are out of sprites_ because that list is now drawn inside the panel.
+    sprites_backdrop_.emplace_back(back["11"], Point<int16_t>(400, 300));
+    sprites_backdrop_.emplace_back(ani["17"], Point<int16_t>(129, 283));
+    sprites_backdrop_.emplace_back(ani["18"], Point<int16_t>(306, 252));
+    sprites_backdrop_.emplace_back(ani["19"], Point<int16_t>(379, 207));
+    sprites_backdrop_.emplace_back(back["35"], Point<int16_t>(399, 260));
+    sprites_backdrop_.emplace_back(prettyLogo, Point<int16_t>(394, 173));
+    sprites_backdrop_.emplace_back(common["frame"], Point<int16_t>(400, 300));
+
     sprites_.emplace_back(title["signboard"], Point<int16_t>(391, 330));
-    sprites_.emplace_back(common["frame"], Point<int16_t>(400, 300));
 
     buttons_[Buttons::BT_LOGIN] =
         std::make_unique<MapleButton>(title["BtLogin"],
@@ -128,6 +146,10 @@ UILogin::UILogin() : UIElement(Point<int16_t>(0, 0), Point<int16_t>(800, 600)) {
     password_.set_cryptchar('*');
     passwordbg_ = title["PW"];
 
+    // This dialog is composited on the panel, so both fields are hit-tested in the panel's units.
+    account_.set_panel_space(true);
+    password_.set_panel_space(true);
+
     saveid_ = Setting<SaveLogin>::get().load();
 
     // Whichever field is still blank is the one to put the cursor in. Remembering is on by default,
@@ -156,9 +178,18 @@ UILogin::UILogin() : UIElement(Point<int16_t>(0, 0), Point<int16_t>(800, 600)) {
 }
 
 void UILogin::draw(float alpha) const {
+    // The picture and the frame are on the interface, which the panel composites over; the version
+    // number belongs to the screen rather than the dialog, so it keeps its place at the edge.
+    for (const Sprite &sprite : sprites_backdrop_) {
+        sprite.draw(Point<int16_t>(0, 0), alpha);
+    }
+
+    version_.draw(Point<int16_t>(707, 1));
+
+    PanelRenderer::get().begin();
+
     UIElement::draw(alpha);
 
-    version_.draw(position_ + Point<int16_t>(707, 1));
     account_.draw(position_);
     password_.draw(position_);
 
@@ -172,10 +203,16 @@ void UILogin::draw(float alpha) const {
     }
 
     checkbox_[saveid_].draw(DrawArgument(position_ + Point<int16_t>(291, 335)));
+
+    PanelRenderer::get().end();
 }
 
 void UILogin::update() {
     UIElement::update();
+
+    for (auto &sprite : sprites_backdrop_) {
+        sprite.update();
+    }
 
     account_.update(position_);
     password_.update(position_);
@@ -271,6 +308,9 @@ Button::State UILogin::button_pressed(uint16_t id) {
 }
 
 Cursor::State UILogin::send_cursor(bool clicked, Point<int16_t> cursorpos) {
+    // The fields convert the pointer themselves, because UI::send_cursor also pokes the focused one
+    // directly and that call cannot convert on the window's behalf. Everything else on the board is
+    // laid out on the panel, so those units are converted here for the buttons.
     if (Cursor::State new_state = account_.send_cursor(cursorpos, clicked)) {
         return new_state;
     }
@@ -279,7 +319,16 @@ Cursor::State UILogin::send_cursor(bool clicked, Point<int16_t> cursorpos) {
         return new_state;
     }
 
-    return UIElement::send_cursor(clicked, cursorpos);
+    Point<int16_t> panelpos = Constants::to_panel_space(cursorpos);
+
+    return UIElement::send_cursor(clicked, panelpos);
+}
+
+bool UILogin::is_in_range(Point<int16_t> cursorpos) const {
+    // The origin is the shift into the panel's units, not a place on the screen: this element still
+    // owns the whole interface, so a tap anywhere on it is routed here.
+    return Rectangle<int16_t>(Point<int16_t>(0, 0), dimension_)
+        .contains(cursorpos);
 }
 
 UIElement::Type UILogin::get_type() const {
