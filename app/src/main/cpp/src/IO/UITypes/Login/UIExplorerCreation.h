@@ -49,6 +49,10 @@ private:
 
     const std::string &get_equipname(EquipSlot::Id slot) const;
 
+    bool check_name(const std::string &name) const;
+
+    std::string to_lower(std::string value) const;
+
     enum Buttons : uint16_t {
         BT_BACK,
         BT_CHARC_OK,

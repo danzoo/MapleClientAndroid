@@ -62,7 +62,6 @@ enum Id : int32_t {
     CHAR_INFO,
     CHANGE_CHANNEL,
     MAIN_MENU,
-    SCREENSHOT,
     PICTURE_MODE,
     MAPLE_ACHIEVEMENT,
     PICKUP = 51,

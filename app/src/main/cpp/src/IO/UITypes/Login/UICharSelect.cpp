@@ -23,7 +23,7 @@
 #include "../Components/MapleButton.h"
 #include "../UI.h"
 #include "UILoginNotice.h"
-#include "UIRaceSelect.h"
+#include "UIExplorerCreation.h"
 #include "UISoftKey.h"
 #include "UIWorldSelect.h"
 
@@ -320,7 +320,7 @@ void UICharSelect::draw(float inter) const {
                     charpos + Point<int16_t>(-5, -298),
                     inter);
             }
-        } else if (i < slots_) {
+        } else if (index < slots_) {
             Point<int16_t> emptyslotpos = get_character_slot_pos(i, 130, 234);
 
             empty_slot_effect_.draw(emptyslotpos, inter);
@@ -735,7 +735,7 @@ Button::State UICharSelect::button_pressed(uint16_t buttonid) {
             tab_move_ = false;
             tab_move_pos_ = 0;
 
-            UI::get().emplace<UIRaceSelect>();
+            UI::get().emplace<UIExplorerCreation>();
             break;
         case Buttons::CHARACTER_DELETE: {
             int32_t id = characters_[selected_character_].id;
@@ -780,10 +780,23 @@ Button::State UICharSelect::button_pressed(uint16_t buttonid) {
                             onok);
                     }
                 } break;
-                case 2:
-                    fn_delete_char(id);
-                    chat_slot_label_.change_text(get_slot_text());
-                    break;
+                case 2: {
+                    // Without a PIC the request would be sent on the first tap,
+                    // which is far too easy to hit by mistake on a touch screen.
+                    std::function<void()> oncancel = [&]() {
+                        chat_slot_label_.change_text(get_slot_text());
+                    };
+
+                    std::function<void()> onok = [&, id, oncancel]() {
+                        fn_delete_char(id);
+                        chat_slot_label_.change_text(get_slot_text());
+                    };
+
+                    UI::get().emplace<UILoginNotice>(
+                        UILoginNotice::Message::DELETE_CONFIRMATION,
+                        onok,
+                        oncancel);
+                } break;
             }
         } break;
         case Buttons::PAGE_LEFT: {

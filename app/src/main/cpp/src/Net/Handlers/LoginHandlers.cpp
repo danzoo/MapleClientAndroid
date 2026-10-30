@@ -22,7 +22,7 @@
 #include "../../IO/UITypes/Login/UIGender.h"
 #include "../../IO/UITypes/Login/UILoginNotice.h"
 #include "../../IO/UITypes/Login/UILoginWait.h"
-#include "../../IO/UITypes/Login/UIRaceSelect.h"
+#include "../../IO/UITypes/Login/UIExplorerCreation.h"
 #include "../../IO/UITypes/Login/UITermsOfService.h"
 #include "../../IO/UITypes/Login/UIWorldSelect.h"
 #include "../PacketProcessor.h"
@@ -250,8 +250,9 @@ void CharnameResponseHandler::handle(InPacket &recv) const {
     bool used = recv.read_bool();
 
     // Notify the character creation screen
-    if (auto raceselect = UI::get().get_element<UIRaceSelect>()) {
-        raceselect->get().send_naming_result(used);
+    if (auto explorercreation =
+            UI::get().get_element<UIExplorerCreation>()) {
+        explorercreation->get().send_naming_result(used);
     }
 }
 
@@ -264,6 +265,10 @@ void AddNewCharEntryHandler::handle(InPacket &recv) const {
     // Read the updated character selection
     if (auto charselect = UI::get().get_element<UICharSelect>()) {
         charselect->get().add_character(std::move(character));
+
+        // Only the entry just received can tell the page which slots are now
+        // taken, so the buttons and the selection follow it from here.
+        charselect->get().post_add_character();
     }
 }
 

@@ -340,8 +340,6 @@ namespace ms {
                 Point<int16_t>(row_x + (slot_width * 9), row_y + (slot_height * 2));
         unbound_actions_pos_[KeyAction::Id::MAIN_MENU] =
                 Point<int16_t>(row_x + (slot_width * 10), row_y + (slot_height * 2));
-        unbound_actions_pos_[KeyAction::Id::SCREENSHOT] =
-                Point<int16_t>(row_x + (slot_width * 11), row_y + (slot_height * 2));
         unbound_actions_pos_[KeyAction::Id::PICTURE_MODE] =
                 Point<int16_t>(row_x + (slot_width * 12), row_y + (slot_height * 2));
         // unbound_actions_pos_[KeyAction::Id::LENGTH] = Point<int16_t>(row_x +
@@ -600,9 +598,6 @@ namespace ms {
                 Keyboard::Mapping(get_keytype(KeyAction::Id::MAIN_MENU),
                                   KeyAction::Id::MAIN_MENU));
         action_mappings_.push_back(
-                Keyboard::Mapping(get_keytype(KeyAction::Id::SCREENSHOT),
-                                  KeyAction::Id::SCREENSHOT));
-        action_mappings_.push_back(
                 Keyboard::Mapping(get_keytype(KeyAction::Id::PICTURE_MODE),
                                   KeyAction::Id::PICTURE_MODE));
         action_mappings_.push_back(
@@ -821,37 +816,33 @@ namespace ms {
                 std::make_unique<MappingIcon>(KeyAction::Id::MAIN_MENU),
                 icon_[46],
                 -1);
-        action_icons_[KeyAction::Id::SCREENSHOT] = std::make_unique<Icon>(
-                std::make_unique<MappingIcon>(KeyAction::Id::SCREENSHOT),
-                icon_[47],
-                -1);
         action_icons_[KeyAction::Id::PICTURE_MODE] = std::make_unique<Icon>(
                 std::make_unique<MappingIcon>(KeyAction::Id::PICTURE_MODE),
-                icon_[48],
+                icon_[47],
                 -1);
         action_icons_[KeyAction::Id::MAPLE_ACHIEVEMENT] = std::make_unique<Icon>(
                 std::make_unique<MappingIcon>(KeyAction::Id::MAPLE_ACHIEVEMENT),
-                icon_[49],
+                icon_[48],
                 -1);
         action_icons_[KeyAction::Id::PICKUP] = std::make_unique<Icon>(
                 std::make_unique<MappingIcon>(KeyAction::Id::PICKUP),
-                icon_[50],
+                icon_[49],
                 -1);
         action_icons_[KeyAction::Id::SIT] = std::make_unique<Icon>(
                 std::make_unique<MappingIcon>(KeyAction::Id::SIT),
-                icon_[51],
+                icon_[50],
                 -1);
         action_icons_[KeyAction::Id::ATTACK] = std::make_unique<Icon>(
                 std::make_unique<MappingIcon>(KeyAction::Id::ATTACK),
-                icon_[52],
+                icon_[51],
                 -1);
         action_icons_[KeyAction::Id::JUMP] = std::make_unique<Icon>(
                 std::make_unique<MappingIcon>(KeyAction::Id::JUMP),
-                icon_[53],
+                icon_[52],
                 -1);
         action_icons_[KeyAction::Id::INTERACT_HARVEST] = std::make_unique<Icon>(
                 std::make_unique<MappingIcon>(KeyAction::Id::INTERACT_HARVEST),
-                icon_[54],
+                icon_[53],
                 -1);
         action_icons_[KeyAction::Id::FACE1] = std::make_unique<Icon>(
                 std::make_unique<MappingIcon>(KeyAction::Id::FACE1),
@@ -1041,19 +1032,9 @@ namespace ms {
 
                 auto onok = [&](bool ok) {
                     if (ok) {
-                        auto keysel_onok = [&](bool alternate) {
-                            clear();
-
-                            if (alternate) {
-                                staged_mappings_ = alternate_keys_;
-                            } else {
-                                staged_mappings_ = basic_keys_;
-                            }
-
-                            bind_staged_action_keys();
-                        };
-
-                        UI::get().emplace<UIKeySelect>(keysel_onok, false);
+                        clear();
+                        staged_mappings_ = basic_keys_;
+                        bind_staged_action_keys();
                     }
                 };
 
@@ -1554,7 +1535,6 @@ namespace ms {
             case KeyAction::Id::CHAR_INFO:
             case KeyAction::Id::CHANGE_CHANNEL:
             case KeyAction::Id::MAIN_MENU:
-            case KeyAction::Id::SCREENSHOT:
             case KeyAction::Id::PICTURE_MODE:
             case KeyAction::Id::MAPLE_ACHIEVEMENT:
                 return KeyType::Id::MENU;

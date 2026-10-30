@@ -295,7 +295,6 @@ namespace ms {
                     // Login
                     types.emplace_back(UIElement::Type::WORLD_SELECT);
                     types.emplace_back(UIElement::Type::CHAR_SELECT);
-                    types.emplace_back(UIElement::Type::RACE_SELECT);  // No tab
                     types.emplace_back(
                             UIElement::Type::CLASS_CREATION);  // No tab (No arrows,
                     // but

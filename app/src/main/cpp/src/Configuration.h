@@ -97,12 +97,6 @@ public:
     // Set private member HWID
     void set_hwid(const std::string &hwid, std::string volumeSerialNumber);
 
-    // Set private member MAXWIDTH
-    void set_max_width(int16_t max_width);
-
-    // Set private member MAXHEIGHT
-    void set_max_height(int16_t max_height);
-
     // Get private member MACS
     std::string get_macs();
 
@@ -111,12 +105,6 @@ public:
 
     // Get the Hard Drive Volume Serial Number
     std::string get_vol_serial_num();
-
-    // Get the max width allowed
-    int16_t get_max_width();
-
-    // Get the max height allowed
-    int16_t get_max_height();
 
     // Get the shop's "Right-click to sell item" boolean
     bool get_rightclicksell();
@@ -266,8 +254,6 @@ private:
     bool start_shown = false;
     std::string MACS;
     std::string HWID;
-    int16_t MAXWIDTH;
-    int16_t MAXHEIGHT;
     std::string VolumeSerialNumber;
     uint8_t worldid;
     uint8_t channelid;

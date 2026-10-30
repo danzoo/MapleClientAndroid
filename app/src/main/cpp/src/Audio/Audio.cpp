@@ -66,7 +66,6 @@ Error Sound::init() {
     add_sound(Sound::Name::DLG_NOTICE, uisrc["DlgNotice"]);
     add_sound(Sound::Name::MENU_DOWN, uisrc["MenuDown"]);
     add_sound(Sound::Name::MENU_UP, uisrc["MenuUp"]);
-    add_sound(Sound::Name::RACE_SELECT, uisrc["RaceSelect"]);
     add_sound(Sound::Name::SCROLL_UP, uisrc["ScrollUp"]);
     add_sound(Sound::Name::SELECT_MAP, uisrc["SelectMap"]);
     add_sound(Sound::Name::TAB, uisrc["Tab"]);

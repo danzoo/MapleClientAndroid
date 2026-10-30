@@ -32,13 +32,11 @@
 #include "Constants.h"
 #include "Util/HardwareInfo.h"
 #include "Util/ImgFiles.h"
-#include "ScreenResolution.h"
 #include "Singleton.h"
 
 namespace ms {
 Game::Game() {
     HardwareInfo();
-    ScreenResolution();
 }
 
 Error Game::init(GLFMDisplay *pApp) {
