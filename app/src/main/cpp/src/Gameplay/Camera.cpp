@@ -49,13 +49,22 @@ void Camera::update(Point<int16_t> position) {
         next_y += vdelta * (12.0 / VHEIGHT);
     }
 
-    if (next_x > hbounds_.first() || hbounds_.length() < VWIDTH) {
+    // A map whose viewport range is smaller than the view can never fill it. Upstream parks it
+    // against the range's first edge, which leaves all of the empty margin on the right and below
+    // and the whole picture in the corner of the screen; splitting the margin between both edges
+    // centres it instead. Each axis is decided on its own, so a map that is only too narrow keeps
+    // its normal vertical follow.
+    if (hbounds_.length() < VWIDTH) {
+        next_x = hbounds_.first() + (VWIDTH - hbounds_.length()) / 2;
+    } else if (next_x > hbounds_.first()) {
         next_x = hbounds_.first();
     } else if (next_x < hbounds_.second() + VWIDTH) {
         next_x = hbounds_.second() + VWIDTH;
     }
 
-    if (next_y > vbounds_.first() || vbounds_.length() < VHEIGHT) {
+    if (vbounds_.length() < VHEIGHT) {
+        next_y = vbounds_.first() + (VHEIGHT - vbounds_.length()) / 2;
+    } else if (next_y > vbounds_.first()) {
         next_y = vbounds_.first();
     } else if (next_y < vbounds_.second() + VHEIGHT) {
         next_y = vbounds_.second() + VHEIGHT;
