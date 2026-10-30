@@ -160,7 +160,7 @@ constexpr float BUFF_FADE_PER_SECOND = 6.25f;
 // reads right on the panel. The drive is rebuilt from walkSpeed under this damping rather than taken
 // from walkForce, so the speed you can see stays the archive's and only the ramp that gets there is
 // this client's.
-constexpr double GROUND_FRICTION = 0.25;
+constexpr double GROUND_FRICTION = 0.15;
 
 // The shape of the hop a blow knocks the player into, as the two figures that are actually seen: how
 // many pixels the body is lifted off the ground, and how many pixels back it travels over it. They
