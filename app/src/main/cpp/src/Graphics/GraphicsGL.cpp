@@ -24,6 +24,7 @@
 
 #include "../Configuration.h"
 #include "AndroidText.h"
+#include "PanelRenderer.h"
 #include "UIRenderer.h"
 #include "Window.h"
 
@@ -255,9 +256,11 @@ namespace ms {
 
         // One atlas per pass. The scene keeps nearest sampling because its art is pixel work that
         // must not blur; the interface is laid out on a smaller screen and magnified, so it
-        // interpolates instead of showing stair-steps.
-        init_atlas(scene_atlas_, false);
-        init_atlas(ui_atlas_, true);
+        // interpolates instead of showing stair-steps. The panel pass magnifies further still and is
+        // cut to the size of the handful of windows it holds rather than a whole screen's art.
+        init_atlas(scene_atlas_, ATLASW, ATLASH, false);
+        init_atlas(ui_atlas_, ATLASW, ATLASH, true);
+        init_atlas(panel_atlas_, PANEL_ATLASW, PANEL_ATLASH, true);
 
         if (!AndroidText::init(pApp)) {
             __android_log_print(ANDROID_LOG_ERROR, "NativeText", "bridge init failed");
@@ -266,10 +269,13 @@ namespace ms {
         return Error::Code::NONE;
     }
 
-    void GraphicsGL::init_atlas(AtlasState &atlas, bool linear) {
+    void GraphicsGL::init_atlas(AtlasState &atlas, GLshort width, GLshort height, bool linear) {
         if (atlas.texture == 0) {
             glGenTextures(1, &atlas.texture);
         }
+
+        atlas.width = width;
+        atlas.height = height;
 
         glBindTexture(GL_TEXTURE_2D, atlas.texture);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -280,8 +286,8 @@ namespace ms {
         glTexImage2D(GL_TEXTURE_2D,
                      0,
                      GL_RGBA,
-                     ATLASW,
-                     ATLASH,
+                     width,
+                     height,
                      0,
                      GL_RGBA,
                      GL_UNSIGNED_BYTE,
@@ -329,12 +335,20 @@ namespace ms {
     void GraphicsGL::bind_atlas(AtlasState &atlas) {
         glUseProgram(shader_program_);
         glBindTexture(GL_TEXTURE_2D, atlas.texture);
-        glUniform2f(uniform_atlas_size_, ATLASW, ATLASH);
+        glUniform2f(uniform_atlas_size_, atlas.width, atlas.height);
         glUniform1i(uniform_font_region_, atlas.glyph_region_bottom);
     }
 
     GraphicsGL::AtlasState &GraphicsGL::active_atlas() {
-        return UIRenderer::get().active() ? ui_atlas_ : scene_atlas_;
+        switch (active_batch()) {
+            case Batch::PANEL:
+                return panel_atlas_;
+            case Batch::UI:
+                return ui_atlas_;
+            case Batch::SCENE:
+            default:
+                return scene_atlas_;
+        }
     }
 
     void GraphicsGL::set_atlas_text_scale(AtlasState &atlas, float scale) {
@@ -363,16 +377,20 @@ namespace ms {
         }
 
         // The scene goes into a texture the size of the view and is then stretched over the box; the
-        // interface is laid out on a screen UI_SCALE smaller and is rasterised straight into a
-        // target the size of the box. Each pass's text has to be built for its own stretch, or the
-        // letters get resampled on the way to the screen.
+        // interface and the panel are each laid out on a screen of their own smaller than the view
+        // and rasterised straight into a target the size of the box. Each pass's text has to be built
+        // for its own stretch, or the letters get resampled on the way to the screen.
         const int16_t layout_width =
                 static_cast<int16_t>(std::ceil(VWIDTH / Constants::UI_SCALE));
+        const int16_t panel_layout_width =
+                static_cast<int16_t>(std::ceil(VWIDTH / Constants::PANEL_SCALE));
 
         set_atlas_text_scale(scene_atlas_,
                              static_cast<float>(box_width) / static_cast<float>(VWIDTH));
         set_atlas_text_scale(ui_atlas_,
                              static_cast<float>(box_width) / static_cast<float>(layout_width));
+        set_atlas_text_scale(panel_atlas_,
+                             static_cast<float>(box_width) / static_cast<float>(panel_layout_width));
     }
 
     void GraphicsGL::font_metrics(Text::Font id, float &px, bool &bold) {
@@ -520,7 +538,7 @@ namespace ms {
             // Shelf-pack into this atlas's glyph strip. A glyph too wide for the rest of the row
             // starts a new row; running off the bottom throws the strip away and starts over, which
             // is cheap because the raster is already cached and only the upload is redone.
-            if (atlas.glyph_x + fw + 1 > ATLASW) {
+            if (atlas.glyph_x + fw + 1 > atlas.width) {
                 atlas.glyph_y = static_cast<int16_t>(atlas.glyph_y + atlas.glyph_row_h + 1);
                 atlas.glyph_x = 1;
                 atlas.glyph_row_h = 0;
@@ -610,14 +628,15 @@ namespace ms {
 
         clear_internal(scene_atlas_);
         clear_internal(ui_atlas_);
+        clear_internal(panel_atlas_);
 
         bind_atlas(scene_atlas_);
     }
 
     void GraphicsGL::clear() {
-        for (AtlasState *atlas : {&scene_atlas_, &ui_atlas_}) {
-            size_t used = ATLASW * atlas->border.y() + atlas->border.x() * atlas->y_range.second();
-            double usedpercent = static_cast<double>(used) / (ATLASW * ATLASH);
+        for (AtlasState *atlas : {&scene_atlas_, &ui_atlas_, &panel_atlas_}) {
+            size_t used = atlas->width * atlas->border.y() + atlas->border.x() * atlas->y_range.second();
+            double usedpercent = static_cast<double>(used) / (atlas->width * atlas->height);
 
             // usedpercent is a 0..1 fraction, so the threshold has to be one too. Comparing it
             // against 80.0 kept this reclaim dead, which left the mid-frame overflow inside
@@ -721,11 +740,11 @@ namespace ms {
                 atlas.rlid++;
             }
         } else {
-            if (atlas.border.x() + pw > ATLASW) {
+            if (atlas.border.x() + pw > atlas.width) {
                 atlas.border.set_x(0);
                 atlas.border.shift_y(atlas.y_range.second());
 
-                if (atlas.border.y() + ph > ATLASH) {
+                if (atlas.border.y() + ph > atlas.height) {
                     clear_internal(atlas);
                 } else {
                     atlas.y_range = Range<GLshort>();
@@ -1757,6 +1776,16 @@ namespace ms {
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         }
 
+        if (!PanelRenderer::get().empty()) {
+            // Over the interface: a window that opts into this pass is the thing being looked at, so
+            // it covers whatever the interface happens to draw where it stands. What has to stay
+            // above an enlarged window - notices, tooltips, status text - belongs to the game's own
+            // interface rather than to the screen the enlarged window is standing on.
+            glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+            draw_filter(PanelRenderer::get().texture());
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        }
+
         if (opacity != 1.0f) {
             const Color color = Color(0.0f, 0.0f, 0.0f, 1.0f - opacity);
             std::vector<Quad> fade;
@@ -1796,19 +1825,54 @@ namespace ms {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
+    GraphicsGL::Batch GraphicsGL::active_batch() {
+        // The panel pass wins over the interface, and either over the scene, so one window can open
+        // it from inside the interface's own bracket and hand the rest of the screen straight back.
+        if (PanelRenderer::get().active()) {
+            return Batch::PANEL;
+        }
+
+        return UIRenderer::get().active() ? Batch::UI : Batch::SCENE;
+    }
+
     std::vector<GraphicsGL::Quad> &GraphicsGL::batch_quads() {
-        return UIRenderer::get().active() ? UIRenderer::get().quads() : quads_;
+        switch (active_batch()) {
+            case Batch::PANEL:
+                return PanelRenderer::get().quads();
+            case Batch::UI:
+                return UIRenderer::get().quads();
+            case Batch::SCENE:
+            default:
+                return quads_;
+        }
     }
 
     std::vector<GraphicsGL::Circle> &GraphicsGL::batch_circles() {
-        return UIRenderer::get().active() ? UIRenderer::get().circles() : circles_;
+        switch (active_batch()) {
+            case Batch::PANEL:
+                return PanelRenderer::get().circles();
+            case Batch::UI:
+                return UIRenderer::get().circles();
+            case Batch::SCENE:
+            default:
+                return circles_;
+        }
     }
 
     std::vector<GraphicsGL::Quad> &GraphicsGL::batch_text_quads() {
-        // The interface keeps its lettering in the same ordered batch as its geometry, so the two
-        // still cover each other the way they were drawn; the scene has to hold its lettering aside
-        // because that one is not composited until the stretched picture is already on the surface.
-        return UIRenderer::get().active() ? UIRenderer::get().quads() : text_quads_;
+        // The two magnified passes keep their lettering in the same ordered batch as their geometry,
+        // so the two still cover each other the way they were drawn; the scene has to hold its
+        // lettering aside because that one is not composited until the stretched picture is already on
+        // the surface.
+        switch (active_batch()) {
+            case Batch::PANEL:
+                return PanelRenderer::get().quads();
+            case Batch::UI:
+                return UIRenderer::get().quads();
+            case Batch::SCENE:
+            default:
+                return text_quads_;
+        }
     }
 
     void GraphicsGL::flush_batch(const std::vector<Quad> &quads,
@@ -1929,13 +1993,16 @@ namespace ms {
 
         bind_atlas(scene_atlas_);
         flush_batch(quads_, circles_, VWIDTH, VHEIGHT);
+        PanelRenderer::get().flush();
         UIRenderer::get().flush();
     }
+
     void GraphicsGL::clear_scene() {
         if (!locked_) {
             quads_.clear();
             circles_.clear();
             text_quads_.clear();
+            PanelRenderer::get().clear();
             UIRenderer::get().clear();
         }
     }

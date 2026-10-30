@@ -18,6 +18,7 @@
 #include "../Constants.h"
 #include "../Audio/Audio.h"
 #include "../Graphics/GraphicsGL.h"
+#include "../Graphics/PanelRenderer.h"
 #include "../Graphics/UIRenderer.h"
 #include "../Timer.h"
 #include "UI.h"
@@ -589,11 +590,12 @@ namespace ms {
         surface_width_ = surface_width;
         surface_height_ = surface_height;
 
-        // The interface is rasterised straight into a target this size, so it comes out at native
-        // pixel density instead of being drawn small and stretched over the box afterwards.
+        // Both magnified passes are rasterised straight into targets this size, so they come out at
+        // native pixel density instead of being drawn small and stretched over the box afterwards.
         UIRenderer::get().set_native_size(box_width, box_height);
+        PanelRenderer::get().set_native_size(box_width, box_height);
 
-        // Both passes magnify by a ratio of this box to their own screen, and text has to be
+        // Every pass magnifies by a ratio of this box to its own screen, and text has to be
         // rasterised at that ratio to reach the screen one texel per pixel.
         GraphicsGL::get().set_output_size(box_width, box_height);
 
