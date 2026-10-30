@@ -34,7 +34,6 @@ public:
         DLG_NOTICE,
         MENU_DOWN,
         MENU_UP,
-        RACE_SELECT,
         SCROLL_UP,
         SELECT_MAP,
         TAB,

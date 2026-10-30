@@ -38,7 +38,6 @@ public:
         REGION,
         CHAR_SELECT,
         LOGIN_WAIT,
-        RACE_SELECT,
         CLASS_CREATION,
         SOFT_KEYBOARD,
         LOGIN_NOTICE,

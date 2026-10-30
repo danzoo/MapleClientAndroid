@@ -17,7 +17,6 @@
 
 #include <array>
 
-#include "../Components/MapleComboBox.h"
 #include "../UIDragElement.h"
 
 namespace ms {
@@ -30,8 +29,6 @@ public:
     UIOptionMenu();
 
     void draw(float inter) const override;
-
-    Cursor::State send_cursor(bool clicked, Point<int16_t> cursorpos) override;
 
     void send_key(int32_t keycode, bool pressed, bool escape) override;
 
@@ -47,12 +44,9 @@ private:
         TAB0,
         TAB1,
         TAB2,
-        TAB3,
-        TAB4,
         CANCEL,
         OK,
-        UIRESET,
-        SELECT_RES
+        UIRESET
     };
 
     uint16_t selected_tab_;

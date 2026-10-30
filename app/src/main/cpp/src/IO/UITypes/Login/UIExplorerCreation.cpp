@@ -15,6 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "UIExplorerCreation.h"
 
+#include <algorithm>
+
 #include <imgwz/wz.hpp>
 
 #include "../../Audio/Audio.h"
@@ -25,7 +27,6 @@
 #include "../UI.h"
 #include "UICharSelect.h"
 #include "UILoginNotice.h"
-#include "UIRaceSelect.h"
 
 namespace ms {
 namespace {
@@ -190,39 +191,47 @@ UIExplorerCreation::UIExplorerCreation() :
     wepname_ =
         Text(Text::Font::A11M, Text::Alignment::CENTER, Color::Name::BLACK);
 
-    img::node mkinfo = img::wz::etc["MakeCharInfo.img"]["Info"];
+    // Info is the Adventurer set, Premium was the Noblesse set and Orient the
+    // Legend set; every look they offered is selectable here.
+    img::node mkinfo = img::wz::etc["MakeCharInfo.img"];
 
     for (size_t i = 0; i < 2; i++) {
-        bool f;
-        img::node CharGender;
+        bool f = (i == 0);
+        std::string gender = f ? "Female" : "Male";
 
-        if (i == 0) {
-            f = true;
-            CharGender = mkinfo["CharFemale"];
-        } else {
-            f = false;
-            CharGender = mkinfo["CharMale"];
-        }
+        std::vector<img::node> charsets = {
+            mkinfo["Info"]["Char" + gender],
+            mkinfo["PremiumChar" + gender],
+            mkinfo["OrientChar" + gender]};
 
-        for (const auto &node : CharGender) {
-            int num = stoi(node.name());
+        auto add_unique = [](auto &ids, auto value) {
+            if (std::find(ids.begin(), ids.end(), value) == ids.end()) {
+                ids.push_back(value);
+            }
+        };
 
-            for (const auto &idnode : node) {
-                int32_t value = idnode;
+        for (const auto &CharGender : charsets) {
+            for (const auto &node : CharGender) {
+                int num = stoi(node.name());
 
-                switch (num) {
-                    case 0: faces_[f].push_back(value); break;
-                    case 1: hairs_[f].push_back(value); break;
-                    case 2:
-                        haircolors_[f].push_back(static_cast<uint8_t>(value));
-                        break;
-                    case 3:
-                        skins_[f].push_back(static_cast<uint8_t>(value));
-                        break;
-                    case 4: tops_[f].push_back(value); break;
-                    case 5: bots_[f].push_back(value); break;
-                    case 6: shoes_[f].push_back(value); break;
-                    case 7: weapons_[f].push_back(value); break;
+                for (const auto &idnode : node) {
+                    int32_t value = idnode;
+
+                    switch (num) {
+                        case 0: add_unique(faces_[f], value); break;
+                        case 1: add_unique(hairs_[f], value); break;
+                        case 2:
+                            add_unique(haircolors_[f],
+                                       static_cast<uint8_t>(value));
+                            break;
+                        case 3:
+                            add_unique(skins_[f], static_cast<uint8_t>(value));
+                            break;
+                        case 4: add_unique(tops_[f], value); break;
+                        case 5: add_unique(bots_[f], value); break;
+                        case 6: add_unique(shoes_[f], value); break;
+                        case 7: add_unique(weapons_[f], value); break;
+                    }
                 }
             }
         }
@@ -400,20 +409,15 @@ void UIExplorerCreation::send_naming_result(bool nameused) {
                            cwep,
                            female_);
 
-            auto onok = [&](bool alternate) {
-                Sound(Sound::Name::SCROLL_UP).play();
+            Sound(Sound::Name::SCROLL_UP).play();
 
-                UI::get().remove(UIElement::Type::LOGIN_NOTICE_CONFIRM);
-                UI::get().remove(UIElement::Type::LOGIN_NOTICE);
-                UI::get().remove(UIElement::Type::CLASS_CREATION);
-                UI::get().remove(UIElement::Type::RACE_SELECT);
+            UI::get().remove(UIElement::Type::CLASS_CREATION);
 
-                if (auto charselect = UI::get().get_element<UICharSelect>()) {
-                    charselect->get().post_add_character();
-                }
-            };
-
-            UI::get().emplace<UIKeySelect>(onok, true);
+            // The new entry is not known yet, so the list itself is only
+            // refreshed once AddNewCharEntryHandler has taken it in.
+            if (auto charselect = UI::get().get_element<UICharSelect>()) {
+                charselect->get().makeactive();
+            }
         } else {
             auto onok = [&]() {
                 namechar_.set_state(Textfield::State::FOCUSED);
@@ -512,13 +516,10 @@ Button::State UIExplorerCreation::button_pressed(uint16_t buttonid) {
                         buttons_[Buttons::BT_CHARC_CANCEL]->set_state(
                             Button::State::DISABLED);
 
-                        if (auto raceselect =
-                                UI::get().get_element<UIRaceSelect>()) {
-                            if (raceselect->get().check_name(name)) {
-                                fn_name_char(name);
+                        if (check_name(name)) {
+                            fn_name_char(name);
 
-                                return Button::State::IDENTITY;
-                            }
+                            return Button::State::IDENTITY;
                         }
 
                         std::function<void()> okhandler = [&]() {
@@ -566,7 +567,10 @@ Button::State UIExplorerCreation::button_pressed(uint16_t buttonid) {
             Sound(Sound::Name::SCROLL_UP).play();
 
             UI::get().remove(UIElement::Type::CLASS_CREATION);
-            UI::get().emplace<UIRaceSelect>();
+
+            if (auto charselect = UI::get().get_element<UICharSelect>()) {
+                charselect->get().makeactive();
+            }
 
             return Button::State::NORMAL;
         case Buttons::BT_CHARC_CANCEL:
@@ -783,6 +787,27 @@ void UIExplorerCreation::randomize_look() {
     topname_.change_text(get_equipname(EquipSlot::Id::TOP));
     shoename_.change_text(get_equipname(EquipSlot::Id::SHOES));
     wepname_.change_text(get_equipname(EquipSlot::Id::WEAPON));
+}
+
+bool UIExplorerCreation::check_name(const std::string &name) const {
+    img::node ForbiddenName = img::wz::etc["ForbiddenName.img"];
+
+    for (const auto &forbiddenName : ForbiddenName) {
+        std::string lName = to_lower(name);
+        std::string fName = to_lower(forbiddenName);
+
+        if (lName.find(fName) != std::string::npos) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+std::string UIExplorerCreation::to_lower(std::string value) const {
+    std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+
+    return value;
 }
 
 const std::string &UIExplorerCreation::get_equipname(EquipSlot::Id slot) const {
