@@ -20,7 +20,6 @@
 #include "UITypes/Login/UILogin.h"
 #include "UITypes/Login/UILoginNotice.h"
 #include "UITypes/Login/UILogo.h"
-#include "UITypes/Login/UIRegion.h"
 
 namespace ms {
 UIStateLogin::UIStateLogin() {
@@ -123,10 +122,9 @@ void UIStateLogin::send_scroll(double yoffset) {
 void UIStateLogin::send_close() {
     auto logo = UI::get().get_element<UILogo>();
     auto login = UI::get().get_element<UILogin>();
-    auto region = UI::get().get_element<UIRegion>();
 
-    if ((logo && logo->get().is_active()) || (login && login->get().is_active())
-        || (region && region->get().is_active())) {
+    if ((logo && logo->get().is_active())
+        || (login && login->get().is_active())) {
         UI::get().quit();
     } else {
         UI::get().emplace<UIQuitConfirm>();

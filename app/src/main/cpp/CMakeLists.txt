@@ -125,7 +125,6 @@ add_library(OpenMapleClient SHARED
         src/IO/UITypes/Login/UILoginNotice.cpp
         src/IO/UITypes/Login/UILoginWait.cpp
         src/IO/UITypes/Login/UILogo.cpp
-        src/IO/UITypes/Login/UIRegion.cpp
         src/IO/UITypes/Login/UISoftKey.cpp
         src/IO/UITypes/Login/UITermsOfService.cpp
         src/IO/UITypes/Login/UIWorldSelect.cpp

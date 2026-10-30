@@ -25,7 +25,6 @@
 #include "../UI.h"
 #include "UILoginNotice.h"
 #include "UILoginWait.h"
-#include "UIRegion.h"
 
 namespace ms {
 namespace {
@@ -36,6 +35,10 @@ auto fn_charlist_req = [](auto&&... args) {
 auto fn_server_status_req = [](auto&&... args) {
     ServerStatusRequestPacket(std::forward<decltype(args)>(args)...).dispatch();
 };
+
+// The one entry of BtWorld/release/index the world buttons are built out of. Every world this client
+// talks to lives in it, so there is nothing left to choose between regions.
+constexpr uint8_t REGION_ID = 5;
 }  // namespace
 
 UIWorldSelect::UIWorldSelect() :
@@ -67,7 +70,6 @@ UIWorldSelect::UIWorldSelect() :
 
     worldid_ = Setting<DefaultWorld>::get().load();
     channelid_ = Setting<DefaultChannel>::get().load();
-    uint8_t regionid = Setting<DefaultRegion>::get().load();
 
     img::node obj = img::wz::mapLatest["Obj"]["login.img"];
     img::node login = img::wz::ui["Login.img"];
@@ -76,7 +78,7 @@ UIWorldSelect::UIWorldSelect() :
     channel_src_ = world_select_["BtChannel"];
     img::node common = login["Common"];
 
-    set_region(regionid);
+    set_region(REGION_ID);
 
     sprites_.emplace_back(obj["WorldSelect"]["default"][0], background_pos);
 
@@ -129,9 +131,6 @@ UIWorldSelect::UIWorldSelect() :
 
     recommended_textures_.emplace_back(world_select_["alert"]["backgrd"]);
 
-    buttons_[Buttons::BT_CHANGE_REGION] =
-        std::make_unique<MapleButton>(world_select_["BtRegion"],
-                                      Point<int16_t>(3, 127));
     buttons_[Buttons::BT_QUIT_GAME] =
         std::make_unique<MapleButton>(common["BtExit"], Point<int16_t>(0, 515));
 
@@ -571,14 +570,6 @@ Button::State UIWorldSelect::button_pressed(uint16_t id) {
 
         recommended_message_.change_text(
             recommended_worlds_[recommended_worldid_].message);
-
-        return Button::State::NORMAL;
-    }
-
-    if (id == Buttons::BT_CHANGE_REGION) {
-        UI::get().emplace<UIRegion>();
-
-        deactivate();
 
         return Button::State::NORMAL;
     }

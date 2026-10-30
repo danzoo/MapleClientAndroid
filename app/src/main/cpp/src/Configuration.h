@@ -85,9 +85,6 @@ public:
     // Get private member FINDPASS
     std::string get_findpass() const;
 
-    // Get private member RESETPIC
-    std::string get_resetpic() const;
-
     // Get private member CHARGENX
     std::string get_chargenx() const;
 
@@ -238,7 +235,6 @@ private:
     const char *WEBSITE = "http://maplestory.nexon.net/";
     const char *FINDID = "https://www.nexon.com/account/en/login";
     const char *FINDPASS = "https://www.nexon.com/account/en/reset-password";
-    const char *RESETPIC = "https://www.nexon.com/account/en/login";
     const char *CHARGENX = "https://billing.nexon.net/PurchaseNX";
     const bool SHOW_FPS = true;
     const bool SHOW_PACKETS = true;
@@ -335,11 +331,6 @@ struct DefaultWorld : public Configuration::ByteEntry {
 // The last used channel
 struct DefaultChannel : public Configuration::ByteEntry {
     DefaultChannel() : ByteEntry("Channel", "0") {}
-};
-
-// The last used region
-struct DefaultRegion : public Configuration::ByteEntry {
-    DefaultRegion() : ByteEntry("Region", "5") {}
 };
 
 // The last used character

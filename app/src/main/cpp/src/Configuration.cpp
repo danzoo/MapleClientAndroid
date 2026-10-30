@@ -46,7 +46,6 @@ Configuration::Configuration() {
     settings.emplace<DefaultAccount>();
     settings.emplace<DefaultWorld>();
     settings.emplace<DefaultChannel>();
-    settings.emplace<DefaultRegion>();
     settings.emplace<DefaultCharacter>();
     settings.emplace<Chatopen>();
     settings.emplace<PosSTATS>();
@@ -210,10 +209,6 @@ std::string Configuration::get_findid() const {
 
 std::string Configuration::get_findpass() const {
     return FINDPASS;
-}
-
-std::string Configuration::get_resetpic() const {
-    return RESETPIC;
 }
 
 std::string Configuration::get_chargenx() const {

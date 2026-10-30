@@ -67,8 +67,6 @@ UICharSelect::UICharSelect(std::vector<CharEntry> c,
     characters_count_(char_count),
     slots_(s),
     require_pic_(rp) {
-    burning_character_ = true;
-
     std::string version_text = Configuration::get().get_version();
     version_ = Text(Text::Font::A11M,
                     Text::Alignment::LEFT,
@@ -140,10 +138,6 @@ UICharSelect::UICharSelect(std::vector<CharEntry> c,
     sprites_.emplace_back(Common["frame"], Point<int16_t>(400, 300));
     sprites_.emplace_back(Common["step"]["2"], Point<int16_t>(40, 0));
 
-    burning_notice_ = Common["Burning"]["BurningNotice"];
-    burning_count_ =
-        Text(Text::Font::A12B, Text::Alignment::LEFT, Color::Name::WHITE, "1");
-
     charinfo_ = CharSelect["charInfo"];
     charslot_ = CharSelect["charSlot"]["0"];
     pagebase_ = pageNew["base"]["0"];
@@ -170,15 +164,6 @@ UICharSelect::UICharSelect(std::vector<CharEntry> c,
     buttons_[Buttons::PAGE_RIGHT] =
         std::make_unique<MapleButton>(CharSelect["pageR"],
                                       Point<int16_t>(485, 491));
-    buttons_[Buttons::CHANGE_PIC] =
-        std::make_unique<MapleButton>(Common["BtChangePIC"],
-                                      Point<int16_t>(0, 45));
-    buttons_[Buttons::RESET_PIC] =
-        std::make_unique<MapleButton>(Login["WorldSelect"]["BtResetPIC"],
-                                      Point<int16_t>(0, 85));
-    buttons_[Buttons::EDIT_CHAR_LIST] =
-        std::make_unique<MapleButton>(CharSelect["EditCharList"]["BtCharacter"],
-                                      Point<int16_t>(-1, 118));
     buttons_[Buttons::BACK] =
         std::make_unique<MapleButton>(Common["BtStart"],
                                       Point<int16_t>(0, 515));
@@ -187,11 +172,6 @@ UICharSelect::UICharSelect(std::vector<CharEntry> c,
         buttons_[Buttons::CHARACTER_SLOT0 + i] =
             std::make_unique<AreaButton>(get_character_slot_pos(i, 105, 144),
                                          Point<int16_t>(50, 90));
-    }
-
-    if (require_pic_ == 0) {
-        buttons_[Buttons::CHANGE_PIC]->set_active(false);
-        buttons_[Buttons::RESET_PIC]->set_active(false);
     }
 
     level_set_ = Charset(CharSelect["lv"], Charset::Alignment::CENTER);
@@ -335,11 +315,6 @@ void UICharSelect::draw(float inter) const {
                   + Point<int16_t>(0, tab_move_pos_));
     }
 
-    if (burning_character_) {
-        burning_notice_.draw(position_ + Point<int16_t>(190, 502), inter);
-        burning_count_.draw(position_ + Point<int16_t>(149, 464));
-    }
-
     pagebase_.draw(position_ + page_pos_);
     pagenumber_.draw(
         current.substr(0, 1),
@@ -404,10 +379,6 @@ void UICharSelect::update() {
     }
 
     empty_slot_effect_.update();
-
-    if (burning_character_) {
-        burning_notice_.update();
-    }
 }
 
 void UICharSelect::doubleclick(Point<int16_t> cursorpos) {
@@ -829,15 +800,6 @@ Button::State UICharSelect::button_pressed(uint16_t buttonid) {
                 button_pressed(Buttons::CHARACTER_SLOT0);
             }
         } break;
-        case Buttons::CHANGE_PIC: break;
-        case Buttons::RESET_PIC: {
-            std::string url = Configuration::get().get_resetpic();
-
-            // TODO: (rich) fix
-            // ShellExecute(NULL, "open", url.c_str(), NULL, NULL,
-            // SW_SHOWNORMAL);
-        } break;
-        case Buttons::EDIT_CHAR_LIST: break;
         case Buttons::BACK:
             deactivate();
 

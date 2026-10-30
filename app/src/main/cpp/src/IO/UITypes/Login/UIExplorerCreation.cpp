@@ -74,8 +74,6 @@ UIExplorerCreation::UIExplorerCreation() :
     img::node Common = Login["Common"];
     img::node CustomizeChar = Login["CustomizeChar"]["000"];
     img::node back = img::wz::map001["Back"]["login.img"]["back"];
-    img::node signboard =
-        img::wz::mapLatest["Obj"]["login.img"]["NewChar"]["signboard"];
     img::node board = CustomizeChar["board"];
     img::node genderSelect = CustomizeChar["genderSelect"];
 
@@ -84,8 +82,6 @@ UIExplorerCreation::UIExplorerCreation() :
 
     scenery_ = Sprite(back["14"], Point<int16_t>(250, 302));
 
-    sprites_pinned_.emplace_back(signboard["2"],
-                                 DrawArgument(Point<int16_t>(234, 235), 2.0f));
     sprites_gender_select_.emplace_back(board["genderTop"],
                                         Point<int16_t>(486, 95));
     sprites_gender_select_.emplace_back(board["boardMid"],
@@ -344,10 +340,9 @@ void UIExplorerCreation::draw(float inter) const {
 
     PanelRenderer::get().end();
 
-    // The sign, the frame, the step marker and the back arrow belong to the screen rather than to the
-    // board. They stay on the interface, which the panel now composites over: the board is sized to
-    // stay inside the frame's clear window, so the only thing this costs is the sign's lower bar,
-    // which the top of the enlarged board runs over.
+    // The frame and the step marker belong to the screen rather than to the board, as does the back
+    // arrow. They stay on the interface, which the panel now composites over; the board is sized to
+    // stay inside the frame's clear window, so nothing of theirs ends up covered.
     for (const Sprite &sprite : sprites_pinned_) {
         sprite.draw(Point<int16_t>(0, 0), inter);
     }

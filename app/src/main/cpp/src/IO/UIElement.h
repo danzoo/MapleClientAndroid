@@ -35,7 +35,6 @@ public:
         TOS,
         GENDER,
         WORLD_SELECT,
-        REGION,
         CHAR_SELECT,
         LOGIN_WAIT,
         CLASS_CREATION,
