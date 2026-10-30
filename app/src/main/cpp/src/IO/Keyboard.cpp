@@ -18,10 +18,11 @@
 #include <android/input.h>
 
 namespace ms {
-    // Indexed by the Maple key id. Ids 100-119 are the quick-slot bar's cells past F12: no physical
-    // key produces them, so they dispatch under virtual platform codes (0x220+, above everything
-    // glfm and the gamepad's 0x200 range emit) and travel the same keyboard path as a real key.
-    constexpr int32_t Keytable[128] = {0,
+    // Indexed by the Maple key id. Ids 100-131 are the quick-slot bar's 32 cells: no physical key
+    // produces them, so they dispatch under virtual platform codes (0x220+, above everything glfm
+    // and the gamepad's 0x200 range emit) and travel the same keyboard path as a real key. The
+    // table runs to 160 because that is how far the keymap packet reaches (QuickSlots::keycode).
+    constexpr int32_t Keytable[160] = {0,
                                       0,  // 1
                                       GLFMKeyCode0,
                                       GLFMKeyCode1,
@@ -116,7 +117,12 @@ namespace ms {
                                       0x225, 0x226, 0x227, 0x228, 0x229,  // 109
                                       0x22A, 0x22B, 0x22C, 0x22D, 0x22E,  // 114
                                       0x22F, 0x230, 0x231, 0x232, 0x233,  // 119
-                                      0, 0, 0, 0, 0, 0, 0, 0};  // 127
+                                      0x234, 0x235, 0x236, 0x237, 0x238,  // 124
+                                      0x239, 0x23A, 0x23B, 0x23C, 0x23D,  // 129
+                                      0x23E, 0x23F,  // 131
+                                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 141
+                                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 151
+                                      0, 0, 0, 0, 0, 0, 0, 0};  // 159
 
     constexpr int32_t Shifttable[126] = {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    //  10

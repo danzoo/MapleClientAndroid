@@ -315,8 +315,9 @@ void AddCooldownHandler::handle(InPacket &recv) const {
 void KeymapHandler::handle(InPacket &recv) const {
     recv.skip(1);
 
-    // 128, not the original 90: ids 100-119 carry the quick-slot bar's cells past F12.
-    for (int i = 0; i < 128; i++) {
+    // 160, not the original 90: ids 100-131 are the quick-slot bar's 32 virtual cells, and the
+    // packet is positional, so this has to reach as far as the server's getKeymap loop.
+    for (int i = 0; i < 160; i++) {
         uint8_t type = recv.read_ubyte();
         int32_t action = recv.read_int();
 

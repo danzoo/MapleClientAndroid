@@ -33,20 +33,17 @@ namespace ms {
     // here.
     class QuickSlots {
     public:
-        // The art is a 16x2 grid and every cell of it is a slot. The first twelve are the function
-        // keys F1-F12, so they stay reachable from a keyboard; the rest stand for key ids no
-        // physical key produces (see keycode), which the keymap carries just the same.
+        // The art is a 16x2 grid and every cell of it is a slot. None of them is one of the
+        // keyboard's function keys: this device has no F1-F12 to press, so a cell stands for a key
+        // id that no physical key produces (see keycode), which the keymap carries just the same.
         static constexpr int16_t LENGTH = 32;
-        static constexpr int16_t FUNCTION_KEYS = 12;
 
-        // The key a slot stands for. The first slot is the first function key; past F12 the ids
-        // continue at 100, clear of the physical keys and of 91/92, which the server keeps for the
-        // auto-potion bindings.
+        // The id of the first cell. Clear of every physical key (KeyConfig::Key::LENGTH is 89) and
+        // of 91 and 92, which the server keeps for the auto-potion bindings.
+        static constexpr int32_t VIRTUAL_BASE = 100;
+
+        // The key a slot stands for, one of the ids above VIRTUAL_BASE.
         static int32_t keycode(int16_t slot);
-
-        // Whether a key is one of the bar's, which is what lets a window tell a quick slot apart
-        // from any other binding when it is handed a key or asked about one.
-        static bool is_quick_slot(int32_t keycode);
 
         // The mapping committed to a slot, or a mapping of NONE when the slot is empty.
         static Keyboard::Mapping at(int16_t slot);
