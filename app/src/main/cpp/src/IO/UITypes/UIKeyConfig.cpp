@@ -963,7 +963,10 @@ namespace ms {
             }
 
             if (ficon) {
-                if (maplekey != -1) {
+                // Only the ids this window has a key picture for. The quick-slot bar's cells are
+                // virtual ids past the last physical key, so they belong to no key of this keyboard
+                // and keys_pos_ has no slot for them.
+                if (maplekey >= 0 && maplekey < KeyConfig::Key::LENGTH) {
                     KeyConfig::Key fkey = KeyConfig::actionbyid(maplekey);
 
                     if (maplekey == KeyConfig::Key::SPACE) {

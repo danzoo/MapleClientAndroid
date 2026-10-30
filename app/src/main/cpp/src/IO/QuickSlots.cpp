@@ -133,16 +133,7 @@ namespace ms {
     }  // namespace
 
     int32_t QuickSlots::keycode(int16_t slot) {
-        if (slot < FUNCTION_KEYS) {
-            return KeyConfig::Key::F1 + slot;
-        }
-
-        return 100 + (slot - FUNCTION_KEYS);
-    }
-
-    bool QuickSlots::is_quick_slot(int32_t key) {
-        return (key >= KeyConfig::Key::F1 && key < KeyConfig::Key::F1 + FUNCTION_KEYS)
-               || (key >= 100 && key < 100 + LENGTH - FUNCTION_KEYS);
+        return VIRTUAL_BASE + slot;
     }
 
     Keyboard::Mapping QuickSlots::at(int16_t slot) {

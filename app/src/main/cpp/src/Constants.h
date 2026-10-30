@@ -265,9 +265,10 @@ constexpr int16_t LOGIN_HEIGHT = 600;
 // cells, and measured against the point the art is drawn at the first cell begins 12 in from the
 // left and 3 down.
 //
-// Every cell of the art is a slot: 16 columns by 2 rows. The first twelve are F1-F12 and the rest
-// stand for virtual key ids (QuickSlots::keycode). Folded, the strip shows only the leftmost ten
-// columns; the fold button opens it to reach the rest, exactly as the original bar works.
+// Every cell of the art is a slot: 16 columns by 2 rows, and every one of them stands for a virtual
+// key id (QuickSlots::keycode) rather than one of the keyboard's function keys. Folded, the strip
+// shows only the leftmost ten columns; the fold button opens it to reach the rest, exactly as the
+// original bar works.
 // The distance from one cell's top-left to the next, horizontally and vertically: a 32x32 picture
 // inside a 3px frame line. Hit testing uses this rather than the picture, so a finger on a border
 // still belongs to a slot instead of falling between two of them.

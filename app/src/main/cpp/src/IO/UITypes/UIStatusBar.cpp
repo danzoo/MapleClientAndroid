@@ -1201,15 +1201,22 @@ Cursor::State UIStatusBar::send_cursor(bool clicked,
         const Keyboard::Mapping mapping = QuickSlots::at(slot);
 
         if (mapping.type != KeyType::Id::NONE) {
+            const bool taken = takes_binding(mapping);
+
             if (!clicked) {
-                // Telling the touch layer that this can start a drag is what lets a finger that
-                // never paused pick the icon up, instead of reading the move as a swipe of
-                // whatever is behind the bar. A slot is offered this way whether or not a window is
-                // open to take it: a hold is always a pick-up, and only a tap is a trigger.
-                return Cursor::State::CAN_DRAG;
+                if (taken) {
+                    // Telling the touch layer that this can start a drag is what lets a finger that
+                    // never paused pick the icon up, instead of reading the move as a swipe of
+                    // whatever is behind the bar. Only while a window that takes the icon back is
+                    // open: with nothing to drop it into, a bar is no place for a fast drag and a
+                    // swipe there should keep scrolling the page behind it. A hold still picks it up.
+                    return Cursor::State::CAN_DRAG;
+                }
+
+                return UIElement::send_cursor(clicked, cursorpos);
             }
 
-            if (takes_binding(mapping) || Window::get().is_hold_press()) {
+            if (taken || Window::get().is_hold_press()) {
                 return grab_quickslot(slot, cursorpos);
             }
 
