@@ -180,6 +180,7 @@ add_library(OpenMapleClient SHARED
         src/Graphics/EffectLayer.cpp
         src/Graphics/Geometry.cpp
         src/Graphics/GraphicsGL.cpp
+        src/Graphics/PanelRenderer.cpp
         src/Graphics/UIRenderer.cpp
         src/Graphics/RecurringEffect.cpp
         src/Graphics/Sprite.cpp

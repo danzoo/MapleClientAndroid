@@ -22,6 +22,7 @@
 #include "../../Audio/Audio.h"
 #include "../../Configuration.h"
 #include "../../Data/ItemData.h"
+#include "../../Graphics/PanelRenderer.h"
 #include "../../Net/Packets/CharCreationPackets.h"
 #include "../Components/MapleButton.h"
 #include "../UI.h"
@@ -33,12 +34,32 @@ namespace {
 auto fn_create_char = []<typename... T>(T && ...args) {
     CreateCharPacket(std::forward<T>(args)...).dispatch();
 };
+
+// Where the board sits in the interface's own coordinates: its box is x 486..711, y 95..472, so this
+// is the point it is grown about. Growing about the board's own centre keeps it over the part of the
+// picture it has always covered instead of drifting into a corner of the screen.
+constexpr Point<int16_t> BOARD_CENTRE(598, 283);
+
+// Growing about the centre alone lifts the board by 67, and the frame's clear window - which is
+// x 37..761, y 39..548 of the interface - only lets a board that starts at y 95 be lifted by 56
+// before its top edge crosses the border. The frame stays on the interface, which the panel now
+// composites over, so a board that crossed it would cover the border instead of hiding under it;
+// either way it has to stay inside.
+constexpr int16_t BOARD_LIFT = 59;
+
+// The translation from the interface's coordinates into the panel's for everything on the board.
+Point<int16_t> board_shift() {
+    Point<int16_t> centred =
+        Constants::to_panel_space(BOARD_CENTRE) - BOARD_CENTRE;
+
+    return Point<int16_t>(centred.x(), -BOARD_LIFT);
+}
 }  // namespace
 
 auto fn_name_char = [](auto name) { NameCharPacket(name).dispatch(); };
 
 UIExplorerCreation::UIExplorerCreation() :
-    UIElement(Point<int16_t>(0, 0), Point<int16_t>(800, 600)) {
+    UIElement(board_shift(), Point<int16_t>(800, 600)) {
     gender_ = false;
     charset_ = false;
     named_ = false;
@@ -61,9 +82,10 @@ UIExplorerCreation::UIExplorerCreation() :
     sky_ = back["2"];
     cloud_ = back["27"];
 
-    sprites_.emplace_back(back["14"], Point<int16_t>(250, 302));
-    sprites_.emplace_back(signboard["2"],
-                          DrawArgument(Point<int16_t>(234, 235), 2.0f));
+    scenery_ = Sprite(back["14"], Point<int16_t>(250, 302));
+
+    sprites_pinned_.emplace_back(signboard["2"],
+                                 DrawArgument(Point<int16_t>(234, 235), 2.0f));
     sprites_gender_select_.emplace_back(board["genderTop"],
                                         Point<int16_t>(486, 95));
     sprites_gender_select_.emplace_back(board["boardMid"],
@@ -162,12 +184,13 @@ UIExplorerCreation::UIExplorerCreation() :
         Rectangle<int16_t>(Point<int16_t>(522, 195), Point<int16_t>(630, 253)),
         12);
 
-    sprites_.emplace_back(Common["frame"], Point<int16_t>(400, 300));
-    sprites_.emplace_back(Common["step"]["3"], Point<int16_t>(40, 0));
+    sprites_pinned_.emplace_back(Common["frame"], Point<int16_t>(400, 300));
+    sprites_pinned_.emplace_back(Common["step"]["3"], Point<int16_t>(40, 0));
 
-    buttons_[Buttons::BT_BACK] =
-        std::make_unique<MapleButton>(Login["Common"]["BtStart"],
-                                      Point<int16_t>(0, 515));
+    // The arrow is pinned to the corner of the screen, not to the board, so it stays on the
+    // interface at the size every other login screen draws it and is not in the panel's button list.
+    back_button_ = std::make_unique<MapleButton>(Login["Common"]["BtStart"],
+                                                 Point<int16_t>(0, 515));
 
     namechar_.set_state(Textfield::DISABLED);
 
@@ -246,6 +269,8 @@ UIExplorerCreation::UIExplorerCreation() :
 }
 
 void UIExplorerCreation::draw(float inter) const {
+    // The backdrop belongs to the interface; only the board goes onto the panel, which now
+    // composites over the interface, so nothing here has to be shrunk on its way into that pass.
     for (size_t i = 0; i < 2; i++) {
         for (size_t k = 0; k < 800; k += sky_.width()) {
             sky_.draw(Point<int16_t>(k, (400 * i) - 100));
@@ -256,6 +281,10 @@ void UIExplorerCreation::draw(float inter) const {
     cloud_.draw(Point<int16_t>(cloudx - cloud_.width(), 310));
     cloud_.draw(Point<int16_t>(cloudx, 310));
     cloud_.draw(Point<int16_t>(cloudx + cloud_.width(), 310));
+
+    scenery_.draw(Point<int16_t>(0, 0), inter);
+
+    PanelRenderer::get().begin();
 
     if (!gender_) {
         for (size_t i = 0; i < sprites_gender_select_.size(); i++) {
@@ -272,39 +301,37 @@ void UIExplorerCreation::draw(float inter) const {
 
         UIElement::draw(inter);
 
-        newchar_.draw(Point<int16_t>(394, 339), inter);
+        newchar_.draw(Constants::to_panel_space(Point<int16_t>(394, 339)),
+                      inter);
     } else {
         if (!charset_) {
-            UIElement::draw_sprites(inter);
-
             for (const auto &sprite : sprites_lookboard_) {
                 sprite.draw(position_, inter);
             }
 
-            facename_.draw(Point<int16_t>(625, 193 + (0 * 18)));
-            hairname_.draw(Point<int16_t>(625, 193 + (1 * 18)));
-            bodyname_.draw(Point<int16_t>(625, 193 + (3 * 18)));
-            topname_.draw(Point<int16_t>(625, 193 + (4 * 18)));
-            shoename_.draw(Point<int16_t>(625, 193 + (5 * 18)));
-            wepname_.draw(Point<int16_t>(625, 193 + (6 * 18)));
+            facename_.draw(position_ + Point<int16_t>(625, 193 + (0 * 18)));
+            hairname_.draw(position_ + Point<int16_t>(625, 193 + (1 * 18)));
+            bodyname_.draw(position_ + Point<int16_t>(625, 193 + (3 * 18)));
+            topname_.draw(position_ + Point<int16_t>(625, 193 + (4 * 18)));
+            shoename_.draw(position_ + Point<int16_t>(625, 193 + (5 * 18)));
+            wepname_.draw(position_ + Point<int16_t>(625, 193 + (6 * 18)));
 
-            newchar_.draw(Point<int16_t>(394, 339), inter);
+            newchar_.draw(Constants::to_panel_space(Point<int16_t>(394, 339)),
+                          inter);
 
             UIElement::draw_buttons(inter);
         } else {
             if (!named_) {
-                UIElement::draw_sprites(inter);
-
-                nameboard_.draw(Point<int16_t>(486, 95));
+                nameboard_.draw(position_ + Point<int16_t>(486, 95));
 
                 namechar_.draw(position_);
-                newchar_.draw(Point<int16_t>(394, 339), inter);
+                newchar_.draw(
+                    Constants::to_panel_space(Point<int16_t>(394, 339)),
+                    inter);
 
                 UIElement::draw_buttons(inter);
             } else {
-                UIElement::draw_sprites(inter);
-
-                nameboard_.draw(Point<int16_t>(486, 95));
+                nameboard_.draw(position_ + Point<int16_t>(486, 95));
 
                 UIElement::draw_buttons(inter);
 
@@ -315,7 +342,19 @@ void UIExplorerCreation::draw(float inter) const {
         }
     }
 
-    version_.draw(position_ + Point<int16_t>(707, 1));
+    PanelRenderer::get().end();
+
+    // The sign, the frame, the step marker and the back arrow belong to the screen rather than to the
+    // board. They stay on the interface, which the panel now composites over: the board is sized to
+    // stay inside the frame's clear window, so the only thing this costs is the sign's lower bar,
+    // which the top of the enlarged board runs over.
+    for (const Sprite &sprite : sprites_pinned_) {
+        sprite.draw(Point<int16_t>(0, 0), inter);
+    }
+
+    back_button_->draw(Point<int16_t>(0, 0));
+
+    version_.draw(Point<int16_t>(707, 1));
 }
 
 void UIExplorerCreation::update() {
@@ -348,13 +387,55 @@ void UIExplorerCreation::update() {
 
     UIElement::update();
 
+    // The backdrop and the furniture are no longer in the base class's list, because they are drawn
+    // on the interface while everything that used to be next to them goes onto the panel.
+    scenery_.update();
+
+    for (auto &sprite : sprites_pinned_) {
+        sprite.update();
+    }
+
+    back_button_->update();
+
     cloudfx_ += 0.25f;
 }
 
 Cursor::State UIExplorerCreation::send_cursor(bool clicked,
                                               Point<int16_t> cursorpos) {
+    // The back arrow is on the interface rather than on the panel, so it is asked what it covers in
+    // the units the pointer arrives in, before those units are converted for everything on the board.
+    // The padding matches UIElement::button_at, since this button is outside the loop that applies it.
+    constexpr int16_t TOUCH_PAD = 6;
+    Rectangle<int16_t> backbounds =
+        back_button_->bounds(Point<int16_t>(0, 0));
+    backbounds =
+        Rectangle<int16_t>(backbounds.get_left_top() - TOUCH_PAD,
+                           backbounds.get_right_bottom() + TOUCH_PAD);
+
+    if (backbounds.contains(cursorpos)) {
+        if (back_button_->get_state() == Button::State::NORMAL) {
+            Sound(Sound::Name::BUTTON_OVER).play();
+            back_button_->set_state(Button::State::MOUSEOVER);
+        } else if (clicked) {
+            Sound(Sound::Name::BUTTON_CLICK).play();
+            back_button_->set_state(button_pressed(Buttons::BT_BACK));
+
+            return Cursor::State::IDLE;
+        }
+
+        return Cursor::State::CAN_CLICK;
+    }
+
+    if (back_button_->get_state() == Button::State::MOUSEOVER) {
+        back_button_->set_state(Button::State::NORMAL);
+    }
+
+    // The pointer arrives in the interface's units and everything on the board is laid out on the
+    // panel, so the tap is brought into that space before anything else is asked what it covers.
+    Point<int16_t> panelpos = Constants::to_panel_space(cursorpos);
+
     if (namechar_.get_state() == Textfield::State::NORMAL) {
-        if (namechar_.get_bounds().contains(cursorpos)) {
+        if (namechar_.get_bounds().contains(panelpos)) {
             if (clicked) {
                 namechar_.set_state(Textfield::State::FOCUSED);
 
@@ -365,7 +446,7 @@ Cursor::State UIExplorerCreation::send_cursor(bool clicked,
         }
     }
 
-    return UIElement::send_cursor(clicked, cursorpos);
+    return UIElement::send_cursor(clicked, panelpos);
 }
 
 void UIExplorerCreation::send_key(int32_t keycode, bool pressed, bool escape) {

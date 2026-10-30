@@ -94,6 +94,16 @@ private:
     std::vector<Sprite> sprites_lookboard_;
     std::vector<Sprite> sprites_gender_select_;
     std::vector<Sprite> sprites_keytype_;
+
+    // Split out of sprites_ because the board is the only thing that goes onto the panel: these are
+    // the backdrop and the screen's own furniture, which stay on the interface under it. They are
+    // updated by hand since they are no longer in the base list that UIElement::update() walks.
+    Sprite scenery_;
+    std::vector<Sprite> sprites_pinned_;
+    // Out of buttons_ for the same reason: the arrow is pinned to the corner of the screen, so it is
+    // drawn and hit-tested in the interface's units instead of the panel's, and UIElement's cursor
+    // loop never sees it.
+    std::unique_ptr<Button> back_button_;
     Texture sky_;
     Texture cloud_;
     float cloudfx_;

@@ -29,8 +29,10 @@ namespace ms {
     class GraphicsGL : public Singleton<GraphicsGL> {
         // The interface pass lives in its own module but shares this GL device (shader, atlas, VBO)
         // and has to restore the scene framebuffer after it flushes, so it reaches the private
-        // device pieces through friendship rather than through a widened public surface.
+        // device pieces through friendship rather than through a widened public surface. The panel
+        // pass is the same arrangement a third time over.
         friend class UIRenderer;
+        friend class PanelRenderer;
 
     public:
         GraphicsGL();
@@ -320,10 +322,16 @@ namespace ms {
         };
 
         // Everything one texture of the device needs: its GL name, the quadtree/shelf packer for
-        // sprites, and the strip plus cache for glyphs rasterised on demand. The scene and the
-        // interface each own one so they can be filtered, grown and evicted independently.
+        // sprites, and the strip plus cache for glyphs rasterised on demand. Each pass owns one so
+        // they can be filtered, grown, sized and evicted independently.
         struct AtlasState {
             GLuint texture = 0;
+
+            // This atlas's own pixel size, set by init_atlas. The two passes that carry a whole
+            // screen's art use the default there; the panel pass holds a handful of windows and is
+            // cut much smaller.
+            GLshort width = 0;
+            GLshort height = 0;
 
             Point<GLshort> border;
             Range<GLshort> y_range;
@@ -349,8 +357,8 @@ namespace ms {
 
         void clear_internal(AtlasState &atlas);
 
-        // Create (or leave) the texture and rewind both packers of one atlas.
-        void init_atlas(AtlasState &atlas, bool linear);
+        // Create (or leave) the texture, give it this size and filter, and rewind both packers.
+        void init_atlas(AtlasState &atlas, GLshort width, GLshort height, bool linear);
 
         // Bind one atlas and tell the shader its size and where its glyph strip ends.
         void bind_atlas(AtlasState &atlas);
@@ -361,8 +369,10 @@ namespace ms {
         // rewind its glyph strip if that is not the density its glyphs were made for.
         void set_atlas_text_scale(AtlasState &atlas, float scale);
 
-        // The atlas the current draw call belongs to: the interface while its pass is open, the
-        // scene otherwise.
+        // The atlas the current draw call belongs to: the panel pass while it is open, else the
+        // interface while it is open, else the scene. A pass opened inside another one takes
+        // precedence for as long as it stays open, which is how a single window can be drawn on the
+        // panel layer while the rest of the interface keeps drawing on its own.
         AtlasState &active_atlas();
 
         const Offset &get_offset(AtlasState &atlas, const img::bitmap &bmp);
@@ -440,12 +450,29 @@ namespace ms {
         static const GLshort ATLASH = 8192;
         static const GLshort MINLOSIZE = 32;
 
+        // The panel pass carries the art of the few windows drawn on it, never a whole map's worth,
+        // so its atlas is a sixteenth the size of the other two rather than a third huge texture on
+        // top of what the device already holds. A glyph strip that overflows is rewound, not lost.
+        static const GLshort PANEL_ATLASW = 4096;
+        static const GLshort PANEL_ATLASH = 4096;
+
         // Height of the strip at the top of each atlas reserved for glyphs the platform renderer
         // rasterises on demand. Everything the shader sees at or above this row is treated as text;
         // sprites are packed below it.
         static const GLshort GLYPH_REGION_H = 512;
 
         bool locked_;
+
+        // Which of the three passes a draw call is being made from, read off the two renderers that
+        // bracket their own drawing. It decides which batch a quad lands in and which atlas its
+        // bitmaps are packed into.
+        enum class Batch {
+            SCENE,
+            UI,
+            PANEL
+        };
+
+        Batch active_batch();
 
         std::vector<Quad>& batch_quads();
 
@@ -464,10 +491,11 @@ namespace ms {
                          int16_t screen_width,
                          int16_t screen_height);
 
-        // Submit the interface batch. Geometry is mapped from the UI_SCALE-smaller layout screen and
-        // lettering from the target's own pixels, so the batch is walked in submission order and
-        // broken into runs of the two; keeping the order is what lets a window drawn later cover a
-        // window drawn earlier. Circles are logical-space and ride with the first geometry run.
+        // Submit one of the two magnified passes (interface or panel). Geometry is mapped from the
+        // pass's own smaller layout screen and lettering from the target's own pixels, so the batch
+        // is walked in submission order and broken into runs of the two; keeping the order is what
+        // lets a window drawn later cover a window drawn earlier. Circles are logical-space and ride
+        // with the first geometry run.
         void flush_ui(const std::vector<Quad> &quads,
                       const std::vector<Circle> &circles,
                       int16_t layout_width,
@@ -524,10 +552,11 @@ namespace ms {
         GLint filter_attribute_coord_;
         GLint filter_uniform_scene_;
 
-        // The scene and the interface each pack their sprites and glyphs into their own texture, so
-        // the two passes never share a filter setting or evict each other's bitmaps.
+        // Every pass packs its sprites and glyphs into its own texture, so no two of them share a
+        // filter setting, a text density, or each other's eviction.
         AtlasState scene_atlas_;
         AtlasState ui_atlas_;
+        AtlasState panel_atlas_;
 
         // Scratch for the one-texel replicated border, kept at the size of the largest sprite so
         // that packing a picture never has to allocate and zero a fresh buffer for it.

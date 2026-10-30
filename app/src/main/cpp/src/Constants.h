@@ -204,6 +204,29 @@ constexpr double STOP_SPEED = 12.5;
 // it grows every window, button and piece of text together while the map stays the same size.
 constexpr float UI_SCALE = 1.3f;
 
+// A third space, above the world and beside the interface, for the windows that have to read bigger
+// than the interface's own magnification allows. It works exactly like UI_SCALE - the window lays
+// itself out on a screen this much smaller than the view and is rasterised straight into a target
+// the size of the view box - but the two numbers are independent, so growing the windows that opt
+// into this pass leaves every other window, and the map, the size it was.
+//
+// How small a window can be laid out is bounded by the screen it has to fit inside: a panel window
+// still has to leave room for whatever it is pinned against, so this sits only a little above
+// UI_SCALE. Raising it grows every panel window together, the way UI_SCALE grows the interface.
+constexpr float PANEL_SCALE = 1.7f;
+
+// The interface and the panel share one screen, so a point of the interface is this much of a point
+// of the panel. Anything that stays on the panel's screen but must not be enlarged - the backdrop a
+// panel window is laid over, a control pinned to a corner - is submitted shrunk by this factor,
+// which lands every one of its pixels on the pixel the interface would have put it on. The same
+// factor brings a pointer, which the interface hands over in its own units, into the panel.
+constexpr float PANEL_FROM_UI = UI_SCALE / PANEL_SCALE;
+
+constexpr Point<int16_t> to_panel_space(const Point<int16_t> &uipos) {
+    return Point<int16_t>(static_cast<int16_t>(uipos.x() * PANEL_FROM_UI),
+                          static_cast<int16_t>(uipos.y() * PANEL_FROM_UI));
+}
+
 // The interface is laid out on a screen UI_SCALE smaller than the view, so a placement made
 // against the view - a window's stored origin, for instance - has to be brought into that space
 // before the interface can use it. Writing it back out goes the other way.
