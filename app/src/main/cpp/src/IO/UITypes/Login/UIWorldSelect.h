@@ -46,8 +46,6 @@ public:
 
     void remove_selected();
 
-    void set_region(uint8_t value);
-
     uint16_t get_worldbyid(uint16_t worldid);
 
     uint8_t get_channel_count(uint8_t wid) const;
@@ -57,6 +55,10 @@ protected:
 
 private:
     void enter_world();
+
+    // Builds the world buttons out of one entry of BtWorld/release/index. The region picker is gone,
+    // so the constructor is the only caller and the id it passes is a constant.
+    void set_region(uint8_t value);
 
     void toggle_recommended(bool active);
 
@@ -97,7 +99,6 @@ private:
         BT_VIEW_RECOMMENDED_CANCEL,
         BT_VIEW_RECOMMENDED_PREV,
         BT_VIEW_RECOMMENDED_NEXT,
-        BT_CHANGE_REGION,
         BT_QUIT_GAME
     };
 

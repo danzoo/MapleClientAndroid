@@ -92,9 +92,6 @@ private:
         CHARACTER_DELETE,
         PAGE_LEFT,
         PAGE_RIGHT,
-        CHANGE_PIC,
-        RESET_PIC,
-        EDIT_CHAR_LIST,
         BACK,
         CHARACTER_SLOT0
     };
@@ -118,8 +115,6 @@ private:
     int16_t tab_move_pos_;
     std::map<uint8_t, uint16_t> tab_map_;
     Point<int16_t> world_dimensions_;
-    Animation burning_notice_;
-    Text burning_count_;
     std::vector<Sprite> world_sprites_;
     Texture charinfo_;
     Texture charslot_;
@@ -142,7 +137,6 @@ private:
     // squared up only when it is drawn.
     double charslot_y_;
     bool show_timestamp_;
-    bool burning_character_;
 
     enum InfoLabel : uint8_t { JOB, STR, DEX, INT, LUK, NUM_LABELS };
 
