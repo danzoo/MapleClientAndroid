@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "../Configuration.h"
+#include "../Perf.h"
 #include "../IO/UI.h"
 #include "../IO/UITypes/UIStatusBar.h"
 #include "../Net/Packets/AttackAndSkillPackets.h"
@@ -100,6 +101,11 @@ void Stage::clear() {
 }
 
 void Stage::load_map(int32_t mapid) {
+    // The whole of a map's construction, timed as one: reading the nodes, packing the tiles and
+    // objects, decoding the backgrounds and building the foothold index. This is the cost a portal
+    // pays on the render thread, and the only one big enough to be worth moving off it.
+    PerfScope perf(PerfSection::MapLoad);
+
     Stage::map_id_ = mapid;
 
     std::string strid = string_format::extend_id(mapid, 9);
@@ -173,12 +179,19 @@ void Stage::update() {
     effect_.update();
     tiles_objs_.update();
 
-    reactors_.update(physics_);
-    npcs_.update(physics_);
-    mobs_.update(physics_);
-    chars_.update(physics_);
-    drops_.update(physics_);
-    player_.update(physics_);
+    {
+        // Everything that moves an entity through the terrain, and nothing else: the share of
+        // Stage::update() this reports is the whole ceiling on what running it on more cores could
+        // ever take back.
+        PerfScope perf(PerfSection::PhysicsUpdate);
+
+        reactors_.update(physics_);
+        npcs_.update(physics_);
+        mobs_.update(physics_);
+        chars_.update(physics_);
+        drops_.update(physics_);
+        player_.update(physics_);
+    }
 
     // A ladder has to be re-checked while the key is held rather than only on the edge of the press.
     // The edge arrives once - the stick reports a direction when the direction changes, not every

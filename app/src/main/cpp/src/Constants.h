@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 
 #include "Template/Point.h"
@@ -140,6 +141,40 @@ constexpr uint32_t LOGIN_WAIT_TIMEOUT_MS = 30000;
 // screen has one thing to say about all three - the server is not reachable - and a screen that
 // waited on thirty seconds of silence per step would spend most of a minute saying nothing.
 constexpr uint32_t CONNECT_TIMEOUT_MS = 5000;
+
+// How many frames Perf accumulates before it writes its line. Short enough that a hitch shows up
+// within a couple of seconds of adb, long enough that one line is not most of the cost of writing
+// it - and it has to divide into the ~60 frames a second this runs at, or the interval the rates are
+// worked out over stops matching what the number claims.
+constexpr uint32_t PERF_LOG_FRAMES = 120;
+
+// Texel bytes one sprite is handed to the driver for at a time. A canvas bigger than this is painted
+// a slice of rows per call, so this bounds the granularity of the work - the frame checks its own
+// time between slices, and one slice is the most it can be asked to overshoot by.
+constexpr size_t ATLAS_UPLOAD_SLICE_BYTES = 256 * 1024;
+
+// How long one frame may spend painting sprites, in microseconds. The ceiling has to be kept in time
+// rather than in bytes because the two have no fixed relation: on the test device a megabyte of
+// texels costs the border copy and the driver between 9 and 15ms, which is on its own more than a
+// frame can give, and another device does the same bytes several times cheaper. What a frame can
+// afford is the one number that does not change between them.
+constexpr int64_t ATLAS_PUMP_BUDGET_US = 6000;
+
+// How long one pump is allowed to take when it is filling in a screen nobody can see. A frame that
+// left pictures out is not presented (see GraphicsGL::hold_frame), so this pass is not competing with
+// anything worth keeping smooth and the fastest way through it is to pay for the pixels in one go.
+// The number is a ceiling against a queue that never drains, not a target.
+constexpr int64_t ATLAS_PUMP_CATCHUP_US = 250000;
+
+// How many frames in a row may be held back for want of their art. Past this the frame is shown with
+// whatever has arrived, because a screen missing a picture is better than a screen frozen on the last
+// one - which is what a canvas the worker cannot finish would otherwise cause.
+constexpr uint16_t ATLAS_HOLD_FRAME_LIMIT = 16;
+
+// How many sprites may be sitting in the decode queue at once. Each one is a buffer of its own
+// pixels, so a scene that asks for art faster than the worker can inflate it has to stop asking
+// rather than grow without bound; a sprite that is turned away is simply asked again next frame.
+constexpr size_t ATLAS_DECODE_LIMIT = 192;
 
 // How long the notice across the top of the screen stays up when the server asks for a banner but
 // gives no length. The banner is no longer something the client holds on its own - it arrives with a
