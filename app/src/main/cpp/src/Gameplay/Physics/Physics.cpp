@@ -19,7 +19,6 @@
 
 #include "PhysicsParams.h"
 #include "../../Constants.h"
-#include "../../Perf.h"
 
 namespace ms {
 // Ground takes speed off an object in two parts: walkDrag, which is proportional to the speed it
@@ -55,91 +54,74 @@ Physics::Physics(const img::node &src) {
 Physics::Physics() = default;
 
 void Physics::move_object(PhysicsObject &phobj) const {
-    perf_count(PerfCounter::ObjectsMoved, 1);
+    // Determine which platform the object is currently on
+    fh_tree_.update_fh(phobj);
 
-    // Timed apart from the rest of the move because the two have nothing in common: this is a walk
-    // of the map's foothold tree around the object, the rest is arithmetic and collision checks
-    // against whatever it found. The peak that is left over after those two are separated is the
-    // one that says whether spreading objects across cores would take the hitch away or only spread
-    // it around.
-    {
-        PerfScope perf(PerfSection::FootholdUpdate);
-
-        // Determine which platform the object is currently on
-        fh_tree_.update_fh(phobj);
+    // Use the appropriate physics for the terrain the object is on
+    switch (phobj.type) {
+        case PhysicsObject::Type::NORMAL:
+            move_normal(phobj);
+            break;
+        case PhysicsObject::Type::FLYING:
+            move_flying(phobj);
+            break;
+        case PhysicsObject::Type::SWIMMING:
+            move_swimming(phobj);
+            break;
+        case PhysicsObject::Type::FIXATED:
+        default: break;
     }
 
-    {
-        PerfScope perf(PerfSection::MoveApply);
+    // The tick's displacement, walked in pieces of at most MAX_SUBSTEP pixels with a collision check
+    // between them, so that an object covering more ground than a platform is thick cannot be
+    // between two checks' worth of positions on either side of it. Whatever the checks leave of the
+    // speeds is then applied a piece at a time.
+    //
+    // Nothing slower than MAX_SUBSTEP pixels per tick takes more than one piece, and one piece is
+    // asked about with the same whole-tick displacement the single check used to be made with, so
+    // walking, jumping and every other ordinary movement come out of this exactly as they came out
+    // of the old one-step code. Only an object that would otherwise cross several footholds between
+    // two checks is affected - at the archive's terminal fall speed that is nine pixels a tick.
+    //
+    // normalize() first, then shift(): the update still reads as one segment from where the object
+    // started to where it ends up, which is what the drawing interpolates along. Advancing that
+    // segment once per piece instead would make a fast object stutter between the pieces it is drawn
+    // across.
+    phobj.normalize();
 
-        // Use the appropriate physics for the terrain the object is on
-        switch (phobj.type) {
-            case PhysicsObject::Type::NORMAL:
-                move_normal(phobj);
-                break;
-            case PhysicsObject::Type::FLYING:
-                move_flying(phobj);
-                break;
-            case PhysicsObject::Type::SWIMMING:
-                move_swimming(phobj);
-                break;
-            case PhysicsObject::Type::FIXATED:
-            default: break;
+    double hrem = phobj.hstep();
+    double vrem = phobj.vstep();
+
+    while (hrem != 0.0 || vrem != 0.0) {
+        double reach = std::max(std::abs(hrem), std::abs(vrem));
+        double share = reach > MAX_SUBSTEP ? MAX_SUBSTEP / reach : 1.0;
+        double dh = hrem * share;
+        double dv = vrem * share;
+
+        // A fixated body is never asked about against the terrain, which is what the reference does
+        // too - it limits movement only for normal, flying and swimming bodies - and it has to be
+        // that way: a climber keeps the foothold it grabbed from, because update_fh returns early for
+        // a fixated object, so the floor test would measure it against that very platform and clamp
+        // every downward piece back onto it. Descent would be impossible.
+        if (phobj.type != PhysicsObject::Type::FIXATED) {
+            fh_tree_.limit_movement(phobj, dh, dv);
         }
 
-        // The tick's displacement, walked in pieces of at most MAX_SUBSTEP pixels with a collision
-        // check between them, so that an object covering more ground than a platform is thick cannot
-        // be between two checks' worth of positions on either side of it. Whatever the checks leave
-        // of the speeds is then applied a piece at a time.
-        //
-        // Nothing slower than MAX_SUBSTEP pixels per tick takes more than one piece, and one piece is
-        // asked about with the same whole-tick displacement the single check used to be made with, so
-        // walking, jumping and every other ordinary movement come out of this exactly as they came
-        // out of the old one-step code. Only an object that would otherwise cross several footholds
-        // between two checks is affected - at the archive's terminal fall speed that is nine pixels a
-        // tick.
-        //
-        // normalize() first, then shift(): the update still reads as one segment from where the
-        // object started to where it ends up, which is what the drawing interpolates along.
-        // Advancing that segment once per piece instead would make a fast object stutter between the
-        // pieces it is drawn across.
-        phobj.normalize();
+        // A piece that ran into something is already over: the check put the object against the
+        // obstacle it hit and took that direction's speed away, so the rest of the tick has nothing
+        // left to cover the way it was going.
+        bool hstopped = hrem != 0.0 && !phobj.hmobile();
+        bool vstopped = vrem != 0.0 && !phobj.vmobile();
 
-        double hrem = phobj.hstep();
-        double vrem = phobj.vstep();
+        phobj.apply_substep(hstopped ? 0.0 : dh, vstopped ? 0.0 : dv);
 
-        while (hrem != 0.0 || vrem != 0.0) {
-            double reach = std::max(std::abs(hrem), std::abs(vrem));
-            double share = reach > MAX_SUBSTEP ? MAX_SUBSTEP / reach : 1.0;
-            double dh = hrem * share;
-            double dv = vrem * share;
+        hrem = hstopped ? 0.0 : hrem - dh;
+        vrem = vstopped ? 0.0 : vrem - dv;
 
-            // A fixated body is never asked about against the terrain, which is what the reference
-            // does too - it limits movement only for normal, flying and swimming bodies - and it has
-            // to be that way: a climber keeps the foothold it grabbed from, because update_fh returns
-            // early for a fixated object, so the floor test would measure it against that very
-            // platform and clamp every downward piece back onto it. Descent would be impossible.
-            if (phobj.type != PhysicsObject::Type::FIXATED) {
-                fh_tree_.limit_movement(phobj, dh, dv);
-            }
-
-            // A piece that ran into something is already over: the check put the object against the
-            // obstacle it hit and took that direction's speed away, so the rest of the tick has
-            // nothing left to cover the way it was going.
-            bool hstopped = hrem != 0.0 && !phobj.hmobile();
-            bool vstopped = vrem != 0.0 && !phobj.vmobile();
-
-            phobj.apply_substep(hstopped ? 0.0 : dh, vstopped ? 0.0 : dv);
-
-            hrem = hstopped ? 0.0 : hrem - dh;
-            vrem = vstopped ? 0.0 : vrem - dv;
-
-            // Whichever platform the tick started on is not necessarily the one under the object now,
-            // and a piece is only worth taking if it is measured against the ground actually below
-            // it.
-            if (hrem != 0.0 || vrem != 0.0) {
-                fh_tree_.update_fh(phobj);
-            }
+        // Whichever platform the tick started on is not necessarily the one under the object now,
+        // and a piece is only worth taking if it is measured against the ground actually below it.
+        if (hrem != 0.0 || vrem != 0.0) {
+            fh_tree_.update_fh(phobj);
         }
     }
 }

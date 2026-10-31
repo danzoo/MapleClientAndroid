@@ -15,26 +15,21 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "GraphicsGL.h"
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <iostream>
-#include <iterator>
-#include <utility>
 #include <vector>
 
 #include <android/log.h>
 
 #include "../Configuration.h"
-#include "../Perf.h"
 #include "AndroidText.h"
 #include "PanelRenderer.h"
 #include "UIRenderer.h"
 #include "Window.h"
 
 namespace ms {
-    GraphicsGL::GraphicsGL()
-        : locked_(false), worker_decode_us_(0), worker_decode_pixels_(0) {
+    GraphicsGL::GraphicsGL() : locked_(false) {
         VWIDTH = Constants::Constants::get().get_viewwidth();
         VHEIGHT = Constants::Constants::get().get_viewheight();
         SCREEN = Rectangle<int16_t>(0, VWIDTH, 0, VHEIGHT);
@@ -43,21 +38,6 @@ namespace ms {
         scene_tex_ = 0;
         scene_width_ = 0;
         scene_height_ = 0;
-
-        decode_thread_ = std::thread(&GraphicsGL::decode_worker, this);
-    }
-
-    GraphicsGL::~GraphicsGL() {
-        {
-            std::lock_guard<std::mutex> lock(decode_mutex_);
-            decode_stop_ = true;
-        }
-
-        decode_cv_.notify_one();
-
-        if (decode_thread_.joinable()) {
-            decode_thread_.join();
-        }
     }
 
     Error GraphicsGL::init(GLFMDisplay *pApp) {
@@ -320,26 +300,12 @@ namespace ms {
     }
 
     void GraphicsGL::clear_internal(AtlasState &atlas) {
-        perf_count(PerfCounter::AtlasWipes, 1);
-
         // Sprites are packed from the first row under the glyph strip. It has to be strictly below
         // the fontregion the shader compares against, or the top sprite row would be sampled as a
         // glyph (white times its red channel) instead of as a picture.
         atlas.border = Point<GLshort>(0, static_cast<GLshort>(atlas.glyph_region_bottom + 1));
         atlas.y_range = Range<GLshort>();
         atlas.offsets.clear();
-        // Cleared with the offsets, because a sprite the atlas no longer has can only be painted
-        // again by being asked for again - and an id left in here says that already happened.
-        atlas.requested.clear();
-
-        // A sprite caught half-painted has lost the room it was given, so it starts over in the
-        // emptied atlas instead of finishing its remaining rows into somebody else's rect.
-        for (DecodeJob &waiting : decode_ready_) {
-            if (waiting.atlas == &atlas) {
-                waiting.reserved = false;
-                waiting.painted = 0;
-            }
-        }
         atlas.leftovers = QuadTree<size_t, Leftover>(
                 [](const Leftover &first, const Leftover &second) {
                     bool width_comparison = first.width() >= second.width();
@@ -686,219 +652,42 @@ namespace ms {
         get_offset(scene_atlas_, bmp);
     }
 
-    const GraphicsGL::Offset *GraphicsGL::get_offset(AtlasState &atlas, const img::bitmap &bmp) {
-        const size_t id = bmp.id();
+    const GraphicsGL::Offset &GraphicsGL::get_offset(AtlasState &atlas, const img::bitmap &bmp) {
+        size_t id = bmp.id();
         auto offiter = atlas.offsets.find(id);
 
         if (offiter != atlas.offsets.end()) {
-            return &offiter->second;
+            return offiter->second;
         }
 
-        const GLshort width = bmp.width();
-        const GLshort height = bmp.height();
+        GLshort x = 0;
+        GLshort y = 0;
+        GLshort width = bmp.width();
+        GLshort height = bmp.height();
 
         if (width <= 0 || height <= 0) {
-            return &null_offset_;
+            return null_offset_;
         }
 
-        // A canvas nobody has painted yet is not painted here. Inflating one costs about as much as
-        // drawing everything else in the frame put together, which is what the 45ms peaks in the
-        // uidraw timings were: a screenful of art meeting the render thread for the first time. So
-        // the pixels are asked for and the sprite is left out of this frame; it arrives as soon as
-        // the worker has it and the frame's upload budget reaches it.
-        request_decode(atlas, bmp);
+        // Decode before reserving any atlas area. A canvas with no payload (a blank animation
+        // frame) has nothing to upload, and packing it first burned atlas space on every attempt
+        // while caching nothing, so the atlas filled up and was wiped over and over.
+        //
+        // The pixels come into a buffer this pass owns rather than into the scratch that
+        // img::bitmap::data() hands out, because that one goes out of date under the next decode -
+        // including a decode on another thread, which is what warming a picture up ahead of time
+        // would be.
+        decode_scratch_.resize(static_cast<size_t>(bmp.length()));
 
-        return nullptr;
-    }
-
-    bool GraphicsGL::request_decode(AtlasState &atlas, const img::bitmap &bmp) {
-        if (atlas.requested.count(bmp.id())) {
-            // Already asked for, and still on its way: queued, being inflated, or waiting behind the
-            // frame's upload budget. Asking again would send a second copy of the same picture
-            // through the packer, and every copy reserves fresh space and gets uploaded again, so a
-            // screenful of art meeting an empty atlas filled it with duplicates until it wiped on
-            // itself - which drops the offsets of the quads already batched for that frame, and is
-            // what the flicker on entering a map was.
-            return false;
+        if (bmp.decode_into(decode_scratch_.data(), decode_scratch_.size())
+            != decode_scratch_.size()) {
+            // A canvas whose payload cannot be decoded stays unpainted instead of taking the
+            // whole frame down with it. Caching the empty offset also stops the decode from
+            // being retried on every frame; it is dropped with the rest of the cache on clear.
+            return atlas.offsets.emplace(id, null_offset_).first->second;
         }
 
-        if (decode_outstanding_ >= Constants::ATLAS_DECODE_LIMIT) {
-            // Nothing is remembered about a sprite that could not be queued, so the frame that draws
-            // it again asks for it again. This is the only reason a picture can stay missing for more
-            // than a frame or two, and it means the worker is behind by more than the queue holds.
-            return false;
-        }
-
-        DecodeJob job;
-        job.bmp = bmp;
-        job.atlas = &atlas;
-
-        {
-            std::lock_guard<std::mutex> lock(decode_mutex_);
-            decode_queued_.push_back(std::move(job));
-        }
-
-        decode_outstanding_++;
-        atlas.requested.insert(bmp.id());
-        decode_cv_.notify_one();
-
-        return true;
-    }
-
-    void GraphicsGL::decode_worker() {
-        std::unique_lock<std::mutex> lock(decode_mutex_);
-
-        while (true) {
-            decode_cv_.wait(lock, [this] {
-                return decode_stop_ || !decode_queued_.empty();
-            });
-
-            if (decode_stop_) {
-                return;
-            }
-
-            DecodeJob job = std::move(decode_queued_.front());
-            decode_queued_.pop_front();
-
-            // The pixels are allocated and written with no lock held, which is the whole point: the
-            // inflate and the buffer both happen while the render thread is drawing the frame this
-            // one cannot be in.
-            lock.unlock();
-
-            job.pixels.resize(job.bmp.length());
-
-            const auto began = std::chrono::steady_clock::now();
-            job.decoded
-                    = job.bmp.decode_into(job.pixels.data(), job.pixels.size()) == job.pixels.size();
-            worker_decode_us_.fetch_add(
-                    std::chrono::duration_cast<std::chrono::microseconds>(
-                            std::chrono::steady_clock::now() - began).count(),
-                    std::memory_order_relaxed);
-            worker_decode_pixels_.fetch_add(job.pixels.size(), std::memory_order_relaxed);
-
-            lock.lock();
-            decode_done_.push_back(std::move(job));
-            decode_done_cv_.notify_all();
-        }
-    }
-
-    void GraphicsGL::move_completed() {
-        size_t finished = 0;
-
-        {
-            std::lock_guard<std::mutex> lock(decode_mutex_);
-            finished = decode_done_.size();
-            decode_ready_.insert(decode_ready_.end(),
-                                 std::make_move_iterator(decode_done_.begin()),
-                                 std::make_move_iterator(decode_done_.end()));
-            decode_done_.clear();
-        }
-
-        decode_outstanding_ -= finished;
-
-        perf_count(PerfCounter::WorkerDecodeUs, worker_decode_us_.exchange(0));
-        perf_count(PerfCounter::WorkerDecodePixels, worker_decode_pixels_.exchange(0));
-    }
-
-    void GraphicsGL::pump_uploads() {
-        PerfScope perf(PerfSection::AtlasPump);
-
-        // The budget is there to stop a frame that is being watched from spending all of its time
-        // handing pixels to the driver. A catch-up pass is not that frame: the screen it is filling in
-        // is not on show (Window::end holds the last complete one), so the only thing a shorter pass
-        // would buy is more frames of the same screen held up.
-        const bool catch_up = catch_up_;
-        const int64_t budget_us = catch_up
-                ? Constants::ATLAS_PUMP_CATCHUP_US
-                : Constants::ATLAS_PUMP_BUDGET_US;
-
-        const auto began = std::chrono::steady_clock::now();
-
-        while (true) {
-            move_completed();
-
-            if (decode_ready_.empty()) {
-                const int64_t spent = std::chrono::duration_cast<std::chrono::microseconds>(
-                                              std::chrono::steady_clock::now() - began).count();
-
-                if (!catch_up || spent > budget_us) {
-                    break;
-                }
-
-                if (decode_outstanding_ == 0) {
-                    // Nothing is coming, so this is as filled in as the screen gets.
-                    catch_up_ = false;
-                    break;
-                }
-
-                // The worker is inflating what the held screen is waiting on. Sleeping on it is the
-                // point: taking the answer one polled frame at a time is what left a screen blank for
-                // seconds after a map change.
-                std::unique_lock<std::mutex> lock(decode_mutex_);
-                decode_done_cv_.wait_for(
-                        lock,
-                        std::chrono::microseconds(budget_us - spent),
-                        [this] { return decode_stop_ || !decode_done_.empty(); });
-                continue;
-            }
-
-            DecodeJob &job = decode_ready_.front();
-
-            if (!job.decoded) {
-                // A payload that does not inflate stays unpainted, and is not asked for again until
-                // the atlas is repacked. Caching the blank offset is what keeps a broken canvas from
-                // holding a queue slot on every frame.
-                job.atlas->offsets.emplace(job.bmp.id(), null_offset_);
-                decode_ready_.pop_front();
-                continue;
-            }
-
-            paint_job(job, Constants::ATLAS_UPLOAD_SLICE_BYTES);
-
-            if (job.painted >= job.ph) {
-                decode_ready_.pop_front();
-            }
-
-            // Checked after every slice rather than after every sprite, because a background sheet
-            // takes several of them and the frame is not going to wait for one to finish before it
-            // stops paying. Nothing in the queue is half-painted except the front of it - the rect
-            // was reserved whole - so leaving here is enough to keep the order.
-            const auto spent = std::chrono::duration_cast<std::chrono::microseconds>(
-                                   std::chrono::steady_clock::now() - began).count();
-
-            if (spent > budget_us) {
-                break;
-            }
-        }
-
-        perf_count(PerfCounter::AtlasPending, static_cast<int64_t>(decode_ready_.size()));
-    }
-
-    bool GraphicsGL::hold_frame() {
-        const bool holes = frame_holes_;
-        frame_holes_ = false;
-
-        // Holding is only worth anything while something is actually on its way, because a held frame
-        // never reaches the swap and the swap is what paces this loop. A hole whose pixels were turned
-        // away at the queue cap, or one whose canvas failed to inflate, is a hole that waiting will
-        // not fill: show it and let the frame rate come back.
-        const bool pending = !decode_ready_.empty() || decode_outstanding_ > 0;
-
-        if (!holes || !pending || held_frames_ >= Constants::ATLAS_HOLD_FRAME_LIMIT) {
-            held_frames_ = 0;
-            return false;
-        }
-
-        held_frames_++;
-        perf_count(PerfCounter::AtlasHeld, 1);
-        return true;
-    }
-
-    void GraphicsGL::reserve_space(AtlasState &atlas, DecodeJob &job) {
-        const img::bitmap &bmp = job.bmp;
-
-        const GLshort width = bmp.width();
-        const GLshort height = bmp.height();
+        const uint8_t *src = decode_scratch_.data();
 
         // Bitmaps are stored with a one-texel border of replicated edge pixels. Texture
         // coordinates address texel corners, so a filtered sample taken exactly on a sprite's
@@ -906,13 +695,10 @@ namespace ms {
         // the atlas; the replicated border makes those edge samples resolve to the sprite's
         // own edge colour. This is what keeps a stretched one-pixel fill (tooltip bodies) and
         // abutting nine-slice pieces (window borders) free of foreign-colour fringes.
-        job.pw = static_cast<GLshort>(width + 2);
-        job.ph = static_cast<GLshort>(height + 2);
+        const GLshort pw = static_cast<GLshort>(width + 2);
+        const GLshort ph = static_cast<GLshort>(height + 2);
 
-        GLshort x = 0;
-        GLshort y = 0;
-
-        Leftover value = Leftover(x, y, job.pw, job.ph);
+        Leftover value = Leftover(x, y, pw, ph);
 
         size_t lid = atlas.leftovers.findnode(
                 value,
@@ -926,47 +712,47 @@ namespace ms {
             x = leftover.left;
             y = leftover.top;
 
-            GLshort width_delta = leftover.width() - job.pw;
-            GLshort height_delta = leftover.height() - job.ph;
+            GLshort width_delta = leftover.width() - pw;
+            GLshort height_delta = leftover.height() - ph;
 
             atlas.leftovers.erase(lid);
 
-            atlas.wasted -= job.pw * job.ph;
+            atlas.wasted -= pw * ph;
 
             if (width_delta >= MINLOSIZE && height_delta >= MINLOSIZE) {
                 atlas.leftovers.add(
                         atlas.rlid,
-                        Leftover(x + job.pw, y + job.ph, width_delta, height_delta));
+                        Leftover(x + pw, y + ph, width_delta, height_delta));
                 atlas.rlid++;
 
-                if (job.pw >= MINLOSIZE) {
+                if (pw >= MINLOSIZE) {
                     atlas.leftovers.add(atlas.rlid,
-                                        Leftover(x, y + job.ph, job.pw, height_delta));
+                                        Leftover(x, y + ph, pw, height_delta));
                     atlas.rlid++;
                 }
 
-                if (job.ph >= MINLOSIZE) {
+                if (ph >= MINLOSIZE) {
                     atlas.leftovers.add(atlas.rlid,
-                                        Leftover(x + job.pw, y, width_delta, job.ph));
+                                        Leftover(x + pw, y, width_delta, ph));
                     atlas.rlid++;
                 }
             } else if (width_delta >= MINLOSIZE) {
                 atlas.leftovers.add(
                         atlas.rlid,
-                        Leftover(x + job.pw, y, width_delta, job.ph + height_delta));
+                        Leftover(x + pw, y, width_delta, ph + height_delta));
                 atlas.rlid++;
             } else if (height_delta >= MINLOSIZE) {
                 atlas.leftovers.add(
                         atlas.rlid,
-                        Leftover(x, y + job.ph, job.pw + width_delta, height_delta));
+                        Leftover(x, y + ph, pw + width_delta, height_delta));
                 atlas.rlid++;
             }
         } else {
-            if (atlas.border.x() + job.pw > atlas.width) {
+            if (atlas.border.x() + pw > atlas.width) {
                 atlas.border.set_x(0);
                 atlas.border.shift_y(atlas.y_range.second());
 
-                if (atlas.border.y() + job.ph > atlas.height) {
+                if (atlas.border.y() + ph > atlas.height) {
                     clear_internal(atlas);
                 } else {
                     atlas.y_range = Range<GLshort>();
@@ -976,85 +762,51 @@ namespace ms {
             x = atlas.border.x();
             y = atlas.border.y();
 
-            atlas.border.shift_x(job.pw);
+            atlas.border.shift_x(pw);
 
-            if (job.ph > atlas.y_range.second()) {
-                if (x >= MINLOSIZE && job.ph - atlas.y_range.second() >= MINLOSIZE) {
+            if (ph > atlas.y_range.second()) {
+                if (x >= MINLOSIZE && ph - atlas.y_range.second() >= MINLOSIZE) {
                     atlas.leftovers.add(atlas.rlid,
                                         Leftover(0,
                                                  atlas.y_range.first(),
                                                  x,
-                                                 job.ph - atlas.y_range.second()));
+                                                 ph - atlas.y_range.second()));
                     atlas.rlid++;
                 }
 
-                atlas.wasted += x * (job.ph - atlas.y_range.second());
+                atlas.wasted += x * (ph - atlas.y_range.second());
 
-                atlas.y_range = Range<int16_t>(y + job.ph, job.ph);
-            } else if (job.ph < atlas.y_range.first() - y) {
-                if (job.pw >= MINLOSIZE
-                    && atlas.y_range.first() - y - job.ph >= MINLOSIZE) {
+                atlas.y_range = Range<int16_t>(y + ph, ph);
+            } else if (ph < atlas.y_range.first() - y) {
+                if (pw >= MINLOSIZE
+                    && atlas.y_range.first() - y - ph >= MINLOSIZE) {
                     atlas.leftovers.add(atlas.rlid,
                                         Leftover(x,
-                                                 y + job.ph,
-                                                 job.pw,
-                                                 atlas.y_range.first() - y - job.ph));
+                                                 y + ph,
+                                                 pw,
+                                                 atlas.y_range.first() - y - ph));
                     atlas.rlid++;
                 }
 
-                atlas.wasted += job.pw * (atlas.y_range.first() - y - job.ph);
+                atlas.wasted += pw * (atlas.y_range.first() - y - ph);
             }
         }
 
-        job.x = x;
-        job.y = y;
-    }
-
-    void GraphicsGL::paint_job(DecodeJob &job, size_t slice) {
-        AtlasState &atlas = *job.atlas;
-
-        if (!job.reserved) {
-            reserve_space(atlas, job);
-            job.reserved = true;
-
-            // Making room can mean wiping the atlas, and a wipe empties the list of what has been
-            // asked for. This one is on its way whatever the packer had to do to fit it, so put it
-            // back on the list.
-            atlas.requested.insert(job.bmp.id());
-        }
-
-        const size_t row_bytes = static_cast<size_t>(job.pw) * 4;
-        const size_t left = static_cast<size_t>(job.ph - job.painted);
-
-        // The rows one slice covers, of the rows this sprite still has waiting. At least one, even for
-        // a sprite wider than the whole slice, so that no canvas is ever too wide to make progress.
-        size_t room = slice / row_bytes;
-        if (room < 1) {
-            room = 1;
-        }
-        if (room > left) {
-            room = left;
-        }
-
-        const GLshort rows = static_cast<GLshort>(room);
-
-        // The border is built in one reusable scratch buffer, one slice at a time. A per-bitmap vector
-        // would have to be mmapped, zeroed and munmapped again for every sprite, and the login
-        // animation frames are large enough for that to dominate the time spent painting the logo.
-        atlas_scratch_.resize(row_bytes * room);
+        // The border is built in one reusable scratch buffer. A per-bitmap vector would have to be
+        // mmapped, zeroed and munmapped again for every sprite, and the login animation frames are
+        // large enough for that to dominate the time spent painting the logo.
+        atlas_scratch_.resize(static_cast<size_t>(pw) * ph * 4);
         uint8_t *dst = atlas_scratch_.data();
 
-        const uint8_t *src = job.pixels.data();
-        const GLshort width = job.bmp.width();
-        const GLshort height = job.bmp.height();
         const size_t src_stride = static_cast<size_t>(width) * 4;
+        const size_t dst_stride = static_cast<size_t>(pw) * 4;
 
-        for (GLshort row = job.painted; row < job.painted + rows; row++) {
+        for (GLshort row = 0; row < ph; row++) {
             // Row 0 repeats the first source row and row ph-1 the last; the outer columns repeat
             // the first and last pixel of their row.
             const GLshort srow = std::min<GLshort>(std::max<GLshort>(row - 1, 0), height - 1);
             const uint8_t *srowp = src + static_cast<size_t>(srow) * src_stride;
-            uint8_t *drowp = dst + static_cast<size_t>(row - job.painted) * row_bytes;
+            uint8_t *drowp = dst + static_cast<size_t>(row) * dst_stride;
 
             std::memcpy(drowp + 4, srowp, src_stride);
             std::memcpy(drowp, srowp, 4);
@@ -1065,39 +817,22 @@ namespace ms {
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexSubImage2D(GL_TEXTURE_2D,
                         0,
-                        job.x,
-                        job.y + job.painted,
-                        job.pw,
-                        rows,
+                        x,
+                        y,
+                        pw,
+                        ph,
                         GL_RGBA,
                         GL_UNSIGNED_BYTE,
                         dst);
 
-        job.painted = static_cast<GLshort>(job.painted + rows);
-
-        if (job.painted < job.ph) {
-            return;
-        }
-
-        perf_count(PerfCounter::AtlasUploads, 1);
-        perf_count(PerfCounter::AtlasBytes, static_cast<int64_t>(job.pw) * job.ph * 4);
-
-        // Sampled here because this is the only moment the packing state is looked at between the
-        // ones that matter: how full the atlas is decides how soon the next wipe comes, and a wipe
-        // is what makes every sprite in the window get decoded and uploaded again.
-        const size_t used = static_cast<size_t>(atlas.width) * atlas.border.y()
-                + static_cast<size_t>(atlas.border.x()) * atlas.y_range.second();
-        perf_count(PerfCounter::AtlasOccupancy,
-                   static_cast<int64_t>(used * 1000 / (atlas.width * atlas.height)));
-
-        // Only now is the sprite something the frame can look up and draw.
-        atlas.offsets
+        return atlas.offsets
                 .emplace(std::piecewise_construct,
-                         std::forward_as_tuple(job.bmp.id()),
-                         std::forward_as_tuple(static_cast<GLshort>(job.x + 1),
-                                               static_cast<GLshort>(job.y + 1),
+                         std::forward_as_tuple(id),
+                         std::forward_as_tuple(static_cast<GLshort>(x + 1),
+                                               static_cast<GLshort>(y + 1),
                                                width,
-                                               height));
+                                               height))
+                .first->second;
     }
 
     void GraphicsGL::draw(const img::bitmap &bmp,
@@ -1116,27 +851,11 @@ namespace ms {
             return;
         }
 
-        const Offset *offset = get_offset(active_atlas(), bmp);
-
-        if (offset == nullptr) {
-            // The pixels are still being inflated, and there is nothing in the atlas to sample for
-            // this rect yet. Leaving the quad out is the only way to be honest about that: a blank
-            // offset would fill the rect with whatever colour the shader gives an untextured quad,
-            // which is how a loading picture would announce itself as a solid block of its own tint.
-            //
-            // A hole is a hole however it is left, so the frame that has one is asked not to be shown
-            // (hold_frame) and the next pump is told to finish the job without counting the cost.
-            frame_holes_ = true;
-            catch_up_ = true;
-            perf_count(PerfCounter::AtlasSkips, 1);
-            return;
-        }
-
         batch_quads().emplace_back(rect.left(),
                                    rect.right(),
                                    rect.top(),
                                    rect.bottom(),
-                                   *offset,
+                                   get_offset(active_atlas(), bmp),
                                    color,
                                    angle);
     }

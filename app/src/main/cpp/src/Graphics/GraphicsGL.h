@@ -18,13 +18,6 @@
 #include "GLES3/gl32.h"
 #include <imgwz/bitmap.hpp>
 
-#include <atomic>
-#include <condition_variable>
-#include <deque>
-#include <mutex>
-#include <thread>
-#include <unordered_set>
-
 #include "../Constants.h"
 #include "../Error.h"
 #include "../Util/QuadTree.h"
@@ -44,8 +37,6 @@ namespace ms {
     public:
         GraphicsGL();
 
-        ~GraphicsGL();
-
         // Initialize all resources
         Error init(GLFMDisplay *pApp);
 
@@ -54,18 +45,6 @@ namespace ms {
 
         // Clear all bitmaps if most of the space is used up
         void clear();
-
-        // Paint into the atlases the sprites the decode worker finished, up to one frame's budget.
-        // Called once a frame, on the thread that owns the GL context, before anything is drawn:
-        // inflating a picture's pixels happens on the worker, but packing and uploading cannot, and
-        // this is where the finished ones stop waiting.
-        void pump_uploads();
-
-        // Whether the frame that just finished drawing may be shown. A frame that left sprites out
-        // because their pixels are still on their way is a screen with holes in it, and the one before
-        // it is complete, so the answer is to keep showing that one until this one could be drawn
-        // whole. Called after the frame has been built and before the buffers are swapped.
-        bool hold_frame();
 
         // Add a bitmap to the available resources.
         void add_bitmap(const img::bitmap &bmp);
@@ -361,13 +340,6 @@ namespace ms {
             size_t wasted = 0;
             std::unordered_map<size_t, Offset> offsets;
 
-            // Canvas ids with an upload already asked for: queued for the worker, being inflated by
-            // it, or decoded and waiting behind the frame's budget. Without this a sprite drawn every
-            // frame would submit a fresh job every frame. It is per atlas because the same canvas
-            // legitimately belongs to two passes, and it is dropped with the offset cache because a
-            // wiped atlas has to be able to ask for its pictures again.
-            std::unordered_set<size_t> requested;
-
             // Device pixels one logical pixel of this pass's coordinates covers. Glyphs are
             // rasterised at exactly this density and drawn in device pixels, so a glyph is one texel
             // per screen pixel and is never interpolated.
@@ -403,54 +375,7 @@ namespace ms {
         // panel layer while the rest of the interface keeps drawing on its own.
         AtlasState &active_atlas();
 
-        // One sprite on its way between the two threads: asked for by the one that draws, inflated
-        // by the one that does not, painted by the first again. The bitmap is a copy, but only of a
-        // canvas pointer and its size - the canvas itself lives in the archive's own table for the
-        // life of the process, so it cannot go away underneath the worker.
-        struct DecodeJob {
-            img::bitmap bmp;
-            AtlasState *atlas = nullptr;
-            std::vector<uint8_t> pixels;
-            bool decoded = false;
-
-            // Where the packer gave it room, and how far the painting has got. A canvas bigger than
-            // one frame's budget is painted a slice of rows at a time; until the last slice lands the
-            // offset is not published, so a sprite in that state is simply not drawn yet rather than
-            // drawn half with its own art and half with whatever the atlas held before it.
-            GLshort x = 0;
-            GLshort y = 0;
-            GLshort pw = 0;
-            GLshort ph = 0;
-            GLshort painted = 0;
-            bool reserved = false;
-        };
-
-        // The rect of this bitmap's texels in the atlas, or nullptr while it is not there yet - which
-        // is what lets a picture whose pixels are still being inflated be left out of the frame
-        // instead of drawn from whatever the atlas happens to hold where it will land.
-        const Offset *get_offset(AtlasState &atlas, const img::bitmap &bmp);
-
-        // Ask the worker for one bitmap's pixels. Returns false when there are already too many
-        // sprites in flight, in which case nothing is remembered and the next frame asks again.
-        bool request_decode(AtlasState &atlas, const img::bitmap &bmp);
-
-        // Give one decoded job room in its atlas, in the shelf order the packer keeps. Called once,
-        // before any of its rows are painted.
-        void reserve_space(AtlasState &atlas, DecodeJob &job);
-
-        // Paint the next slice of rows of one decoded job, and publish its offset when the last row
-        // lands. A slice is bounded by `slice` texel bytes, however many sprites that is short of;
-        // how many slices one frame gets is the frame's own decision. Render thread only: this is the
-        // half that needs the GL context.
-        void paint_job(DecodeJob &job, size_t slice);
-
-        // The worker's loop: inflate, in arrival order, until asked to stop.
-        void decode_worker();
-
-        // Take whatever the worker has finished inflating into this thread's own queue, and report
-        // what it spent doing so. Called from the pump, which may need it more than once a frame when
-        // it is waiting on the worker rather than on the driver.
-        void move_completed();
+        const Offset &get_offset(AtlasState &atlas, const img::bitmap &bmp);
 
         // Metrics and the platform bitmap behind them, rasterised at the density of one atlas and
         // cached in it. Rasterises over JNI on first use.
@@ -637,43 +562,10 @@ namespace ms {
         // that packing a picture never has to allocate and zero a fresh buffer for it.
         std::vector<uint8_t> atlas_scratch_;
 
-        // The decode worker. One thread, because inflating a canvas is serial work that the frame
-        // cannot share with anything else it does, and the only reason the picture appears a frame
-        // or two late is the same reason the frame does not stop: this is where the waiting moved.
-        //
-        // Everything below decode_mutex_ is touched by both threads; everything else in this class
-        // is the render thread's alone, including the atlas packing and every GL call.
-        std::thread decode_thread_;
-        std::mutex decode_mutex_;
-        std::condition_variable decode_cv_;
-        std::condition_variable decode_done_cv_;
-        bool decode_stop_ = false;
-        std::deque<DecodeJob> decode_queued_;
-        std::deque<DecodeJob> decode_done_;
-
-        // Decoded and waiting to be painted. The render thread's own, under no lock: a job that the
-        // frame's budget did not reach stays at the front of this until it does.
-        std::deque<DecodeJob> decode_ready_;
-
-        // Jobs this thread has put on the worker and not yet got back, so the cap on them can be
-        // checked without taking the lock that the worker is holding while it inflates.
-        size_t decode_outstanding_ = 0;
-
-        // Set by a draw that left a quad out, and read by Window::end to decide whether this frame may
-        // be shown; cleared there. `catch_up_` outlives it by design: it says the screen still has
-        // pictures on their way, which is the pump's business, not the frame's.
-        bool frame_holes_ = false;
-        bool catch_up_ = false;
-
-        // How many frames in a row have been held back, so a canvas that never arrives cannot freeze
-        // the screen for good.
-        uint16_t held_frames_ = 0;
-
-        // What the worker spent inflating since the last frame, in microseconds and in pixels. The
-        // worker adds to these; the pump reads and clears them, which keeps every write to the
-        // frame timings on the render thread.
-        std::atomic<int64_t> worker_decode_us_;
-        std::atomic<int64_t> worker_decode_pixels_;
+        // What a sprite is decoded into before its border is staged above. Held here rather than
+        // borrowed from img::bitmap::data() so that the pixels belong to this pass for as long as
+        // the packing needs them.
+        std::vector<uint8_t> decode_scratch_;
 
         // Scratch for a glyph upload: its bitmap inside a frame of transparent texels, so the gutter
         // the packer leaves around it is defined instead of whatever the driver left there.

@@ -13,7 +13,6 @@ add_library(OpenMapleClient SHARED
         gl.cpp
         src/Game.cpp
         src/Configuration.cpp
-        src/Perf.cpp
         src/Audio/Audio.cpp
         src/Character/ActiveBuffs.cpp
         src/Character/Buff.cpp
