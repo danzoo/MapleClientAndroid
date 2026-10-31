@@ -164,7 +164,11 @@ void Game::frame() {
 }
 
 bool Game::is_running() {
-    return PacketProcessor::get().is_connected() && UI::get().not_quitted();
+    // A connection that is still being made is not a reason to stop drawing: the login screen is up
+    // by then and it is the screen that reports the attempt, which it can only do from a loop that
+    // runs. Only a link that came up and then died stops the frame, which is what stopping on
+    // is_connected() used to mean once the connect itself could not be waited for.
+    return !PacketProcessor::get().link_lost() && UI::get().not_quitted();
 }
 
 void Game::start(GLFMDisplay *pApp) {

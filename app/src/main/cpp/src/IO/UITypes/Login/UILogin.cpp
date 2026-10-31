@@ -18,6 +18,7 @@
 #include "../../Audio/Audio.h"
 #include "../../Configuration.h"
 #include "../../Graphics/PanelRenderer.h"
+#include "../../Net/PacketProcessor.h"
 #include "../../Net/Packets/LoginPackets.h"
 #include "../Components/MapleButton.h"
 #include "../UI.h"
@@ -246,6 +247,18 @@ void UILogin::login() {
         UI::get().emplace<UILoginNotice>(UILoginNotice::Message::WRONG_PASSWORD,
                                          okhandler);
         return;
+    }
+
+    // Pressing login is the user asking for a session, so it is also the point where a connection
+    // that already gave up gets asked for again. A dial still in flight is left alone - the packet
+    // this call goes on to write is held behind it and sent when it comes up. Without this, a server
+    // that was down when the app started would stay refused after it came back.
+    if (PacketProcessor::get().connect_failed()) {
+        PacketProcessor::get().reconnect();
+
+        // The opening packet went out with the attempt that failed and its queue was thrown away
+        // with it, so the new connection has to be introduced the same way a fresh one is.
+        fn_login_start();
     }
 
     UI::get().emplace<UILoginWait>(okhandler);

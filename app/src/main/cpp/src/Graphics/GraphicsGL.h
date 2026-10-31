@@ -562,6 +562,11 @@ namespace ms {
         // that packing a picture never has to allocate and zero a fresh buffer for it.
         std::vector<uint8_t> atlas_scratch_;
 
+        // What a sprite is decoded into before its border is staged above. Held here rather than
+        // borrowed from img::bitmap::data() so that the pixels belong to this pass for as long as
+        // the packing needs them.
+        std::vector<uint8_t> decode_scratch_;
+
         // Scratch for a glyph upload: its bitmap inside a frame of transparent texels, so the gutter
         // the packer leaves around it is defined instead of whatever the driver left there.
         std::vector<uint8_t> glyph_scratch_;

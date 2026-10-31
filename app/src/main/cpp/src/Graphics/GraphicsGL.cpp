@@ -672,14 +672,22 @@ namespace ms {
         // Decode before reserving any atlas area. A canvas with no payload (a blank animation
         // frame) has nothing to upload, and packing it first burned atlas space on every attempt
         // while caching nothing, so the atlas filled up and was wiped over and over.
-        const uint8_t *src = static_cast<const uint8_t *>(bmp.data());
+        //
+        // The pixels come into a buffer this pass owns rather than into the scratch that
+        // img::bitmap::data() hands out, because that one goes out of date under the next decode -
+        // including a decode on another thread, which is what warming a picture up ahead of time
+        // would be.
+        decode_scratch_.resize(static_cast<size_t>(bmp.length()));
 
-        if (!src) {
+        if (bmp.decode_into(decode_scratch_.data(), decode_scratch_.size())
+            != decode_scratch_.size()) {
             // A canvas whose payload cannot be decoded stays unpainted instead of taking the
             // whole frame down with it. Caching the empty offset also stops the decode from
             // being retried on every frame; it is dropped with the rest of the cache on clear.
             return atlas.offsets.emplace(id, null_offset_).first->second;
         }
+
+        const uint8_t *src = decode_scratch_.data();
 
         // Bitmaps are stored with a one-texel border of replicated edge pixels. Texture
         // coordinates address texel corners, so a filtered sample taken exactly on a sprite's
