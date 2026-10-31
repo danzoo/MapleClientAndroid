@@ -28,6 +28,7 @@
 #include "IO/UI.h"
 #include "IO/Window.h"
 #include "Net/PacketProcessor.h"
+#include "Perf.h"
 #include "Timer.h"
 #include "Constants.h"
 #include "Util/HardwareInfo.h"
@@ -82,18 +83,42 @@ Error Game::init(GLFMDisplay *pApp) {
 }
 
 void Game::update() {
-    Window::get().update();
-    Stage::get().update();
-    UI::get().update();
-    PacketProcessor::get().process();
+    {
+        PerfScope perf(PerfSection::WindowUpdate);
+        Window::get().update();
+    }
+    {
+        PerfScope perf(PerfSection::StageUpdate);
+        Stage::get().update();
+    }
+    {
+        PerfScope perf(PerfSection::UIUpdate);
+        UI::get().update();
+    }
+    {
+        PerfScope perf(PerfSection::NetProcess);
+        PacketProcessor::get().process();
+    }
     Music::update_context();
 }
 
 void Game::draw(float alpha) {
-    Window::get().begin();
-    Stage::get().draw(alpha);
-    UI::get().draw(alpha);
-    Window::get().end();
+    {
+        PerfScope perf(PerfSection::DrawBegin);
+        Window::get().begin();
+    }
+    {
+        PerfScope perf(PerfSection::StageDraw);
+        Stage::get().draw(alpha);
+    }
+    {
+        PerfScope perf(PerfSection::UIDraw);
+        UI::get().draw(alpha);
+    }
+    {
+        PerfScope perf(PerfSection::DrawEnd);
+        Window::get().end();
+    }
 }
 
 void Game::frame() {
@@ -117,6 +142,10 @@ void Game::frame() {
     int64_t elapsed = static_cast<int64_t>(
         std::chrono::duration_cast<std::chrono::microseconds>(now - last).count());
     last = now;
+
+    // Reported before the gap gets cut short, because the size of the gap is the thing being looked
+    // for; the clamped value below is only ever what the simulation was willing to pay for.
+    perf_frame(elapsed);
 
     if (elapsed > max_catchup) {
         elapsed = max_catchup;

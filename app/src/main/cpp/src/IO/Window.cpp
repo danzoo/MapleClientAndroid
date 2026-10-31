@@ -530,6 +530,10 @@ namespace ms {
     void Window::begin() {
         GraphicsGL::get().sync_screen_size();
         update_viewport();
+        // Before anything is batched: what the worker inflated while the last frame was being drawn
+        // is painted here, so the cost of a screenful of new art is a part of this frame rather than
+        // a stop in the middle of drawing it.
+        GraphicsGL::get().pump_uploads();
         GraphicsGL::get().begin_scene();
         GraphicsGL::get().clear_scene();
     }
@@ -538,6 +542,14 @@ namespace ms {
         GraphicsGL::get().flush();
         GraphicsGL::get().end_scene(offset_x_, offset_y_, box_width_, box_height_,
                                     surface_width_, surface_height_, opacity_);
+
+        // The commands have been issued either way; what a held frame gives up is showing them. Its
+        // sprites are still on their way from the decode worker, and the frame already on the screen
+        // is the one that had all of its pictures, so that one stays up a little longer.
+        if (GraphicsGL::get().hold_frame()) {
+            return;
+        }
+
         glfmSwapBuffers(display);
     }
 
