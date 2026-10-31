@@ -135,6 +135,12 @@ constexpr double BULLET_MAX_SPEED = 750.0;
 constexpr uint16_t CHAR_INFO_LOADING_MS = 2040;
 constexpr uint32_t LOGIN_WAIT_TIMEOUT_MS = 30000;
 
+// How long one connection attempt gets in full: the name, the dial, and the handshake key that
+// follows the dial. It is a bound on the whole sequence rather than each step because the login
+// screen has one thing to say about all three - the server is not reachable - and a screen that
+// waited on thirty seconds of silence per step would spend most of a minute saying nothing.
+constexpr uint32_t CONNECT_TIMEOUT_MS = 5000;
+
 // How long the notice across the top of the screen stays up when the server asks for a banner but
 // gives no length. The banner is no longer something the client holds on its own - it arrives with a
 // packet and goes when its time is up - so a packet without a time still has to decide one. This is

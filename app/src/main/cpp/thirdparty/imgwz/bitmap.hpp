@@ -21,14 +21,16 @@ public:
     bool operator<(bitmap const&) const;
     //! Returns whether the bitmap is valid or merely null
     explicit operator bool() const;
-    //! This function inflates the canvas on the fly.
-    //! Do not free the pointer returned by this method.
-    //! Every time this function is called, any previous pointers returned
-    //! by this method become invalid.
-    //! As such, this function is very *not* threadsafe.
-    //!
+    //! Inflates the canvas into this thread's own scratch buffer and returns a pointer into it.
+    //! The buffer belongs to the calling thread, so another thread decoding at the same time cannot
+    //! touch these bytes; within one thread the old rule still holds.
     //! Nullable
     void const* data() const;
+    //! Inflates the canvas straight into `dst`, which has to hold length() bytes. Returns the number
+    //! of bytes written, or 0 when the payload does not decode. Nothing is shared with the caller or
+    //! with any other thread, so this is the form to use when the pixels are to be kept or handed
+    //! across a thread boundary.
+    std::size_t decode_into(void *dst, std::size_t dst_size) const;
     std::uint16_t width() const;
     std::uint16_t height() const;
     //! 4 * width * height

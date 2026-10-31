@@ -50,7 +50,9 @@ public:
         session_.reconnect(ip.c_str(), port.c_str());
     }
 
-    bool is_connected() { return session_.is_connected(); }
+    bool connect_failed() { return session_.connect_failed(); }
+
+    bool link_lost() { return session_.link_lost(); }
 
 private:
     Session session_;

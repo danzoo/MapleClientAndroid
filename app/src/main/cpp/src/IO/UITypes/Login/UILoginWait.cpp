@@ -79,7 +79,11 @@ void UILoginWait::update() {
 
     elapsed_ += Constants::TIMESTEP;
 
-    if (elapsed_ < Constants::LOGIN_WAIT_TIMEOUT_MS) {
+    // The connect now says for itself when it has given up, and it does that much sooner than this
+    // dialog would: holding the loading picture for thirty seconds over a server that stopped
+    // answering after five is a lie about how long the attempt was.
+    if (elapsed_ < Constants::LOGIN_WAIT_TIMEOUT_MS
+        && !PacketProcessor::get().connect_failed()) {
         return;
     }
 
