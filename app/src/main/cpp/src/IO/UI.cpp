@@ -25,6 +25,7 @@
 #include "../../Audio/Audio.h"
 #include "../../Configuration.h"
 #include "Cursor.h"
+#include "GamepadConfig.h"
 #include "NativeChat.h"
 #include "OptionalCreator.h"
 #include "UIStateCashShop.h"
@@ -415,6 +416,13 @@ namespace ms {
     }
 
     void UI::add_keymapping(uint8_t no, uint8_t type, int32_t action) {
+        // The controller's 24 slots ride in the same positional packet, above every key Keytable
+        // knows about, and their live table belongs to GamepadConfig rather than to the keyboard.
+        if (no >= GamepadConfig::FIRST_KEY) {
+            GamepadConfig::get().assign_slot(no, type, action);
+            return;
+        }
+
         keyboard_.assign(no, type, action);
     }
 

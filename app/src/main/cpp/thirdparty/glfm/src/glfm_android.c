@@ -111,6 +111,10 @@ typedef struct {
 
     GLFMInterfaceOrientation orientation;
 
+    // Which d-pad directions a hat-axis controller is holding right now, so the next report can
+    // tell a change from a repeat of the same one.
+    uint32_t gamepadHat;
+
     JNIEnv *jniEnv;
 } GLFMPlatformData;
 
@@ -1387,6 +1391,64 @@ static bool glfm__onKeyEvent(GLFMPlatformData *platformData, AInputEvent *event)
     return handled;
 }
 
+// The four directions of a hat, in the bits the held mask above keeps them in.
+static const struct {
+    uint32_t bit;
+    GLFMKeyCode code;
+} GLFM_HAT_KEYS[] = {
+        {0x1, GLFMKeyCodeGamepadDpadUp},
+        {0x2, GLFMKeyCodeGamepadDpadRight},
+        {0x4, GLFMKeyCodeGamepadDpadDown},
+        {0x8, GLFMKeyCodeGamepadDpadLeft},
+};
+
+// A d-pad reaches Android two ways: as the four DPAD_* key codes, which glfm__onKeyEvent reports,
+// or as a hat axis - which is what an Xbox controller over Bluetooth sends, and what no key event
+// ever describes. Reporting the hat as the same codes the first kind produces is what lets one
+// binding mean one thing whichever way the hardware chose to say it.
+static void glfm__reportGamepadHat(GLFMPlatformData *platformData, AInputEvent *event) {
+    GLFMDisplay *display = platformData->display;
+    const int32_t action = AMotionEvent_getAction(event) & AMOTION_EVENT_ACTION_MASK;
+    uint32_t pressed = 0;
+
+    if (action != AMOTION_EVENT_ACTION_UP && action != AMOTION_EVENT_ACTION_CANCEL) {
+        const double x = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_HAT_X, 0);
+        const double y = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_HAT_Y, 0);
+
+        if (y < 0) {
+            pressed |= 0x1;
+        }
+        if (x > 0) {
+            pressed |= 0x2;
+        }
+        if (y > 0) {
+            pressed |= 0x4;
+        }
+        if (x < 0) {
+            pressed |= 0x8;
+        }
+    }
+
+    const uint32_t held = platformData->gamepadHat;
+    platformData->gamepadHat = pressed;
+
+    if (display->keyFunc == NULL || held == pressed) {
+        return;
+    }
+
+    for (size_t i = 0; i < sizeof(GLFM_HAT_KEYS) / sizeof(*GLFM_HAT_KEYS); ++i) {
+        const bool now = (pressed & GLFM_HAT_KEYS[i].bit) != 0;
+        const bool before = (held & GLFM_HAT_KEYS[i].bit) != 0;
+
+        if (now != before) {
+            display->keyFunc(display,
+                             GLFM_HAT_KEYS[i].code,
+                             now ? GLFMKeyActionPressed : GLFMKeyActionReleased,
+                             0);
+        }
+    }
+}
+
 static bool glfm__onTouchEvent(GLFMPlatformData *platformData, AInputEvent *event) {
     if (!platformData || !platformData->display || !platformData->display->touchFunc) {
         return false;
@@ -1406,6 +1468,7 @@ static bool glfm__onTouchEvent(GLFMPlatformData *platformData, AInputEvent *even
                                       AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_Z, 0),
                                       AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_RZ, 0));
             }
+            glfm__reportGamepadHat(platformData, event);
         }
         return true;
     }

@@ -18,10 +18,13 @@
 #include <algorithm>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <vector>
 
+#include "../../Net/Packets/PlayerPackets.h"
 #include "../Configuration.h"
 #include "../Util/StringHandling.h"
+#include "KeyConfig.h"
 #include "UI.h"
 
 namespace ms {
@@ -110,6 +113,7 @@ namespace ms {
         }
 
         load();
+
         apply();
     }
 
@@ -189,23 +193,33 @@ namespace ms {
         apply();
 
         std::string stored;
+        std::vector<std::tuple<KeyConfig::Key, KeyType::Id, int32_t>> updated;
 
         for (uint8_t slot = 0; slot < Slot::LENGTH; ++slot) {
             const Keyboard::Mapping &mapping = mappings_[slot];
 
             // Only what the player changed is written, so an empty value means the defaults and a
             // setting left from a build that had fewer slots still parses.
-            if (mapping == default_mapping(static_cast<Slot>(slot))) {
-                continue;
+            const bool changed = mapping != default_mapping(static_cast<Slot>(slot));
+
+            if (changed) {
+                std::ostringstream entry;
+                entry << static_cast<int32_t>(mapping.type) << ',' << mapping.action;
+                stored += std::to_string(slot) + '=' + entry.str() + ';';
             }
 
-            std::ostringstream entry;
-            entry << static_cast<int32_t>(mapping.type) << ',' << mapping.action;
-            stored += std::to_string(slot) + '=' + entry.str() + ';';
+            // Every slot goes out, including the unchanged ones: the server keeps this table per
+            // character and drops a row it is sent with type zero, so a binding the player moved
+            // back to its default has to be reported as removed rather than left behind.
+            updated.emplace_back(KeyConfig::actionbyid(FIRST_KEY + slot),
+                                 changed ? mapping.type : KeyType::Id::NONE,
+                                 changed ? mapping.action : 0);
         }
 
         Setting<GamepadBindings>::get().save(stored);
         Configuration::get().save();
+
+        ChangeKeyMapPacket(updated).dispatch();
     }
 
     void GamepadConfig::load() {
@@ -242,6 +256,28 @@ namespace ms {
         // Read back through the same rule the window stages with, so a table saved by a build that
         // let one item sit on two inputs does not show up that way.
         keep_first_item(mappings_);
+    }
+
+    void GamepadConfig::assign_slot(int32_t key, uint8_t type, int32_t action) {
+        const int32_t slot = key - FIRST_KEY;
+
+        if (slot < 0 || slot >= Slot::LENGTH) {
+            return;
+        }
+
+        // The keymap packet is positional, so an untouched slot arrives as type zero. The server
+        // drops a row the moment a slot goes back to what it came with, so what that zero means is
+        // that this character has no binding of its own here - which is the slot's own default.
+        // Falling back to anything wider, this device's settings line included, is how one
+        // character's table used to arrive on the next character's controller.
+        if (type == 0 || type >= KeyType::LENGTH) {
+            mappings_[slot] = default_mapping(static_cast<Slot>(slot));
+        }
+        else {
+            mappings_[slot] = Keyboard::Mapping(static_cast<KeyType::Id>(type), action);
+        }
+
+        apply();
     }
 
     void GamepadConfig::apply() const {

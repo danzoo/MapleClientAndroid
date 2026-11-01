@@ -64,6 +64,15 @@ namespace ms {
         // its own code, so dialogs, menus and the chat bar treat a controller press exactly like
         // the key the binding stands for.
         static constexpr int32_t VIRTUAL_KEY = 0x200;
+        // The Maple key ids the table travels to the server under. Ids 0-99 are the physical
+        // keyboard, 100-131 the quick-slot bar's cells and 132-159 are the rest of what the keymap
+        // packet reaches, so the 24 controller slots go there: the server already stores that
+        // packet per character, which is what makes the bindings belong to one character instead
+        // of to the device.
+        static constexpr uint8_t FIRST_KEY = 132;
+
+        static_assert(FIRST_KEY + Slot::LENGTH <= 160,
+                      "the controller table has to fit inside the keymap packet");
 
         GamepadConfig();
 
@@ -81,8 +90,16 @@ namespace ms {
 
         const std::array<Keyboard::Mapping, Slot::LENGTH> &mappings() const;
 
-        // Install a whole table as the live one and write it to the settings file.
+        // Install a whole table as the live one, keep a copy in the settings file as what this
+        // device uses before a character is known, and send it to the server as this character's.
         void commit(const std::array<Keyboard::Mapping, Slot::LENGTH> &mappings);
+
+        // One slot arriving in the keymap packet, addressed by its Maple key id rather than by slot
+        // so the caller does not have to know the range. A type of zero means the server holds no
+        // row for this character here, which is the slot's own default rather than another
+        // character's setting: the packet is positional, so this is where a character that has
+        // bound nothing of its own stops inheriting whoever bound the slot last.
+        void assign_slot(int32_t key, uint8_t type, int32_t action);
 
     private:
         void load();
