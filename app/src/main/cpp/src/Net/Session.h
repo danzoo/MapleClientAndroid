@@ -15,10 +15,13 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <deque>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "../Error.h"
@@ -35,10 +38,29 @@
 #endif
 
 namespace ms {
+// The connection, on a thread of its own.
+//
+// Two threads meet here and the split is by ownership, not by locking everything:
+//
+//   the render thread - everything that was true before this refactor. It calls write() to hand out
+//   a packet, read() to take delivery of the ones that arrived since the last frame, and init() and
+//   reconnect() to point the session somewhere. Every packet handler, and therefore every change to
+//   the UI, the stage and the game state, runs on this thread and inside read(), so none of that
+//   needs to be thread-safe.
+//
+//   the network thread - the socket, the cipher, and the reading of the stream into packets. It owns
+//   cryptography_, buffer_ and the framing positions, and touches nothing else. The two queues are
+//   the only ground it shares with the render thread, and they are the only thing under the mutex.
+//
+// What that buys: a connect, a slow server, or a stalled frame no longer costs the other side. The
+// attempt and its deadline run without a frame to carry them, so the link comes up while the game is
+// backgrounded instead of waiting for the loop to return; and incoming packets are read and decrypted
+// as they arrive rather than once per frame, which is what kept a frozen picture from ever noticing
+// that the server had gone on talking.
 class Session {
 public:
-    // Where the connection stands. A connection is opened across frames, so none of these except
-    // Connected means there is a socket to send on.
+    // Where the connection stands. A connection is opened without the loop waiting for it, so none
+    // of these except Connected means there is a socket to send on.
     enum class Link {
         // No attempt in flight: nothing has asked for a connection yet, or one was closed.
         Idle,
@@ -53,12 +75,12 @@ public:
     Session(std::unique_ptr<Forwarder> packet_forwarder);
     ~Session();
 
-    // Start connecting using the address in hostip.txt and return at once: the attempt runs across
-    // the following frames, so this says nothing about whether it succeeds.
+    // Start connecting using the address in hostip.txt and return at once: the attempt runs on the
+    // network thread, so this says nothing about whether it succeeds.
     Error init(GLFMDisplay *pApp);
-    // Send a packet to the server, or hold it if the connection is still being made
+    // Hand a packet to the network thread, or hold it if the connection is still being made.
     void write(int8_t *bytes, size_t length);
-    // Advance a connection in progress, then check for incoming packets and handle them
+    // Take the packets that arrived since the last call and give them to the packet handlers.
     void read();
     // Closes the current connection and opens a new one with default connection
     // settings
@@ -72,51 +94,75 @@ public:
     // sit out the second and has nothing left to draw through the first.
     bool link_lost() const;
 
-    std::string readHostIP(GLFMDisplay* pApp);
+    std::string readHostIP(GLFMDisplay *pApp);
 
 private:
     void connect(const char *host, const char *port);
     // Called off an attempt that is not coming back, so that every path that ends a connection says
-    // so once and in the same way.
+    // so once and in the same way. On the network thread.
     void give_up(const char *why);
-    void send(int8_t *bytes, size_t length);
-    void flush_outbox();
+    // Withdraws both queues and retires the connection number, so that nothing a dead stream already
+    // delivered is ever handed to a handler after the attempt that follows it.
+    void reset_streams();
+
+    // The three things the network thread has to say. They are called from inside the io service, on
+    // the network thread.
+    void on_io_handshake(const int8_t *handshake);
+    void on_io_bytes(const int8_t *bytes, size_t length);
+    // The cipher belongs to a connection, so a packet cannot be framed for the wire before the key
+    // arrives. Everything held behind that gate goes out in order when it does.
+    void pump_send();
+
     // The length of the packet that starts here, or 0 if there is nothing to read yet. Consumes the
-    // header, including a header that came in pieces.
+    // header, including a header that came in pieces. Network thread only.
     bool read_length(const int8_t *&bytes, size_t &available);
-    void process(const int8_t *bytes, size_t available);
 
     Cryptography cryptography_;
+    // Render thread only, and only from read().
     std::unique_ptr<Forwarder> packet_forwarder_;
 
+    // Network thread only: the packet being assembled out of the stream.
     int8_t buffer_[MAX_PACKET_LENGTH];
     size_t length_;
     size_t pos_;
     // A packet whose four length bytes have not all arrived yet, held until they do.
     int8_t header_[HEADER_LENGTH];
     size_t header_pos_;
-    Link link_;
+
+    // Read by the render thread, written by the network thread.
+    std::atomic<Link> link_;
     // Set the first time a connection comes up and cleared by every deliberate new attempt, so that
     // losing a connection is distinguishable from still making one.
-    bool had_connection_;
+    std::atomic<bool> had_connection_;
+    // Every attempt and every death of a connection numbers itself, so a batch being handed to the
+    // handlers can tell that a packet in the middle of it pointed the session elsewhere and stop
+    // before the rest of a stream that no longer exists is read as game state.
+    std::atomic<uint32_t> epoch_;
+
+    // The two queues, and the two strings logged from both sides.
+    std::mutex data_mutex_;
+    // Packets written before there was a key to frame them with, and packets written while the
+    // network thread is busy, in the order they were written. Held unencrypted because the cipher
+    // belongs to a connection and its key is only known once that connection's handshake has been
+    // read.
+    std::deque<std::vector<int8_t>> tx_;
+    // Complete packets, decrypted, waiting for a frame to hand them to a handler.
+    std::deque<std::vector<int8_t>> rx_;
 
     // The address hostip.txt gave at startup, and the address this session was last pointed at. A
     // bare reconnect() goes back to the first: after a hop to a channel server, that is still the
     // server the login flow belongs to.
     std::string default_host_;
     std::string default_port_;
+    // Guarded by data_mutex_: the network thread logs them when an attempt ends.
     std::string host_;
     std::string port_;
-
-    // Packets written while a connection is being made, in the order they were written. Held
-    // unencrypted because the cipher belongs to a connection and its key is only known once that
-    // connection's handshake has been read.
-    std::deque<std::vector<int8_t>> outbox_;
 
 #ifdef USE_ASIO
     SocketAsio socket_;
 #else
     SocketWinsock socket_;
 #endif
+    std::thread net_thread_;
 };
 }  // namespace ms

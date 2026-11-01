@@ -18,6 +18,10 @@
 #include "../MSClient.h"
 
 #ifdef USE_ASIO
+#include <deque>
+#include <functional>
+#include <vector>
+
 #include "NetConstants.h"
 
 #define BOOST_DATE_TIME_NO_LIB
@@ -35,49 +39,63 @@ using asio::error_code;
 using asio::io_service;
 using asio::ip::tcp;
 
-// How far a connect that is being carried out across frames has got.
-enum class Connect {
-    // Nothing in flight and no connection.
-    Idle,
-    // Resolving, dialling, or waiting for the handshake key. The three run in sequence and each is
-    // only advanced by poll(), which is what keeps an attempt from ever occupying the render thread.
-    Pending,
-    // The key is in handshake() and the socket can be read from and written to.
-    Ready,
-    // The attempt ended without a connection, either because one of the three steps failed or
-    // because the deadline ran out.
-    Failed
-};
-
 // Class that wraps an asio socket.
+//
+// Everything this class owns - the socket, the io_service, the deadline and both stream buffers -
+// belongs to the single thread calling run(). Nothing here is safe to use before run() has been
+// entered by that thread and nothing here needs a lock: work from other threads only ever arrives
+// through post(), which hands it to that same thread.
 class SocketAsio {
 public:
+    // All three are called on the thread running run(), from inside it, so they may touch the
+    // io_service they were called from without posting back.
+
+    // The handshake key, once, for the connection that is now up. Everything the read loop reports
+    // afterwards is a body byte of that same connection.
+    using HandshakeFunc = std::function<void(const int8_t *handshake)>;
+    // A run of stream bytes of the connection that the handshake announced. Framing is not this
+    // class's business, so a packet can arrive in pieces and pieces of two packets can arrive
+    // together.
+    using BytesFunc = std::function<void(const int8_t *bytes, size_t length)>;
+    // The connection ended: the deadline ran out, one of the steps failed, the other end stopped
+    // answering, or a write was refused. There is no attempt in flight afterwards.
+    using FailedFunc = std::function<void(const char *why)>;
+
     SocketAsio();
     ~SocketAsio();
 
-    // Starts the connect: resolving the name, then dialling every address it returns in turn, then
-    // reading the handshake key. None of that happens before this returns - a connection attempt
-    // takes as long as the network and the other machine take, and the frame loop cannot be held
-    // waiting for them - so poll() has to be called once a frame until connect_state() is no longer
-    // Connect::Pending. timeout_ms bounds the whole sequence, not each step.
+    void set_handlers(HandshakeFunc on_handshake, BytesFunc on_bytes, FailedFunc on_failed);
+
+    // Hands the work to the io thread; returns at once. Calling any other method of this class from
+    // a thread that is not running run() is not supported except through this.
+    template <typename CompletionHandler>
+    void post(CompletionHandler &&handler) {
+        ioservice_.post(std::forward<CompletionHandler>(handler));
+    }
+
+    // Starts the attempt: resolving the name, then dialling every address it returns in turn, then
+    // reading the handshake key. Safe from any thread - it posts itself. timeout_ms bounds the whole
+    // sequence, not each step.
     void start_connect(const char *address, const char *port, uint32_t timeout_ms);
 
-    // Runs whatever asio has finished since the last call, which is also how a connect advances.
-    void poll();
+    // Queues one already-framed packet (header and body together) and, if nothing is being written,
+    // starts writing it. Safe from any thread - it posts itself. Frames leave in the order they were
+    // queued.
+    void write(std::vector<int8_t> frame);
 
-    Connect connect_state() const;
+    // Runs the io service until stop() is called. Call this on the network thread and nowhere else.
+    void run();
+    // Withdraws whatever attempt is in flight and lets run() return. Safe from any thread.
+    void stop();
 
-    // The handshake key, valid once connect_state() is Connect::Ready. Kept apart from the packet
-    // buffer so that a key arriving in pieces cannot be mistaken for the start of a packet.
-    const int8_t *handshake() const;
-
-    // Withdraws whatever attempt is in flight and closes the socket.
+    // Drops the connection and everything queued for it, leaving the socket idle. On the io thread.
     void close();
-    size_t receive(bool *connected);
-    const int8_t *get_buffer() const;
-    bool dispatch(const int8_t *bytes, size_t length);
 
 private:
+    void connect_now(std::string address, std::string port, uint32_t timeout_ms);
+    void read_handshake(uint32_t seq);
+    void start_read(uint32_t seq);
+    void write_next(uint32_t seq);
     // Every attempt numbers itself and every handler carries the number of the attempt that queued
     // it, so a completion that arrives after a close() or after a newer start_connect is recognised
     // and dropped instead of being applied to the connection that has replaced it.
@@ -86,18 +104,24 @@ private:
 
     io_service ioservice_;
     // A poll() on a service whose outstanding work count has reached zero stops it for good, and a
-    // stopped service never runs a handler again. An in-flight connect is not counted as work, so
-    // the count is back at zero by the time the channel hop asks for the second poll(); holding the
-    // count here is what keeps that attempt, and its deadline, alive.
+    // stopped service never runs a handler again. Holding the count here is what keeps run() awake
+    // across the gaps between packets instead of returning the moment the socket goes quiet.
     asio::executor_work_guard<io_service::executor_type> work_;
     tcp::resolver resolver_;
     tcp::socket socket_;
     asio::steady_timer deadline_;
 
     uint32_t seq_ = 0;
-    Connect connect_ = Connect::Idle;
-    int8_t buffer_[MAX_PACKET_LENGTH];
+    // A write is in flight, so anything queued behind it waits for its completion rather than being
+    // started alongside it; two concurrent writes to one socket would interleave their bytes.
+    bool writing_ = false;
+    std::vector<int8_t> read_buffer_;
+    std::deque<std::vector<int8_t>> tx_;
     int8_t handshake_[HANDSHAKE_LEN];
+
+    HandshakeFunc on_handshake_;
+    BytesFunc on_bytes_;
+    FailedFunc on_failed_;
 };
 }  // namespace ms
 #endif

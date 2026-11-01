@@ -29,6 +29,12 @@ namespace {
 // being a buffer and become a symptom: whoever is writing is doing it faster than a connection that
 // does not exist could ever take the packets, so the surplus is dropped rather than remembered.
 constexpr size_t OUTBOX_LIMIT = 64;
+
+// How far a render loop that stopped calling read() may fall behind the stream before the packets are
+// no longer worth having. It is generous: a game that cannot take a thousand packets is not going to
+// be rescued by a queue, and the alternative - keeping the server's whole output - is the thing that
+// gets the process killed.
+constexpr size_t INBOX_LIMIT = 1024;
 }  // namespace
 
 Session::Session(std::unique_ptr<Forwarder> packet_forwarder) :
@@ -37,10 +43,27 @@ Session::Session(std::unique_ptr<Forwarder> packet_forwarder) :
     pos_(0),
     header_pos_(0),
     link_(Link::Idle),
-    had_connection_(false) {}
+    had_connection_(false),
+    epoch_(0) {
+    socket_.set_handlers(
+        [this](const int8_t *handshake) { on_io_handshake(handshake); },
+        [this](const int8_t *bytes, size_t length) { on_io_bytes(bytes, length); },
+        [this](const char *why) { give_up(why); });
+
+    // The io service is only ever run from here, which is what lets the socket, the cipher and the
+    // framing go without a lock. The work guard holds the service open, so the thread waits on the
+    // socket instead of returning the first time the stream goes quiet.
+    net_thread_ = std::thread([this] { socket_.run(); });
+}
 
 Session::~Session() {
-    socket_.close();
+    // Stops the service and then waits for the thread, so that nothing owns the socket by the time
+    // this object's members go away. A handler that is mid-flight is allowed to finish; one that has
+    // not started never will.
+    socket_.stop();
+    if (net_thread_.joinable()) {
+        net_thread_.join();
+    }
 }
 
 std::string Session::readHostIP(GLFMDisplay *pApp) {
@@ -49,7 +72,7 @@ std::string Session::readHostIP(GLFMDisplay *pApp) {
     std::string hostIP;
 
     if (file != nullptr) {
-        char buffer[256]; // Buffer to store read data
+        char buffer[256]; // Buffer to read data
         size_t bytesRead = fread(buffer, 1, sizeof(buffer), file);
         fclose(file);
 
@@ -83,35 +106,59 @@ Error Session::init(GLFMDisplay *pApp) {
 }
 
 void Session::connect(const char *host, const char *port) {
-    host_ = host;
-    port_ = port;
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        host_ = host;
+        port_ = port;
+    }
 
-    // Whatever reader state the last connection was left in belongs to that connection. A packet
-    // that stopped halfway through it would otherwise be finished out of the new one's bytes.
-    length_ = 0;
-    pos_ = 0;
-    header_pos_ = 0;
-    outbox_.clear();
+    // Whatever reader state the last connection was left in belongs to that connection, and so do the
+    // packets still waiting for a frame to take them. The framing positions themselves are reset where
+    // they are used, on the network thread, when this attempt's key arrives.
+    reset_streams();
 
     // A deliberate new attempt, however it ends from here, is not a connection that was lost.
-    had_connection_ = false;
+    had_connection_.store(false);
 
     if (host[0] == '\0') {
-        // No address to dial, which is an attempt that is over rather than one in progress: a
-        // connect that never ends would leave the login screen holding its loading picture for ever,
-        // and there is no answer for a picture like that to be waiting for.
-        link_ = Link::Failed;
+        // No address to dial, which is an attempt that is over rather than one in progress: a connect
+        // that never ends would leave the login screen holding its loading picture for ever, and there
+        // is no answer for a picture like that to be waiting for.
+        link_.store(Link::Failed);
+        __android_log_print(ANDROID_LOG_WARN, "Session", "no address to dial");
         return;
     }
 
-    link_ = Link::Connecting;
-    socket_.start_connect(host, port, Constants::CONNECT_TIMEOUT_MS);
-    __android_log_print(ANDROID_LOG_INFO, "Session", "connecting %s:%s", host, port);
+    // Asked for through post(), and with the state change inside that same handler, so that it is
+    // queued behind whatever the previous attempt still has to report. A read or a deadline from the
+    // old connection may be reaching give_up() on the network thread right now, and a Failed it
+    // stores after this Connecting is a login screen told to give up on a connection that has not
+    // even been tried. Link state therefore only ever changes value on that thread - except for the
+    // two cases above, which have no attempt for anything to disagree with.
+    const std::string dial_host = host;
+    const std::string dial_port = port;
+    socket_.post([this, dial_host, dial_port] {
+        link_.store(Link::Connecting);
+        socket_.start_connect(dial_host.c_str(), dial_port.c_str(), Constants::CONNECT_TIMEOUT_MS);
+        __android_log_print(ANDROID_LOG_INFO, "Session", "connecting %s:%s", dial_host.c_str(),
+                            dial_port.c_str());
+    });
+}
+
+void Session::reset_streams() {
+    // Retiring the connection number first: a batch already in the handlers' hands stops at the next
+    // packet, and anything still in the queues belongs to a stream that is not coming back.
+    epoch_.fetch_add(1);
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    tx_.clear();
+    rx_.clear();
 }
 
 void Session::give_up(const char *why) {
-    link_ = Link::Failed;
-    outbox_.clear();
+    link_.store(Link::Failed);
+    reset_streams();
+
+    std::lock_guard<std::mutex> lock(data_mutex_);
     __android_log_print(ANDROID_LOG_WARN, "Session", "%s: %s", why, host_.c_str());
 }
 
@@ -151,15 +198,40 @@ bool Session::read_length(const int8_t *&bytes, size_t &available) {
     return true;
 }
 
-void Session::process(const int8_t *bytes, size_t available) {
+void Session::on_io_handshake(const int8_t *handshake) {
+    cryptography_ = {handshake};
+    length_ = 0;
+    pos_ = 0;
+    header_pos_ = 0;
+    link_.store(Link::Connected);
+    had_connection_.store(true);
+
+    size_t held = 0;
+    std::string dial_host;
+    std::string dial_port;
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        held = tx_.size();
+        dial_host = host_;
+        dial_port = port_;
+    }
+    __android_log_print(ANDROID_LOG_INFO, "Session", "connected %s:%s held=%zu",
+                        dial_host.c_str(), dial_port.c_str(), held);
+
+    pump_send();
+}
+
+void Session::on_io_bytes(const int8_t *bytes, size_t available) {
+    bool overflow = false;
+
     while (available > 0) {
-        // A packet is only ever started from a fresh position, and only a complete header can say
-        // how long it is.
+        // A packet is only ever started from a fresh position, and only a complete header can say how
+        // long it is.
         if (pos_ == 0 && !read_length(bytes, available)) {
             return;
         }
 
-        size_t towrite = std::min(length_ - pos_, available);
+        const size_t towrite = std::min(length_ - pos_, available);
         std::memcpy(buffer_ + pos_, bytes, towrite);
 
         pos_ += towrite;
@@ -174,119 +246,117 @@ void Session::process(const int8_t *bytes, size_t available) {
 
         cryptography_.decrypt(buffer_, length_);
 
-        try {
-            packet_forwarder_->forward(buffer_, length_);
-        } catch (const PacketError &err) {
-            std::cout << err.what() << std::endl;
+        // The handler that eventually takes this may point the session at another server, and that
+        // throws away whatever this stream still had in it. Handing the packet over as a copy of its
+        // own is what makes that safe: the bytes left here belong to a connection that no longer
+        // exists, but they are never read as a header again, because the fresh attempt resets the
+        // positions when it reads its key.
+        {
+            std::lock_guard<std::mutex> lock(data_mutex_);
+            if (rx_.size() >= INBOX_LIMIT) {
+                overflow = true;
+                break;
+            }
+            rx_.emplace_back(buffer_, buffer_ + length_);
         }
 
         pos_ = 0;
         length_ = 0;
+    }
 
-        // A packet handler is allowed to point the session at another server, and that throws away
-        // whatever this stream still had in it. The bytes left here belong to a connection that no
-        // longer exists: reading a header out of them would be charged to the next connection, whose
-        // keys are not even read yet, so the length comes out of nonsense and the fresh attempt gets
-        // called off before it ever had a chance.
-        if (link_ != Link::Connected) {
-            return;
-        }
+    if (overflow) {
+        give_up("inbox overflow");
     }
 }
 
-void Session::send(int8_t *bytes, size_t length) {
-    int8_t header[HEADER_LENGTH];
-    cryptography_.create_header(header, length);
-    cryptography_.encrypt(bytes, length);
+void Session::pump_send() {
+    if (link_.load() != Link::Connected) {
+        // Still no key to frame these with. They leave from on_io_handshake instead.
+        return;
+    }
 
-    if (!socket_.dispatch(header, HEADER_LENGTH)
-        || !socket_.dispatch(bytes, length)) {
-        // A send the socket refused means the other end is gone; there is no point reading on for a
-        // server that has stopped taking packets.
-        give_up("send refused");
+    std::deque<std::vector<int8_t>> held;
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        held.swap(tx_);
+    }
+
+    while (!held.empty()) {
+        std::vector<int8_t> plaintext = std::move(held.front());
+        held.pop_front();
+
+        int8_t header[HEADER_LENGTH];
+        cryptography_.create_header(header, plaintext.size());
+        cryptography_.encrypt(plaintext.data(), plaintext.size());
+
+        // Header and body as one frame: the two separate writes this replaces could have left a
+        // header on the wire with its body still to come.
+        std::vector<int8_t> frame;
+        frame.reserve(HEADER_LENGTH + plaintext.size());
+        frame.insert(frame.end(), header, header + HEADER_LENGTH);
+        frame.insert(frame.end(), plaintext.begin(), plaintext.end());
+
+        socket_.write(std::move(frame));
     }
 }
 
 void Session::write(int8_t *packet_bytes, size_t packet_length) {
-    if (link_ == Link::Connecting) {
-        // Nothing can be sent yet, but this belongs to the attempt that is in flight: the login flow
-        // points the session at a channel server and writes its next packet in the same update, which
-        // is long before that dial can have finished. Held as the bytes they were given - the cipher
-        // belongs to a connection, and its key is only known once the handshake has been read - and
-        // sent in order the moment it is.
-        if (outbox_.size() < OUTBOX_LIMIT) {
-            outbox_.emplace_back(packet_bytes, packet_bytes + packet_length);
+    const Link link = link_.load();
+
+    if (link == Link::Connecting || link == Link::Connected) {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        // Nothing can be sent before the key exists, but this belongs to the attempt in flight: the
+        // login flow points the session at a channel server and writes its next packet in the same
+        // update, which is long before that dial can have finished. Held as the bytes they were given,
+        // and sent in order the moment it is.
+        if (link == Link::Connecting && tx_.size() >= OUTBOX_LIMIT) {
+            return;
         }
+        tx_.emplace_back(packet_bytes, packet_bytes + packet_length);
+    } else {
+        // Idle or Failed: there is no connection and no attempt that could make one, so this packet
+        // has nowhere to go. Reconnect() is what starts an attempt; writing is not, or a page that
+        // sends one packet a frame would redial a dead server once a frame.
         return;
     }
 
-    if (link_ == Link::Connected) {
-        send(packet_bytes, packet_length);
-    }
-
-    // Idle or Failed: there is no connection and no attempt that could make one, so this packet has
-    // nowhere to go. Reconnect() is what starts an attempt; writing is not, or a page that sends one
-    // packet a frame would redial a dead server once a frame.
-}
-
-void Session::flush_outbox() {
-    while (!outbox_.empty()) {
-        std::vector<int8_t> packet = std::move(outbox_.front());
-        outbox_.pop_front();
-        send(packet.data(), packet.size());
-    }
+    socket_.post([this] { pump_send(); });
 }
 
 void Session::read() {
-    if (link_ == Link::Connecting) {
-        // Advancing the attempt is the only thing a connect takes between frames, and it is called
-        // from here so that it runs on the same thread as everything that reads the result.
-        socket_.poll();
+    const uint32_t epoch = epoch_.load();
 
-        const Connect state = socket_.connect_state();
-        if (state == Connect::Pending) {
+    std::deque<std::vector<int8_t>> batch;
+    {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        batch.swap(rx_);
+    }
+
+    while (!batch.empty()) {
+        std::vector<int8_t> packet = std::move(batch.front());
+        batch.pop_front();
+
+        if (epoch_.load() != epoch) {
+            // A handler above took the session somewhere else, or the network thread ended the
+            // connection underneath it. The bytes still in this batch came out of a stream that is
+            // gone: forwarding them would be charged to a connection whose keys are not even read
+            // yet, and the login flow would then be answered by packets from the server it left.
             return;
         }
 
-        if (state == Connect::Ready) {
-            cryptography_ = {socket_.handshake()};
-            length_ = 0;
-            pos_ = 0;
-            header_pos_ = 0;
-            link_ = Link::Connected;
-            had_connection_ = true;
-            __android_log_print(ANDROID_LOG_INFO, "Session", "connected %s:%s held=%zu",
-                                host_.c_str(), port_.c_str(), outbox_.size());
-            flush_outbox();
-            return;
+        try {
+            packet_forwarder_->forward(packet.data(), packet.size());
+        } catch (const PacketError &err) {
+            __android_log_print(ANDROID_LOG_ERROR, "Session", "packet error: %s", err.what());
         }
-
-        give_up("connect gave up");
-        return;
-    }
-
-    if (link_ != Link::Connected) {
-        return;
-    }
-
-    bool alive = true;
-    size_t result = socket_.receive(&alive);
-
-    if (!alive) {
-        give_up("link dropped");
-        return;
-    }
-
-    if (result > 0) {
-        process(socket_.get_buffer(), result);
     }
 }
 
 bool Session::connect_failed() const {
-    return link_ == Link::Failed;
+    return link_.load() == Link::Failed;
 }
 
 bool Session::link_lost() const {
-    return had_connection_ && link_ == Link::Failed;
+    return had_connection_.load() && link_.load() == Link::Failed;
 }
 }  // namespace ms
