@@ -953,11 +953,13 @@ static void glfm__onAppCmd(GLFMPlatformData *platformData, GLFMActivityCommand c
         }
         case GLFMActivityCommandOnWindowFocusLost: {
             GLFM_LOG_LIFECYCLE("OnWindowFocusLost");
-            if (platformData->animating) {
-                platformData->refreshRequested = true;
-                glfm__drawFrame(platformData);
-                glfm__setAnimating(platformData, false);
-            }
+            // Kept animating. A window of this app's own can take the focus without the activity
+            // going anywhere - the message panel does exactly that the moment a line is typed into
+            // it, because a text field cannot raise the keyboard from a window that holds no focus.
+            // Stopping here hands that window the game: the loop blocks in the poll below until
+            // something wakes it, and nothing does until the panel lets the focus go, so the whole
+            // picture sits frozen behind a text box. onPause is the command that means the app is
+            // really going away, and that is where the loop is held now.
             break;
         }
         case GLFMActivityCommandOnContentRectChanged: {
@@ -988,17 +990,27 @@ static void glfm__onAppCmd(GLFMPlatformData *platformData, GLFMActivityCommand c
             }
             break;
         }
-#if GLFM_LOG_LIFECYCLE_ENABLE
-        case GLFMActivityCommandOnStart: {
-            GLFM_LOG_LIFECYCLE("OnStart");
-            break;
-        }
         case GLFMActivityCommandOnResume: {
             GLFM_LOG_LIFECYCLE("OnResume");
+            // The app is in front again, so the loop runs again. Waiting for the surface keeps a
+            // resume that arrives ahead of the window from drawing into nothing; the window-created
+            // command covers that case.
+            if (platformData->window) {
+                glfm__setAnimating(platformData, true);
+            }
             break;
         }
         case GLFMActivityCommandOnPause: {
             GLFM_LOG_LIFECYCLE("OnPause");
+            // Where the loop is held now that losing the window focus no longer does it: onPause is
+            // the command that means the app itself went away, rather than a text box of its own
+            // borrowing the focus.
+            glfm__setAnimating(platformData, false);
+            break;
+        }
+#if GLFM_LOG_LIFECYCLE_ENABLE
+        case GLFMActivityCommandOnStart: {
+            GLFM_LOG_LIFECYCLE("OnStart");
             break;
         }
         case GLFMActivityCommandOnStop: {
@@ -1007,8 +1019,6 @@ static void glfm__onAppCmd(GLFMPlatformData *platformData, GLFMActivityCommand c
         }
 #else
         case GLFMActivityCommandOnStart:
-        case GLFMActivityCommandOnResume:
-        case GLFMActivityCommandOnPause:
         case GLFMActivityCommandOnStop:
             break;
 #endif

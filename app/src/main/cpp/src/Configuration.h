@@ -338,11 +338,6 @@ struct DefaultCharacter : public Configuration::ByteEntry {
     DefaultCharacter() : ByteEntry("Character", "0") {}
 };
 
-// Whether to show UIChatBar
-struct Chatopen : public Configuration::BoolEntry {
-    Chatopen() : BoolEntry("Chatopen", "false") {}
-};
-
 // The default position of UIStatsInfo
 struct PosSTATS : public Configuration::PointEntry {
     PosSTATS() : PointEntry("PosSTATS", "(72,72)") {}
@@ -378,10 +373,7 @@ struct PosUSERLIST : public Configuration::PointEntry {
     PosUSERLIST() : PointEntry("PosUSERLIST", "(104, 104)") {}
 };
 
-// The default position of UIChatBar
-struct PosCHAT : public Configuration::PointEntry {
-    PosCHAT() : PointEntry("PosCHAT", "(0, 572)") {}
-};
+
 
 // The default position of UIMiniMap
 struct PosMINIMAP : public Configuration::PointEntry {

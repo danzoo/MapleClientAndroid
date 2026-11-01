@@ -24,7 +24,7 @@
 #include "../../IO/UITypes/UIStatsInfo.h"
 #include "../../IO/Window.h"
 #include "Helpers/LoginParser.h"
-#include "../../IO/UITypes/UIChatBar.h"
+#include "../../IO/NativeChat.h"
 #include "../../Net/Packets/LoginPackets.h"
 #include "../../Net/PacketProcessor.h"
 #include "../Packets/GameplayPackets.h"
@@ -286,10 +286,8 @@ void FameResponseHandler::handle(InPacket &recv) const {
         default: break;
     }
 
-    if (auto chatbar = UI::get().get_element<UIChatBar>()) {
-        if (!message.empty()) {
-            chatbar->get().send_chatline(message, UIChatBar::LineType::RED);
-        }
+    if (!message.empty()) {
+        NativeChat::send_line(message, NativeChat::LineType::RED, NativeChat::BATTLE);
     }
 }
 

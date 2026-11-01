@@ -21,11 +21,11 @@
 #include "../Net/Packets/GameplayPackets.h"
 #include "OptionalCreator.h"
 #include "UI.h"
+#include "NativeChat.h"
 #include "UITypes/UIBuffList.h"
 #include "UITypes/UIChannel.h"
 #include "UITypes/UICharInfo.h"
 #include "UITypes/UIChat.h"
-#include "UITypes/UIChatBar.h"
 #include "UITypes/UIEquipInventory.h"
 #include "UITypes/UIEvent.h"
 #include "UITypes/UIItemInventory.h"
@@ -60,7 +60,6 @@ namespace ms {
 
         emplace<UIStatusMessenger>();
         emplace<UIStatusBar>(stats_, channel_count_);
-        emplace<UIChatBar>();
         emplace<UIMiniMap>(stats_);
         emplace<UIBuffList>();
         emplace<UIShop>(look, inventory);
@@ -69,6 +68,12 @@ namespace ms {
         // size to remember and to hand out when it changes.
         VWIDTH = Constants::Constants::get().get_ui_viewwidth();
         VHEIGHT = Constants::Constants::get().get_ui_viewheight();
+
+        NativeChat::activate();
+    }
+
+    UIStateGame::~UIStateGame() {
+        NativeChat::deactivate();
     }
 
     void UIStateGame::draw(float inter, Point<int16_t> cursor) const {
@@ -90,6 +95,8 @@ namespace ms {
     }
 
     void UIStateGame::update() {
+        NativeChat::update();
+
         bool update_screen = false;
         int16_t new_width = Constants::Constants::get().get_ui_viewwidth();
         int16_t new_height = Constants::Constants::get().get_ui_viewheight();
@@ -290,12 +297,8 @@ namespace ms {
                             fn_enter_cashshop();
                             break;
                         case KeyAction::Id::TOGGLE_CHAT:
-                            if (auto chatbar = UI::get().get_element<UIChatBar>()) {
-                                if (!chatbar->get().is_chatfield_open()) {
-                                    chatbar->get().toggle_chat();
-                                }
-                            }
-
+                            // The message window owns the keyboard now, so there is nothing
+                            // left on the game side for this key to open.
                             break;
                         case KeyAction::Id::KEY_BINDINGS: {
                             auto keyconfig = UI::get().get_element<UIKeyConfig>();
@@ -359,6 +362,12 @@ namespace ms {
 
         if (auto *focusedelement = get(focused_)) {
             if (focusedelement->is_active()) {
+                if (clicked) {
+                    // The press belongs to a window of the interface, so the message window - which
+                    // cannot be sent under the interface for real, only faded and made to let touches
+                    // through - has no business being the first thing the eye comes to.
+                    NativeChat::sink();
+                }
                 remove_cursor(focusedelement->get_type());
                 return focusedelement->send_cursor(clicked, cursorpos);
             }
@@ -420,7 +429,21 @@ namespace ms {
         }
 
         if (dragged_) {
+            // A window of the interface took the press, which is the reader working in it rather than
+            // reading what came past: the message window goes behind.
+            NativeChat::sink();
+
             return dragged_->send_cursor(clicked, cursorpos);
+        }
+
+        // Nothing of the interface wanted the press, so the last thing that can claim it is the
+        // message window - which sits under the interface and over the map while it is out of the way.
+        // Claiming it here is the reader asking for the window back, and the map underneath does not
+        // get to read the same press as somewhere to walk to.
+        if (NativeChat::covers(cursorpos.x(), cursorpos.y())) {
+            NativeChat::raise();
+
+            return Cursor::State::IDLE;
         }
 
         return Stage::get().send_cursor(clicked, cursorpos);
@@ -532,7 +555,6 @@ namespace ms {
 
             auto silent_types = {UIElement::Type::STATUS_MESSENGER,
                                  UIElement::Type::STATUS_BAR,
-                                 UIElement::Type::CHAT_BAR,
                                  UIElement::Type::MINI_MAP,
                                  UIElement::Type::BUFF_LIST,
                                  UIElement::Type::NPC_TALK,
@@ -540,6 +562,12 @@ namespace ms {
 
             if (std::find(silent_types.begin(), silent_types.end(), T::TYPE)
                 == silent_types.end()) {
+                // A window of the interface has just come over the map, and a window that came by
+                // itself is not one the reader is still reading messages through. The silent types are
+                // the parts of the interface the game keeps laid out at the edges of the screen, and
+                // putting one of them back is not the reader asking for anything.
+                NativeChat::sink();
+
                 if (T::TYPE == UIElement::Type::WORLD_MAP) {
                     Sound(Sound::Name::WORLD_MAP_OPEN).play();
                 } else {

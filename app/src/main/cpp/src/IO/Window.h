@@ -46,6 +46,12 @@ namespace ms {
         // Fade the whole screen out over the given number of milliseconds, then run the procedure.
         void fadeout(uint16_t millis, std::function<void()> fadeprocedure);
 
+        // Whether the screen is showing the scene at full strength. A transition takes the whole
+        // picture down and back up, and anything that is not part of that picture - a platform
+        // window floating over the surface, for one - has to wait for it to finish before it looks
+        // like it belongs to the scene rather than like it arrived during the loading screen.
+        bool is_faded_in() const;
+
         void set_clipboard(const std::string &text) const;
 
         std::string get_clipboard() const;

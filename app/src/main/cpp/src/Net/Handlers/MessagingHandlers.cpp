@@ -18,7 +18,7 @@
 #include "../../Data/ItemData.h"
 #include "../../Gameplay/Stage.h"
 #include "../../IO/UI.h"
-#include "../../IO/UITypes/UIChatBar.h"
+#include "../../IO/NativeChat.h"
 #include "../../IO/UITypes/UIStatusMessenger.h"
 
 namespace ms {
@@ -169,10 +169,9 @@ void ServerMessageHandler::handle(InPacket &recv) const {
     } else if (type == 6) {
         recv.read_int();  // server appends an unused int(0) after lightblue notices
 
-        if (auto chatbar = UI::get().get_element<UIChatBar>()) {
-            chatbar->get().send_chatline("[Notice] " + message,
-                                         UIChatBar::LineType::BLUE);
-        }
+        NativeChat::send_line("[Notice] " + message,
+                              NativeChat::LineType::BLUE,
+                              NativeChat::NOTICE);
     } else if (type == 7) {
         recv.read_int();  // npcid
     }
@@ -189,9 +188,7 @@ void WeekEventMessageHandler::handle(InPacket &recv) const {
         message = "[Notice] " + message;
     }
 
-    if (auto chatbar = UI::get().get_element<UIChatBar>()) {
-        chatbar->get().send_chatline(message, UIChatBar::LineType::YELLOW);
-    }
+    NativeChat::send_line(message, NativeChat::LineType::YELLOW, NativeChat::NOTICE);
 }
 
 void WhisperReceivedHandler::handle(InPacket &recv) const {
@@ -203,10 +200,9 @@ void WhisperReceivedHandler::handle(InPacket &recv) const {
 
     std::string message = recv.read_string();
 
-    if (auto chatbar = UI::get().get_element<UIChatBar>()) {
-        chatbar->get().send_chatline(sender + "<< " + message,
-                                     UIChatBar::LineType::GREEN);
-    }
+    NativeChat::send_line(sender + "<< " + message,
+                                 NativeChat::LineType::GREEN,
+                                 NativeChat::FRIEND);
 }
 
 void ChatReceivedHandler::handle(InPacket &recv) const {
@@ -222,11 +218,9 @@ void ChatReceivedHandler::handle(InPacket &recv) const {
         character->get().speak(message);
     }
 
-    auto linetype = static_cast<UIChatBar::LineType>(type);
+    auto linetype = static_cast<NativeChat::LineType>(type);
 
-    if (auto chatbar = UI::get().get_element<UIChatBar>()) {
-        chatbar->get().send_chatline(message, linetype);
-    }
+    NativeChat::send_line(message, linetype, NativeChat::GENERAL);
 }
 
 void ScrollResultHandler::handle(InPacket &recv) const {
@@ -255,9 +249,7 @@ void ScrollResultHandler::handle(InPacket &recv) const {
     Stage::get().show_character_effect(cid, effect);
 
     if (Stage::get().is_player(cid)) {
-        if (auto chatbar = UI::get().get_element<UIChatBar>()) {
-            chatbar->get().display_message(message, UIChatBar::LineType::RED);
-        }
+        NativeChat::display_message(message, NativeChat::LineType::RED);
 
         UI::get().enable();
     }
@@ -285,10 +277,9 @@ void ShowItemGainInChatHandler::handle(InPacket &recv) const {
             std::string message = "Gained an item: " + name + " (" + sign
                                   + std::to_string(qty) + ")";
 
-            if (auto chatbar = UI::get().get_element<UIChatBar>()) {
-                chatbar->get().send_chatline(message,
-                                             UIChatBar::LineType::BLUE);
-            }
+            NativeChat::send_line(message,
+                                         NativeChat::LineType::BLUE,
+                                         NativeChat::BATTLE);
         }
     } else if (mode1 == 13)  // card effect
     {

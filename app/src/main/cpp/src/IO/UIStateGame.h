@@ -32,6 +32,8 @@ class UIStateGame : public UIState {
 public:
     UIStateGame(uint8_t channel_count);
 
+    ~UIStateGame() override;
+
     void draw(float inter, Point<int16_t> cursor) const override;
 
     void update() override;

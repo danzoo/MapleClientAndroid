@@ -15,8 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Messages.h"
 
-#include "UI.h"
-#include "UITypes/UIChatBar.h"
+#include "NativeChat.h"
 
 namespace ms {
 const EnumMap<Messages::Type, const char *> Messages::messages = {
@@ -43,9 +42,7 @@ void InChatMessage::drop() const {
         return;
     }
 
-    if (auto chatbar = UI::get().get_element<UIChatBar>()) {
-        chatbar->get().display_message(type, UIChatBar::RED);
-    }
+    NativeChat::display_message(type, NativeChat::RED);
 }
 
 ForbidSkillMessage::ForbidSkillMessage(SpecialMove::ForbidReason reason,

@@ -47,7 +47,6 @@ Configuration::Configuration() {
     settings.emplace<DefaultWorld>();
     settings.emplace<DefaultChannel>();
     settings.emplace<DefaultCharacter>();
-    settings.emplace<Chatopen>();
     settings.emplace<PosSTATS>();
     settings.emplace<PosEQINV>();
     settings.emplace<PosINV>();
@@ -55,7 +54,6 @@ Configuration::Configuration() {
     settings.emplace<PosQUEST>();
     settings.emplace<PosMAP>();
     settings.emplace<PosUSERLIST>();
-    settings.emplace<PosCHAT>();
     settings.emplace<PosMINIMAP>();
     settings.emplace<PosSHOP>();
     settings.emplace<PosNOTICE>();

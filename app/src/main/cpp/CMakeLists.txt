@@ -85,6 +85,7 @@ add_library(OpenMapleClient SHARED
         src/IO/Keyboard.cpp
         src/IO/QuickSlots.cpp
         src/IO/Messages.cpp
+        src/IO/NativeChat.cpp
         src/IO/UI.cpp
         src/IO/UIElement.cpp
         src/IO/UIStateCashShop.cpp
@@ -95,7 +96,6 @@ add_library(OpenMapleClient SHARED
         src/IO/UITypes/UIChannel.cpp
         src/IO/UITypes/UICharInfo.cpp
         src/IO/UITypes/UIChat.cpp
-        src/IO/UITypes/UIChatBar.cpp
         src/IO/UITypes/UIEquipInventory.cpp
         src/IO/UITypes/UIEvent.cpp
         src/IO/UITypes/UIGaugeBoss.cpp

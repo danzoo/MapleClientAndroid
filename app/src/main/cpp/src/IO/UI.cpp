@@ -25,13 +25,13 @@
 #include "../../Audio/Audio.h"
 #include "../../Configuration.h"
 #include "Cursor.h"
+#include "NativeChat.h"
 #include "OptionalCreator.h"
 #include "UIStateCashShop.h"
 #include "UIStateGame.h"
 #include "UIStateLogin.h"
 #include "UITypes/UIChannel.h"
 #include "UITypes/UIChat.h"
-#include "UITypes/UIChatBar.h"
 #include "UITypes/UIJoypad.h"
 #include "UITypes/UINpcTalk.h"
 #include "UITypes/UIOptionMenu.h"
@@ -362,29 +362,7 @@ namespace ms {
             }
 
             if (!sent) {
-                auto chatbar = UI::get().get_element<UIChatBar>();
-
-                if (escape) {
-                    if (chatbar && chatbar->get().is_chat_open()) {
-                        chatbar->get().send_key(mapping.action, pressed, escape);
-                    } else {
-                        state_->send_key(mapping.type,
-                                         mapping.action,
-                                         pressed,
-                                         escape);
-                    }
-                } else if (enter) {
-                    if (chatbar) {
-                        chatbar->get().send_key(mapping.action, pressed, escape);
-                    } else {
-                        state_->send_key(mapping.type,
-                                         mapping.action,
-                                         pressed,
-                                         escape);
-                    }
-                } else {
-                    state_->send_key(mapping.type, mapping.action, pressed, escape);
-                }
+                state_->send_key(mapping.type, mapping.action, pressed, escape);
             }
         }
 
@@ -401,6 +379,11 @@ namespace ms {
 
     void UI::set_scrollnotice(const std::string &notice, uint32_t duration_ms) {
         scrolling_notice_.set_notice(notice, duration_ms);
+
+        // A banner scrolls past once and is gone, so the same text is filed under the notices where it
+        // can be read again. Posted rather than copied: the native window is not there at all outside
+        // the game, and posting to nothing is a no-op.
+        NativeChat::send_line(notice, NativeChat::YELLOW, NativeChat::NOTICE);
     }
 
     void UI::focus_textfield(Textfield *tofocus) {

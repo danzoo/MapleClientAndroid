@@ -29,6 +29,7 @@
 #include "MapPortals.h"
 #include "Singleton.h"
 #include "Stage.h"
+#include "NativeChat.h"
 
 #include <algorithm>
 #include <chrono>
@@ -61,6 +62,13 @@ namespace ms {
         // handled one is what stops the framework from showing its own volume slider.
         if (keyCode == GLFMKeyCodeUnknown) {
             return false;
+        }
+
+        if (action != GLFMKeyActionReleased) {
+            // A key that arrives is the reader working with the game - on this device every key that
+            // reaches here is a controller's, and it is the controller the window gets out of the way
+            // for.
+            NativeChat::sink();
         }
 
         if (Gamepad::get().on_key(keyCode, action != GLFMKeyActionReleased)) {
@@ -132,11 +140,25 @@ namespace ms {
     // waiting out the hold-to-drag timeout.
     constexpr double SCROLL_SLOP_PX = 12.0;
 
+    // The sticks report as often as they are looked at, so only a stick that has actually been pushed
+    // out of its resting place is the reader steering.
+    bool stick_moved(double x, double y) {
+        return std::abs(x) >= 0.1 || std::abs(y) >= 0.1;
+    }
+
     void joystick_axis_callback(GLFMDisplay *display, double x, double y) {
+        if (stick_moved(x, y)) {
+            NativeChat::sink();
+        }
+
         Gamepad::get().set_left_stick(x, y);
     }
 
     void joystick_axis2_callback(GLFMDisplay *display, double x, double y) {
+        if (stick_moved(x, y)) {
+            NativeChat::sink();
+        }
+
         Gamepad::get().set_right_stick(x, y);
     }
 
@@ -525,6 +547,13 @@ namespace ms {
                 fade_procedure_();
             }
         }
+    }
+
+    bool Window::is_faded_in() const {
+        // A transition leaves the opacity at one and the step at zero only once it has finished
+        // coming back up, so the step has to be asked about as well: a fade that has been started
+        // but not yet stepped is still sitting at full strength.
+        return opacity_ >= 1.0f && opc_step_ == 0.0f;
     }
 
     void Window::begin() {

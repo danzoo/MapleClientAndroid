@@ -357,6 +357,24 @@ constexpr uint16_t GAMEPAD_PICKUP_REPEAT_MS = 100;
 constexpr uint16_t GAMEPAD_TALK_REPEAT_MS = 500;
 constexpr uint16_t GAMEPAD_USE_REPEAT_MS = 300;
 
+// The message window handed to android.widget, measured in interface units like every other window
+// so that its lettering lands at the height the interface is drawn at. The row height and the line
+// width are taken from the chat bar it replaces, so a line breaks where it used to break.
+constexpr int16_t NATIVE_CHAT_WIDTH = 480;
+constexpr int16_t NATIVE_CHAT_ROW_HEIGHT = 13;
+constexpr int16_t NATIVE_CHAT_ROWS = 8;
+// The strips above and below the list: the one that drags the window, the tabs, and the row a
+// line is typed into. Measured off the built window, so that a window placed by it lands flush
+// with the bottom of the frame rather than hanging past it.
+constexpr int16_t NATIVE_CHAT_CHROME = 88;
+constexpr int16_t NATIVE_CHAT_MARGIN_X = 6;
+// Nothing of the game's own is left under the window, so it is put against the bottom edge.
+constexpr int16_t NATIVE_CHAT_MARGIN_Y = 0;
+// Lines kept for the tab that is not open, so switching tabs shows what was missed. The list is
+// rebuilt from these when a tab is picked, which is why the number costs little and bounds what a
+// long session can hold.
+constexpr int32_t NATIVE_CHAT_MAX_LINES = 200;
+
 class Constants : public Singleton<Constants> {
 public:
     Constants() : VIEWWIDTH(1280), VIEWHEIGHT(720) {}
