@@ -15,8 +15,10 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "GamepadConfig.h"
 
+#include <algorithm>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "../Configuration.h"
 #include "../Util/StringHandling.h"
@@ -24,6 +26,28 @@
 
 namespace ms {
     namespace {
+        // The same consumable on two inputs is one supply with two ways to drink from it, and the
+        // number under both icons is the same total. The quick-slot bar binds one item to one cell;
+        // this keeps the controller to it as well, so a table stored before the rule had it still
+        // reads as one binding per item - the first input to hold the item keeps it.
+        void keep_first_item(
+                std::array<Keyboard::Mapping, GamepadConfig::Slot::LENGTH> &mappings) {
+            std::vector<Keyboard::Mapping> bound;
+
+            for (Keyboard::Mapping &mapping: mappings) {
+                if (mapping.type != KeyType::Id::ITEM) {
+                    continue;
+                }
+
+                if (std::find(bound.begin(), bound.end(), mapping) != bound.end()) {
+                    mapping = {};
+                    continue;
+                }
+
+                bound.push_back(mapping);
+            }
+        }
+
         // Where each slot sits on the 620x231 controller, measured off the art.
         constexpr Point<int16_t> kPositions[GamepadConfig::Slot::LENGTH] = {
             {94, 17},   // DPAD_UP
@@ -161,6 +185,7 @@ namespace ms {
 
     void GamepadConfig::commit(const std::array<Keyboard::Mapping, Slot::LENGTH> &mappings) {
         mappings_ = mappings;
+        keep_first_item(mappings_);
         apply();
 
         std::string stored;
@@ -213,6 +238,10 @@ namespace ms {
 
             mappings_[slot] = Keyboard::Mapping(static_cast<KeyType::Id>(type), action);
         }
+
+        // Read back through the same rule the window stages with, so a table saved by a build that
+        // let one item sit on two inputs does not show up that way.
+        keep_first_item(mappings_);
     }
 
     void GamepadConfig::apply() const {

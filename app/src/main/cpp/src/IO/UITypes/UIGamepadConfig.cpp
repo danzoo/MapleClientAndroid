@@ -183,6 +183,17 @@ namespace ms {
     }
 
     bool UIGamepadConfig::send_icon(const Icon &icon, Point<int16_t> cursorpos) {
+        // An icon picked up out of the persistent quick-slot bar is not something this window can
+        // take, any more than the keyboard editor can: wherever it is let go that isn't another cell
+        // of that bar, the cell it came from gives the binding back. Handing it to stage() below
+        // would copy the binding onto a controller input and leave the bar cell holding it too.
+        if (icon.quick_slot() >= 0) {
+            icon.drop_on_stage();
+            grabbed_ = GamepadConfig::Slot::LENGTH;
+
+            return true;
+        }
+
         std::optional<Keyboard::Mapping> binding = icon.binding();
 
         if (binding) {
@@ -313,6 +324,18 @@ namespace ms {
         if (slot >= GamepadConfig::Slot::LENGTH
             || staged_[slot] == mapping) {
             return;
+        }
+
+        // One consumable occupies one input, which is the rule the quick-slot bar runs: the number
+        // drawn under the icon is the item's total across every stack in the backpack, so a second
+        // input for the same item would only be a second way to drink from one supply. Binding it
+        // again moves it rather than copying it.
+        if (mapping.type == KeyType::Id::ITEM) {
+            for (uint8_t other = 0; other < GamepadConfig::Slot::LENGTH; ++other) {
+                if (other != static_cast<uint8_t>(slot) && staged_[other] == mapping) {
+                    stage(static_cast<GamepadConfig::Slot>(other), {});
+                }
+            }
         }
 
         staged_[slot] = mapping;

@@ -31,6 +31,11 @@ namespace ms {
     // tray of the functions that can be dragged onto them. Works like the keyboard editor - grab
     // an icon, drop it on a key, press OK - except that a controller input keeps its own binding
     // instead of standing in for a key, so the same function may sit on several of them.
+    //
+    // Two things it takes from the quick-slot bar instead: a consumable occupies one input only,
+    // because the number under its icon is the item's whole supply; and an icon that came out of
+    // the bar cannot be bound here at all - letting go of one anywhere but another bar cell
+    // empties the cell it came from.
     class UIGamepadConfig : public UIDragElement<PosGAMEPADCONFIG> {
     public:
         static constexpr Type TYPE = UIElement::Type::GAMEPAD_CONFIG;

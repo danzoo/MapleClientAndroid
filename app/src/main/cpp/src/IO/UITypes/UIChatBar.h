@@ -79,7 +79,15 @@ private:
     static constexpr int16_t MIN_CHAT_ROWS_ = 1;
     static constexpr int16_t MAX_CHAT_ROWS_ = 16;
     static constexpr int16_t DIMENSION_Y_ = 17;
-    static constexpr time_t MESSAGE_COOLDOWN_ = 1'000;
+    // Measured against the update tick rather than the wall clock: the cooldown is walked down by
+    // Constants::TIMESTEP once per update, so this is real milliseconds as the loop keeps them.
+    //
+    // Held long enough to repeat, a controller asks for the bound skill again every so often, and
+    // each ask that the character can't grant drops the same red line - a skill short on mp
+    // complained once every three ticks. The line says nothing new between one ask and the next,
+    // so a message of a given kind is only allowed to appear this often. Taps still report: the
+    // counter is cold the first time and the message that a single press earns is never swallowed.
+    static constexpr time_t MESSAGE_COOLDOWN_ = 3'000;
 
     enum Buttons : uint16_t {
         BT_OPEN_CHAT,

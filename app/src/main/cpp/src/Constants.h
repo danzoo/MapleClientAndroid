@@ -346,10 +346,16 @@ constexpr uint16_t GAMEPAD_CONNECT_TIMEOUT_MS = 5000;
 // because loot is picked one item at a time and a pile is worked through. Talking is slow because an
 // answer arrives from the server and a second request while the first is outstanding reads as a
 // stutter.
+//
+// Using is the clock for a bound consumable or skill. Nothing on the client holds a potion back after
+// a drink or waits out a cast, so this number is the packet rate of a key held down. A skill whose
+// conditions fail asks again on this clock but only reports on the chat bar's own, so the hold ends
+// up retrying often and reading as one line at a time.
 constexpr uint16_t GAMEPAD_WALK_REPEAT_MS = 100;
 constexpr uint16_t GAMEPAD_ATTACK_REPEAT_MS = 250;
 constexpr uint16_t GAMEPAD_PICKUP_REPEAT_MS = 100;
 constexpr uint16_t GAMEPAD_TALK_REPEAT_MS = 500;
+constexpr uint16_t GAMEPAD_USE_REPEAT_MS = 300;
 
 class Constants : public Singleton<Constants> {
 public:

@@ -40,6 +40,7 @@ namespace ms {
         constexpr auto PICKUP_REPEAT =
                 std::chrono::milliseconds(Constants::GAMEPAD_PICKUP_REPEAT_MS);
         constexpr auto TALK_REPEAT = std::chrono::milliseconds(Constants::GAMEPAD_TALK_REPEAT_MS);
+        constexpr auto USE_REPEAT = std::chrono::milliseconds(Constants::GAMEPAD_USE_REPEAT_MS);
 
         // The four directions in the order a stick is walked through them, low bit first.
         constexpr Gamepad::Direction kDirections[4] = {
@@ -226,6 +227,12 @@ namespace ms {
             return;
         }
 
+        // A held consumable or skill is asked for again by update(), and the first repeat has to
+        // wait a full interval behind this press rather than come in the same frame as it.
+        if (mapping.type == KeyType::Id::ITEM || mapping.type == KeyType::Id::SKILL) {
+            use_repeat_[static_cast<uint8_t>(slot)] = clock::now();
+        }
+
         UI::get().send_key(GamepadConfig::keycode(slot), true);
     }
 
@@ -339,8 +346,19 @@ namespace ms {
 
             const Keyboard::Mapping &mapping = mappings[slot];
 
-            if (mapping.action == KeyAction::Id::ATTACK
-                && !(cancel_ & held) && now - attack_repeat_ >= ATTACK_REPEAT) {
+            if ((mapping.type == KeyType::Id::ITEM || mapping.type == KeyType::Id::SKILL)
+                && now - use_repeat_[slot] >= USE_REPEAT) {
+                // Both are carried out on the press edge alone, so asking for the key again is the
+                // whole repeat. A skill that can't go off right now is dropped by can_attack() and
+                // fires on the next asking once the character is free, which is what makes a held
+                // attack key feel like a held attack.
+                UI::get().send_key(GamepadConfig::keycode(
+                                       static_cast<GamepadConfig::Slot>(slot)),
+                                   true);
+                use_repeat_[slot] = now;
+            }
+            else if (mapping.action == KeyAction::Id::ATTACK
+                     && !(cancel_ & held) && now - attack_repeat_ >= ATTACK_REPEAT) {
                 tap(KeyAction::Id::ATTACK);
                 attack_repeat_ = now;
             }

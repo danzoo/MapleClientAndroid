@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <array>
 #include <chrono>
 #include <cstdint>
 
@@ -114,5 +115,8 @@ namespace ms {
         clock::time_point attack_repeat_ = clock::now();
         clock::time_point pickup_repeat_ = clock::now();
         clock::time_point talk_repeat_ = clock::now();
+        // When each input last fired the consumable or skill bound to it. Per input rather than one
+        // shared clock, because two of them held at once each have to keep their own pace.
+        std::array<clock::time_point, GamepadConfig::Slot::LENGTH> use_repeat_ = {};
     };
 }  // namespace ms
