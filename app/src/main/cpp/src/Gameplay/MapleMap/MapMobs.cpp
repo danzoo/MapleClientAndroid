@@ -194,6 +194,13 @@ Point<int16_t> MapMobs::get_mob_head_position(int32_t oid) const {
     return Point<int16_t>(0, 0);
 }
 
+Point<int16_t> MapMobs::get_mob_body_position(int32_t oid) const {
+    if (auto mob = mobs_.get<const Mob>(oid)) {
+        return mob->get().get_body_position();
+    }
+    return Point<int16_t>(0, 0);
+}
+
 MapObjects *MapMobs::get_mobs() {
     return &mobs_;
 }

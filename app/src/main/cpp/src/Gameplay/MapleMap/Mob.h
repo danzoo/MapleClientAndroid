@@ -127,6 +127,11 @@ public:
     // Return the head position.
     Point<int16_t> get_head_position() const;
 
+    // Return the middle of the body, which is where a thrown or shot thing is aimed. The head is
+    // drawn above the sprite and is where the name, the buffs and the damage go; aiming a projectile
+    // at it sends the arrow or the star over the mob instead of into it.
+    Point<int16_t> get_body_position() const;
+
     const MobSkill &get_move(int32_t move_id, uint8_t level);
 
     const MobSpecialAttack &get_move(int32_t move_id);

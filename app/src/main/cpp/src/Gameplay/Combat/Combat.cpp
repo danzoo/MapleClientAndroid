@@ -66,7 +66,7 @@ void Combat::update() {
         int32_t target_oid = mb.damageeffect.target_oid;
 
         if (mobs_.contains(target_oid)) {
-            mb.target = mobs_.get_mob_head_position(target_oid);
+            mb.target = mobs_.get_mob_body_position(target_oid);
             bool apply = mb.bullet.update(mb.target);
 
             if (apply) {
@@ -307,7 +307,7 @@ void Combat::extract_effects(const Char &user,
         for (const auto &[oid, vec] : result.damage_lines) {
             if (mobs_.contains(oid)) {
                 std::vector<DamageNumber> numbers = place_numbers(oid, vec);
-                Point<int16_t> head = mobs_.get_mob_head_position(oid);
+                Point<int16_t> body = mobs_.get_mob_body_position(oid);
 
                 size_t i = 0;
 
@@ -323,7 +323,7 @@ void Combat::extract_effects(const Char &user,
                     bullet_effects_.emplace(hitdelay,
                                             std::move(effect),
                                             bullet,
-                                            head);
+                                            body);
                     i++;
                 }
             }

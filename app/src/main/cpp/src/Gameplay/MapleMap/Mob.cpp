@@ -384,6 +384,14 @@ int8_t Mob::update(const Physics &physics) {
             }
         }
 
+        // Which side of the ground the tick began on. A mob that is jumping only ever decides what to
+        // do next while it is still on the ground, and move_object samples the terrain once more for
+        // every sub-step it takes, so a mob that has just left the ground reports that it is no longer
+        // on it by the time the tick is over. Asking the flag afterwards leaves the jump with no tick
+        // to decide on at all: the hop is delivered again the moment it touches down, which is what
+        // holds it in the air, and a mob that has hopped once then hops for the rest of its life.
+        const bool leftground = phobj_.onground;
+
         physics.move_object(phobj_);
 
         if (control_) {
@@ -393,7 +401,7 @@ int8_t Mob::update(const Physics &physics) {
 
             switch (stance_) {
                 case Stance::HIT: next = counter_ > Constants::MOB_WANDER_MS; break;
-                case Stance::JUMP: next = phobj_.onground; break;
+                case Stance::JUMP: next = leftground; break;
                 default: next = aniend && counter_ > Constants::MOB_WANDER_MS; break;
             }
 
@@ -844,6 +852,17 @@ Point<int16_t> Mob::get_head_position() const {
     Point<int16_t> position = get_position();
 
     return get_head_position(position);
+}
+
+Point<int16_t> Mob::get_body_position() const {
+    const Rectangle<int16_t> bounds =
+        animations_.at(stance_).get_bounds();
+    const Point<int16_t> position = get_position();
+
+    return {static_cast<int16_t>(position.x()
+                                 + (bounds.left() + bounds.right()) / 2),
+            static_cast<int16_t>(position.y()
+                                 + (bounds.top() + bounds.bottom()) / 2)};
 }
 
 const MobSkill &Mob::get_move(int32_t move_id, uint8_t level) {

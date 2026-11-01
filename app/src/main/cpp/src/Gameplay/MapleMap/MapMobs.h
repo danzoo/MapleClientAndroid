@@ -90,6 +90,9 @@ public:
     // Return the head position of a mob.
     Point<int16_t> get_mob_head_position(int32_t oid) const;
 
+    // Return the middle of a mob's body, which is what a projectile is aimed at.
+    Point<int16_t> get_mob_body_position(int32_t oid) const;
+
     // Return all mob map objects
     MapObjects *get_mobs();
 
