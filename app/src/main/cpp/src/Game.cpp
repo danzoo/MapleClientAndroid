@@ -24,6 +24,7 @@
 #include "Configuration.h"
 #include "Constants.h"
 #include "Gameplay/Stage.h"
+#include "Graphics/GraphicsGL.h"
 #include "IO/GamepadConfig.h"
 #include "IO/UI.h"
 #include "IO/Window.h"
@@ -35,6 +36,29 @@
 #include "Singleton.h"
 
 namespace ms {
+namespace {
+    // The way out of a session that ended by itself: the map, its atlases and its interface put away
+    // behind a fade, and the login screen back in front of them so there is somewhere to ask for the
+    // connection again. This is what the quit dialog does when a reader chooses to leave the game; a
+    // link that died leaves nothing to choose.
+    void return_to_login() {
+        Window::get().fadeout(Constants::SCREEN_FADE_MS, []() {
+            GraphicsGL::get().clear();
+
+            UI::get().change_state(UI::State::LOGIN);
+            UI::get().set_scrollnotice("", 0);
+
+            UI::get().enable();
+            Timer::get().start();
+            GraphicsGL::get().unlock();
+        });
+
+        GraphicsGL::get().lock();
+        Stage::get().clear();
+        Timer::get().start();
+    }
+}  // namespace
+
 Game::Game() {
     HardwareInfo();
 }
@@ -82,6 +106,17 @@ Error Game::init(GLFMDisplay *pApp) {
 }
 
 void Game::update() {
+    if (PacketProcessor::get().link_lost()) {
+        // A link that came up and then died ends the session, not the client. Nothing else notices:
+        // the scene keeps drawing a game that answers nothing, and the screen that could ask for it
+        // again is two states behind it. Dialling is put back first because an attempt in flight is
+        // not a link that was lost - that is what makes this run once rather than once per update -
+        // and because a server that has come back should be reachable from the login screen the
+        // reader is about to be looking at.
+        PacketProcessor::get().reconnect();
+        return_to_login();
+    }
+
     Window::get().update();
     Stage::get().update();
     UI::get().update();
@@ -164,11 +199,11 @@ void Game::frame() {
 }
 
 bool Game::is_running() {
-    // A connection that is still being made is not a reason to stop drawing: the login screen is up
-    // by then and it is the screen that reports the attempt, which it can only do from a loop that
-    // runs. Only a link that came up and then died stops the frame, which is what stopping on
-    // is_connected() used to mean once the connect itself could not be waited for.
-    return !PacketProcessor::get().link_lost() && UI::get().not_quitted();
+    // A connection is not part of this decision. The loop is the only thing that can draw the screen
+    // that reports a connection's state, so stopping it at a dead link leaves the reader with a black
+    // surface and no way back: a server that is not there is something the login screen says out
+    // loud, and a link that died on the way is taken care of where it is noticed, in update().
+    return UI::get().not_quitted();
 }
 
 void Game::start(GLFMDisplay *pApp) {

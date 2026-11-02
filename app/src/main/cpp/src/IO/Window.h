@@ -52,6 +52,13 @@ namespace ms {
         // like it belongs to the scene rather than like it arrived during the loading screen.
         bool is_faded_in() const;
 
+        // Which way the screen is moving. A thing that is not part of the picture fades alongside it
+        // rather than inside it, and to do that it has to know when the going starts - the end it can
+        // already read off `is_faded_in`.
+        bool is_fading_out() const;
+
+        bool is_fading_in() const;
+
         void set_clipboard(const std::string &text) const;
 
         std::string get_clipboard() const;

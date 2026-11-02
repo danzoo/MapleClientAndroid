@@ -137,6 +137,14 @@ public:
     // Check whether the current account is an admin account
     void set_admin(bool value);
 
+    // The account this run is signed in as, as the server named it back. Not the id written down for
+    // the next start: that one is only kept when the reader asked to be remembered, and what is
+    // remembered about a character has to follow whoever actually logged in.
+    const std::string &get_account();
+
+    // Set private member account_name
+    void set_account(std::string name);
+
     // Base class for an entry in the settings file
     class Entry {
     protected:
@@ -254,6 +262,7 @@ private:
     uint8_t worldid;
     uint8_t channelid;
     bool admin;
+    std::string account_name;
     TypeMap<Entry> settings;
 };
 
@@ -333,9 +342,11 @@ struct DefaultChannel : public Configuration::ByteEntry {
     DefaultChannel() : ByteEntry("Channel", "0") {}
 };
 
-// The last used character
-struct DefaultCharacter : public Configuration::ByteEntry {
-    DefaultCharacter() : ByteEntry("Character", "0") {}
+// The character each account last chose, as "account=characterid" pairs: "admin=100001;toddd=100044".
+// The character's own id and not the box it was sitting in, because the boxes are one world's list
+// and move about when a character is created or deleted.
+struct LastCharacters : public Configuration::StringEntry {
+    LastCharacters() : StringEntry("LastCharacters", "") {}
 };
 
 // The default position of UIStatsInfo

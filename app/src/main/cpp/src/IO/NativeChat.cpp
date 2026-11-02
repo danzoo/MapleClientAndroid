@@ -47,6 +47,7 @@ namespace ms {
         jmethodID g_pending = nullptr;
         jmethodID g_take = nullptr;
         jmethodID g_set_floating = nullptr;
+        jmethodID g_set_faded = nullptr;
         jmethodID g_touched = nullptr;
         bool g_ready = false;
         bool g_wanted = false;
@@ -55,6 +56,10 @@ namespace ms {
         // itself is the one that fades and gives its touches back; this is only kept so that a
         // controller held down does not ask for the same thing every frame.
         bool g_floating = true;
+        // Whether the window was last asked to be at full strength. The screen's fade is stepped here
+        // once at each end of it rather than every frame, because the window is a thing android
+        // composites above the picture the fade works on and so cannot be carried along by it.
+        bool g_faded = true;
         EnumMap<Messages::Type, time_t> g_cooldowns;
 
         JNIEnv *current_env() {
@@ -128,7 +133,7 @@ namespace ms {
 
         bool resolve(ANativeActivity *activity) {
             if (g_class && g_show && g_hide && g_append && g_pending && g_take
-                && g_set_floating && g_touched) {
+                && g_set_floating && g_set_faded && g_touched) {
                 return true;
             }
 
@@ -160,10 +165,12 @@ namespace ms {
             g_pending = env->GetStaticMethodID(g_class, "pending", "()I");
             g_take = env->GetStaticMethodID(g_class, "take", "()Ljava/lang/String;");
             g_set_floating = env->GetStaticMethodID(g_class, "setFloating", "(Z)V");
+            g_set_faded = env->GetStaticMethodID(g_class, "setFaded", "(Z)V");
             g_touched = env->GetStaticMethodID(g_class, "touched", "(II)Z");
 
             if (env->ExceptionCheck() || !g_show || !g_hide || !g_append
-                || !g_pending || !g_take || !g_set_floating || !g_touched) {
+                || !g_pending || !g_take || !g_set_floating || !g_set_faded
+                || !g_touched) {
                 env->ExceptionClear();
                 env->DeleteGlobalRef(g_class);
                 g_class = nullptr;
@@ -173,6 +180,7 @@ namespace ms {
                 g_pending = nullptr;
                 g_take = nullptr;
                 g_set_floating = nullptr;
+                g_set_faded = nullptr;
                 g_touched = nullptr;
 
                 return false;
@@ -272,6 +280,32 @@ namespace ms {
                 env->ExceptionClear();
             }
         }
+
+        // Tells the window to come or go, once per change rather than once per frame: the fade itself
+        // is android's to run, and asking it again every tick would only restart it.
+        void apply_faded(bool faded) {
+            if (g_faded == faded) {
+                return;
+            }
+
+            g_faded = faded;
+
+            if (!g_shown) {
+                return;
+            }
+
+            JNIEnv *env = current_env();
+
+            if (!env) {
+                return;
+            }
+
+            env->CallStaticVoidMethod(g_class, g_set_faded, faded ? JNI_TRUE : JNI_FALSE);
+
+            if (env->ExceptionCheck()) {
+                env->ExceptionClear();
+            }
+        }
     }  // namespace
 
     bool NativeChat::prepare() {
@@ -322,6 +356,16 @@ namespace ms {
             }
         }
         else {
+            // The window is not part of the picture the transition fades, so it is told to go out with
+            // it and come back with it: left to itself it would sit at full strength over a black
+            // loading screen, which is the one thing about it that never belonged to the scene.
+            if (Window::get().is_fading_out()) {
+                apply_faded(false);
+            }
+            else if (Window::get().is_fading_in() || Window::get().is_faded_in()) {
+                apply_faded(true);
+            }
+
             send_typed();
         }
     }
@@ -378,8 +422,10 @@ namespace ms {
 
         // The window that comes into the world comes into it on top of the interface, and the window
         // says so for itself as it is built; this is kept in step with it so that the first press the
-        // interface takes afterwards is taken as the change it is.
+        // interface takes afterwards is taken as the change it is. The window also comes in at nothing
+        // and is asked to fade up by itself, so the game's side of that starts at full strength.
         g_floating = true;
+        g_faded = true;
 
         // The window is a window of its own, so Android composites it above the game's surface
         // rather than under it, and it is the game's own frame that says how far it may be dragged.

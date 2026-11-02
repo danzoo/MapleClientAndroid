@@ -485,8 +485,8 @@ namespace ms {
             // rates are set independently of each other.
             game.frame();
         } else {
-            // Nothing is drawn until the server connection is up, which would leave the surface
-            // presenting the uninitialised contents it was created with.
+            // Only reached once the interface has been quit, which is after the last picture this run
+            // will want: the surface is left showing black rather than whatever it was created with.
             int surface_width, surface_height;
             glfmGetDisplaySize(display, &surface_width, &surface_height);
 
@@ -554,6 +554,14 @@ namespace ms {
         // coming back up, so the step has to be asked about as well: a fade that has been started
         // but not yet stepped is still sitting at full strength.
         return opacity_ >= 1.0f && opc_step_ == 0.0f;
+    }
+
+    bool Window::is_fading_out() const {
+        return opc_step_ < 0.0f;
+    }
+
+    bool Window::is_fading_in() const {
+        return opc_step_ > 0.0f;
     }
 
     void Window::begin() {

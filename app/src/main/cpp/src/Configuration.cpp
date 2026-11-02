@@ -46,7 +46,7 @@ Configuration::Configuration() {
     settings.emplace<DefaultAccount>();
     settings.emplace<DefaultWorld>();
     settings.emplace<DefaultChannel>();
-    settings.emplace<DefaultCharacter>();
+    settings.emplace<LastCharacters>();
     settings.emplace<PosSTATS>();
     settings.emplace<PosEQINV>();
     settings.emplace<PosINV>();
@@ -297,5 +297,13 @@ bool Configuration::get_admin() {
 
 void Configuration::set_admin(bool value) {
     admin = value;
+}
+
+const std::string &Configuration::get_account() {
+    return account_name;
+}
+
+void Configuration::set_account(std::string name) {
+    account_name = std::move(name);
 }
 }  // namespace ms

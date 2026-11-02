@@ -110,6 +110,11 @@ void LoginResultHandler::handle(InPacket &recv) const {
 
             Configuration::get().set_admin(account.admin);
 
+            // The name the server answers with is the one this run is known by, and it is what the
+            // remembered character is filed under - the id typed into the login field is not, because
+            // that one is only written down when the reader has asked to be remembered.
+            Configuration::get().set_account(account.name);
+
             if (account.female == 10) {
                 UI::get().emplace<UIGender>(*okhandler);
             } else {

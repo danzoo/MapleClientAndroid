@@ -363,10 +363,11 @@ constexpr uint16_t GAMEPAD_USE_REPEAT_MS = 300;
 constexpr int16_t NATIVE_CHAT_WIDTH = 480;
 constexpr int16_t NATIVE_CHAT_ROW_HEIGHT = 13;
 constexpr int16_t NATIVE_CHAT_ROWS = 8;
-// The strips above and below the list: the one that drags the window, the tabs, and the row a
-// line is typed into. Measured off the built window, so that a window placed by it lands flush
-// with the bottom of the frame rather than hanging past it.
-constexpr int16_t NATIVE_CHAT_CHROME = 88;
+// The strips above and below the list, each one as tall as the art it is drawn out of: the top strip
+// the window is grabbed by, the tabs, and the band a line is typed into. Measured off the built
+// window, so that a window placed by it lands flush with the bottom of the frame rather than hanging
+// past it.
+constexpr int16_t NATIVE_CHAT_CHROME = 24 + 18 + 28;
 constexpr int16_t NATIVE_CHAT_MARGIN_X = 6;
 // Nothing of the game's own is left under the window, so it is put against the bottom edge.
 constexpr int16_t NATIVE_CHAT_MARGIN_Y = 0;

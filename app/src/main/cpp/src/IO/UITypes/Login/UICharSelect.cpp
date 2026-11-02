@@ -56,6 +56,96 @@ auto fn_delete_char = []<typename... T>(T && ...args) {
 auto fn_register_pic = []<typename... T>(T && ...args) {
     RegisterPicPacket(std::forward<T>(args)...).dispatch();
 };
+
+// One "account=id" pair out of the LastCharacters setting, or nothing when that account has no pair.
+std::string remembered_pair_value(const std::string &account) {
+    const std::string all = Setting<LastCharacters>::get().load();
+    size_t pos = 0;
+
+    while (pos < all.size()) {
+        const size_t stop = all.find(';', pos);
+        const std::string pair
+            = all.substr(pos, stop == std::string::npos ? stop : stop - pos);
+        const size_t equals = pair.find('=');
+
+        if (equals != std::string::npos
+            && pair.compare(0, equals, account) == 0) {
+            return pair.substr(equals + 1);
+        }
+
+        if (stop == std::string::npos) {
+            break;
+        }
+
+        pos = stop + 1;
+    }
+
+    return std::string();
+}
+
+// The list rewritten with this account's pair set to this character. One setting is one line of the
+// file, so a pair cannot be edited where it stands and the whole list goes back through.
+void remember_character(const std::string &account, int32_t id) {
+    if (account.empty()) {
+        return;
+    }
+
+    const std::string all = Setting<LastCharacters>::get().load();
+    std::string kept;
+    size_t pos = 0;
+
+    while (pos < all.size()) {
+        const size_t stop = all.find(';', pos);
+        const std::string pair
+            = all.substr(pos, stop == std::string::npos ? stop : stop - pos);
+        const size_t equals = pair.find('=');
+
+        if (equals != std::string::npos
+            && pair.compare(0, equals, account) != 0) {
+            if (!kept.empty()) {
+                kept += ";";
+            }
+
+            kept += pair;
+        }
+
+        if (stop == std::string::npos) {
+            break;
+        }
+
+        pos = stop + 1;
+    }
+
+    if (!kept.empty()) {
+        kept += ";";
+    }
+
+    kept += account + "=" + std::to_string(id);
+
+    Setting<LastCharacters>::get().save(kept);
+}
+
+// Which box of the list this account last went into. What is written down is the character's own id,
+// because the boxes belong to one world's list and shift when a character is created or deleted -
+// reading back a position would put the reader on whoever happens to stand there now. Nothing
+// remembered, or a character that is gone or on another world, leaves the first one.
+uint8_t remembered_slot(const std::vector<CharEntry> &characters,
+                        int8_t count) {
+    const int32_t id = string_conversion::or_zero<int32_t>(
+        remembered_pair_value(Configuration::get().get_account()));
+
+    if (id == 0) {
+        return 0;
+    }
+
+    for (int8_t i = 0; i < count; ++i) {
+        if (characters[i].id == id) {
+            return static_cast<uint8_t>(i);
+        }
+    }
+
+    return 0;
+}
 }  // namespace
 
 UICharSelect::UICharSelect(std::vector<CharEntry> c,
@@ -81,7 +171,7 @@ UICharSelect::UICharSelect(std::vector<CharEntry> c,
     Point<int16_t> character_new_pos = Point<int16_t>(200, 495);
     Point<int16_t> character_del_pos = Point<int16_t>(316, 495);
 
-    selected_character_ = Setting<DefaultCharacter>::get().load();
+    selected_character_ = remembered_slot(characters_, characters_count_);
     selected_page = selected_character_ / PAGESIZE_;
     page_count_ = std::ceil((double)slots_ / (double)PAGESIZE_);
 
@@ -384,7 +474,7 @@ void UICharSelect::update() {
 void UICharSelect::doubleclick(Point<int16_t> cursorpos) {
     uint16_t button_index = selected_character_ + Buttons::CHARACTER_SLOT0;
 
-    // selected_character_ is restored from the DefaultCharacter setting and can be stale from a
+    // selected_character_ is restored from the remembered character and can be stale from a
     // different world, so this slot may not exist at all. Indexing the map would insert a null
     // unique_ptr and dereference it.
     auto btit = buttons_.find(button_index);
@@ -674,8 +764,13 @@ bool UICharSelect::update_character(int32_t id, const StatsEntry &stats) {
 Button::State UICharSelect::button_pressed(uint16_t buttonid) {
     switch (buttonid) {
         case Buttons::CHARACTER_SELECT: {
-            Setting<DefaultCharacter>::get().save(selected_character_);
             int32_t id = characters_[selected_character_].id;
+
+            // Going into a character is the answer to "which one did you mean", so it is what gets
+            // put away for the next time through this screen. Written down as the app goes on rather
+            // than when it is quit, because a phone more often kills the process than closes it.
+            remember_character(Configuration::get().get_account(), id);
+            Configuration::get().save();
 
             switch (require_pic_) {
                 case 0: {

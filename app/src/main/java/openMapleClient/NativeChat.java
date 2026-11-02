@@ -1,13 +1,16 @@
 package openMapleClient;
 
+import android.animation.ValueAnimator;
 import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
-import android.graphics.PixelFormat;
 import android.graphics.Paint;
+import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
-import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
@@ -27,8 +30,11 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -73,16 +79,58 @@ public final class NativeChat {
     // selected. Line colours arrive already resolved from Color::Name, so they are not repeated here.
     private static final int TAB_DIM = 0xFF999999;
     private static final int TAB_LIT = 0xFFFFFFFF;
-    private static final int PLATE_FILL = 0xB0000000;
-    private static final int PLATE_EDGE = 0x66FFFFFF;
-    // The room each tab's lettering is held off the tab's own edge by. A tab has no box drawn around
-    // it, so this is also how far the lettering - the only part of a tab the eye can see - sits from
-    // where the window measures the tab as starting.
+    // The room each tab's lettering is held off the tab's own edge by. This is also how far the
+    // lettering - what the window measures the tab against when it decides how wide to be - sits from
+    // where the tab's art starts.
     private static final float TAB_PAD_UNITS = 6.0f;
     // How far the window fades when it is out of the way. It is still readable at this strength,
     // because a window the reader is working around is not the same thing as a window they asked not
     // to see; it only has to stop being the first thing the eye comes to.
     private static final float SUNK_ALPHA = 0.45f;
+    // How long the window takes to come and go. This is the screen's own fade, which the window is
+    // asked to keep step with: the game dims the picture it draws into over this many milliseconds,
+    // and this window is composited by android above that picture, so it has to be faded by itself or
+    // it would sit at full strength over a black loading screen.
+    private static final int FADE_MS = 320;
+
+    // The window's art, shipped as loose images beside it. Most of it is the chat bar's own, exported
+    // from UI/StatusBar3.img's chat/ingame subtree - the archive the deleted UIChatBar built the window
+    // out of. The names below are those paths with the slashes turned into underscores, so any piece
+    // can be traced back to the canvas it came from. The two handles are the exception: the chat bar
+    // kept a bare "+" against a "-" in a pill, which are not one another's match, so this window takes
+    // its pair from UI/Basic.img's BtMax and BtMin instead - the squares every dialog's title bar is
+    // closed with, which are drawn to go together.
+    private static final String ART_DIR = "chat/";
+    private static final String ART_EXT = ".png";
+    private static final String NORMAL_EXT = "_normal";
+    private static final String PRESSED_EXT = "_pressed";
+    // How much of a strip's end is held at its own size. The corners of these panels are five or six
+    // art pixels across and everything between them is a flat run, so the middle is what stretches
+    // when the window is wider or narrower than the art - which it always is, since the bar's own
+    // frame was 574 units and this window is as wide as its tabs.
+    private static final int PANEL_CAP_UNITS = 8;
+    private static final int TAB_CAP_UNITS = 4;
+    // The tab's art is its height: a tab drawn taller than this has its gradient pulled with it.
+    private static final int TAB_HEIGHT_UNITS = 18;
+    // The clear space around a handle's art, which is what makes a 10-unit pill something a thumb
+    // can find. The art is drawn at the top-left of the space, so this is also how it is placed.
+    private static final int HANDLE_PAD_UNITS = 9;
+    // How far the handle's art sits in from the frame, the same distance down from its top edge as in
+    // from its right. The two are read together as the margin of the window, and unequal ones look
+    // like a button placed against one edge that forgot the other. The grip beside it shares this.
+    private static final int HANDLE_INSET_UNITS = 7;
+    // The height each of the three rows is asked to be, which is the height of the art they are drawn
+    // out of: the plate's top strip with the handle's pill sitting in it, the bar's whole frame, and
+    // the band the line is typed into. Each handle's own art is smaller than all three, and the rest
+    // of the room is the clear space a thumb needs around it.
+    private static final int HEADER_ROW_UNITS = 24;
+    private static final int BAR_ROW_UNITS = 31;
+    private static final int INPUT_ROW_UNITS = 28;
+
+    private static final HashMap<String, Bitmap> artCache = new HashMap<>();
+    private static final Paint SMOOTH = new Paint(Paint.FILTER_BITMAP_FLAG);
+    private static final int[] PRESSED_STATE = {android.R.attr.state_pressed};
+    private static final int[] ANY_STATE = {};
 
     private static final class Entry {
         final int category;
@@ -153,17 +201,43 @@ public final class NativeChat {
     // the game decides who wins a touch that lands on it: an interface window above the plate keeps
     // the press, and only one the interface does not want reaches the plate.
     private static boolean floating = true;
+    // How far the window has come into the world, between nothing and everything. The game's picture
+    // is faded by the game; this window is above that picture as far as android is concerned, so the
+    // same fade is run here for it - out before the screen goes black for a map, back as it lights up,
+    // and up from nothing when the reader first reaches the game.
+    private static float fade = 1.0f;
+    private static ValueAnimator fader = null;
 
-    // The window's own handle, as wide as iconButton() builds it and as far from the border as the
-    // header row and the button's own margin put it. The width of the whole window is decided against
-    // these, so they are worked out from the same measurements rather than measured back out of a view
-    // that has not been laid out yet.
-    private static int handleWidth() {
-        return px(16) + 2 * px(9);
+    /**
+     * The plate's frame: the chat bar's top strip, the plain run below it, and its bottom strip.
+     *
+     * The row a line is typed into is the lowest thing in the window and carries its own rounded band,
+     * but the plate behind it used to run down to the bottom edge as a square corner, and that corner
+     * showed through the band's own corner cut-offs - the top of the window rounded off and the bottom
+     * did not. Held behind the band, the archive's bottom strip is only ever visible at those corners,
+     * where it is transparent, which is what makes the plate round off at both ends.
+     */
+    private static Drawable plateFace() {
+        return new Frame(art("view_max_top"), art("view_max_center"), art("view_max_bottom"),
+                PANEL_CAP_UNITS);
     }
 
-    private static int handleEdge() {
-        return px(4) + px(4);
+    /** The bar's frame, which is the same window with its list put away and so has a bottom edge. */
+    private static Drawable barFace() {
+        return new Frame(art("view_min_top"), art("view_min_center"), art("view_min_bottom"),
+                PANEL_CAP_UNITS);
+    }
+
+    /** A tab: the face the game drew for the one being looked at, and the dimmed one for the rest. */
+    private static Drawable tabFace(boolean selected) {
+        StateListDrawable faces = new StateListDrawable();
+        Bitmap open = art(selected ? "view_tab_normal" : "view_tab_disabled");
+        Bitmap slice = art("view_tab_mouseOver");
+
+        faces.addState(PRESSED_STATE, new Frame(slice, null, null, TAB_CAP_UNITS));
+        faces.addState(ANY_STATE, new Frame(open, null, null, TAB_CAP_UNITS));
+
+        return faces;
     }
 
     // Device pixels per interface unit, handed over by the game so this window sits at the same
@@ -206,6 +280,15 @@ public final class NativeChat {
         UI.post(() -> {
             releaseKeyboard();
 
+            // A fade still running would otherwise be left to write its next value onto windows that
+            // are about to be built again for someone else.
+            if (fader != null) {
+                fader.cancel();
+                fader = null;
+            }
+
+            fade = 1.0f;
+
             if (windows != null) {
                 if (plate != null) {
                     windows.removeView(plate);
@@ -235,6 +318,15 @@ public final class NativeChat {
             minimized = true;
             floating = true;
         });
+    }
+
+    /**
+     * Whether the window is the game's to be looked at right now. The game fades the picture it draws
+     * into when it changes maps and this window is above that picture as far as android is concerned,
+     * so the game says here when the window is to go out with the screen and come back with it.
+     */
+    public static void setFaded(boolean faded) {
+        UI.post(() -> fadeTo(faded ? 1.0f : 0.0f));
     }
 
     /**
@@ -399,10 +491,11 @@ public final class NativeChat {
 
         plate = new LinearLayout(target);
         plate.setOrientation(LinearLayout.VERTICAL);
-        plate.setBackground(face(PLATE_FILL, px(6)));
+        plate.setBackground(plateFace());
         // The newest line sat flush against the bottom edge of the plate, where the border and the
-        // descenders of the lettering ran into each other.
-        plate.setPadding(0, 0, 0, px(5));
+        // descenders of the lettering ran into each other. The row a line is typed into is the bottom
+        // edge now, and its own art carries the border, so the list no longer needs the gap.
+        plate.setPadding(0, 0, 0, 0);
 
         plate.addView(header(target), rowParams(ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -415,8 +508,11 @@ public final class NativeChat {
             label.setText(TABS[i]);
             label.setTextSize(TypedValue.COMPLEX_UNIT_PX, pxF(11));
             label.setIncludeFontPadding(false);
+            label.setGravity(Gravity.CENTER);
+            label.setMinHeight(px(TAB_HEIGHT_UNITS));
             label.setPadding(px(TAB_PAD_UNITS), px(3), px(TAB_PAD_UNITS), px(3));
             label.setTextColor(i == selectedTab ? TAB_LIT : TAB_DIM);
+            label.setBackground(tabFace(i == selectedTab));
 
             final int index = i;
 
@@ -471,24 +567,23 @@ public final class NativeChat {
         // wide as the list itself, with the same two handles on its right.
         bar = buildBar(target);
 
-        // Grown until the button that puts the list away stands over the last tab. The game's frame is
-        // the cap and the strip decides where things really are: a CJK glyph is as wide as the system
-        // font says it is, so the strip and its last label are measured rather than worked out from
-        // the number of tabs or the size of the lettering. The button is held off the border by its
-        // own margins and is as wide as iconButton() builds it, and the tab it has to come over is
-        // measured to its lettering rather than to its edge - a tab draws no box, so the lettering is
-        // all of it that anyone can see.
+        // The strip decides where the window ends: the plate is as wide as the tabs, so the frame
+        // stands flush with the outer edge of the last tab exactly as it stands flush with the first
+        // one on the left. A CJK glyph is as wide as the system font says it is, so the strip is
+        // measured rather than worked out from the number of tabs or the size of the lettering.
         tabStrip.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-        int noticeWidth = tabViews[TABS.length - 1].getMeasuredWidth();
-        int formWidth = Math.min(width, tabStrip.getMeasuredWidth() - noticeWidth
-                + px(TAB_PAD_UNITS) + handleWidth() + handleEdge());
+        int formWidth = Math.min(width, tabStrip.getMeasuredWidth());
 
         windows = target.getWindowManager();
+        // Comes in from nothing. The reader reaches the game through the screen's own fade, and a
+        // window already at full strength on the other side of it is the one thing that did not fade.
+        fade = 0.0f;
         plateParams = formParams(formWidth, !minimized);
         barParams = formParams(formWidth, minimized);
         windows.addView(plate, plateParams);
         windows.addView(bar, barParams);
+        fadeTo(1.0f);
 
         rebuildRows();
         // A line posted before the window existed was only recorded, so both of the two things that
@@ -532,11 +627,14 @@ public final class NativeChat {
      * land on it, or faded, in which case it gives them to the game underneath - which is the only way
      * a window of this kind has ever gone under the interface, since android composites it above the
      * game's surface no matter what the game draws there.
+     *
+     * The window's own coming and going rides on top of that: a window still on its way in or out is
+     * not something to be pressed, whatever its standing relative to the interface is.
      */
     private static void style(WindowManager.LayoutParams params, boolean worn) {
-        boolean reachable = worn && floating;
+        boolean reachable = worn && floating && fade >= 1.0f;
 
-        params.alpha = worn ? (floating ? 1.0f : SUNK_ALPHA) : 0.0f;
+        params.alpha = worn ? fade * (floating ? 1.0f : SUNK_ALPHA) : 0.0f;
 
         if (reachable) {
             params.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
@@ -546,34 +644,50 @@ public final class NativeChat {
     }
 
     /**
-     * The row across the top: the name of the window, which is wide enough to pick the window up
-     * with, and the button that puts it away.
+     * The grip the chat bar drew in its corner. It is six units of art and does nothing on its own;
+     * what it marks is the strip a window is picked up by, and the whole row it sits in takes the
+     * press for it.
+     */
+    private static ImageView grip(Activity target, Runnable tap) {
+        ImageView grip = new ImageView(target);
+        grip.setScaleType(ImageView.ScaleType.MATRIX);
+        grip.setImageDrawable(new Art(art("view_drag")));
+        grip.setOnTouchListener(new Handle(tap));
+
+        return grip;
+    }
+
+    /**
+     * The row across the top: the grip the chat bar had at its corner, which is what a finger picks
+     * the window up with, and the button that puts it away.
+     *
+     * The bar drew no name for this window, so neither does this one - the grip in the corner is the
+     * whole of its label, and it says what a reader needs to know about the top of a window: that it
+     * moves. The grip is only the width of its own art, but the row it sits in runs the width of the
+     * window and takes the press for all of it, which is the room the name used to hold.
      */
     private static LinearLayout header(Activity target) {
         LinearLayout row = new LinearLayout(target);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(px(4), px(4), px(4), px(4));
+        // Nothing on the right: that edge is the handle's to place itself against, at the inset the
+        // top edge uses too.
+        row.setPadding(px(4), 0, 0, 0);
 
-        TextView title = new TextView(target);
-        title.setText("消息");
-        title.setTextSize(TypedValue.COMPLEX_UNIT_PX, pxF(12));
-        title.setTextColor(TAB_DIM);
-        title.setIncludeFontPadding(false);
-        title.setPadding(px(6), 0, px(6), 0);
-        // The name of the window is part of the handle: a reader who grabs it to move the window
-        // should not have to find the button first.
-        title.setOnTouchListener(new Handle(null));
-
-        LinearLayout.LayoutParams titleParams = rowParams(ViewGroup.LayoutParams.WRAP_CONTENT);
-        titleParams.weight = 1;
-        row.addView(title, titleParams);
+        ImageView handle = grip(target, null);
+        LinearLayout.LayoutParams gripParams = rowParams(ViewGroup.LayoutParams.WRAP_CONTENT);
+        gripParams.weight = 1;
+        gripParams.gravity = Gravity.TOP;
+        gripParams.topMargin = px(HANDLE_INSET_UNITS);
+        row.addView(handle, gripParams);
 
         // One button does both jobs a window is picked up for: a finger that travels moves it and a
-        // finger that lifts is the press that puts it away. A separate handle for moving was a
+        // finger that lifts is the press that puts the list away. A separate handle for moving was a
         // second thing to aim at for the same two gestures.
-        row.addView(iconButton(target, new Glyph(false),
-                new Handle(() -> setMinimized(true))), buttonParams());
+        ImageView collapse = handleButton(target, "BtMin", HEADER_ROW_UNITS);
+
+        collapse.setOnTouchListener(new Handle(() -> setMinimized(true)));
+        row.addView(collapse, buttonParams());
 
         return row;
     }
@@ -587,8 +701,14 @@ public final class NativeChat {
         LinearLayout row = new LinearLayout(target);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackground(face(PLATE_FILL, px(6)));
-        row.setPadding(px(4), px(4), px(4), px(4));
+        row.setBackground(barFace());
+        row.setPadding(px(4), 0, 0, 0);
+
+        ImageView handle = grip(target, () -> setMinimized(false));
+        LinearLayout.LayoutParams gripParams = rowParams(ViewGroup.LayoutParams.WRAP_CONTENT);
+        gripParams.gravity = Gravity.TOP;
+        gripParams.topMargin = px(HANDLE_INSET_UNITS);
+        row.addView(handle, gripParams);
 
         barLine = new TextView(target);
         barLine.setTextSize(TypedValue.COMPLEX_UNIT_PX, pxF(11));
@@ -605,8 +725,10 @@ public final class NativeChat {
         textParams.weight = 1;
         row.addView(barLine, textParams);
 
-        row.addView(iconButton(target, new Glyph(true),
-                new Handle(() -> setMinimized(false))), buttonParams());
+        ImageView expand = handleButton(target, "BtMax", BAR_ROW_UNITS);
+
+        expand.setOnTouchListener(new Handle(() -> setMinimized(false)));
+        row.addView(expand, buttonParams());
 
         return row;
     }
@@ -624,7 +746,10 @@ public final class NativeChat {
         LinearLayout row = new LinearLayout(target);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(px(4), px(2), px(4), px(4));
+        // The band the bar typed into, which is also the bottom edge of the plate: the frame above it
+        // runs down to it and stops, because this art carries its own border and its own corners.
+        row.setBackground(new Frame(art("input_layer_backgrnd"), null, null, PANEL_CAP_UNITS));
+        row.setPadding(px(3), 0, px(3), 0);
 
         chatInput = new EditText(target);
         chatInput.setHint("说点什么…");
@@ -635,24 +760,24 @@ public final class NativeChat {
         chatInput.setSingleLine(true);
         chatInput.setInputType(InputType.TYPE_CLASS_TEXT);
         chatInput.setImeOptions(EditorInfo.IME_ACTION_SEND);
-        chatInput.setBackground(face(0x33FFFFFF, px(4)));
-        chatInput.setPadding(px(6), px(4), px(6), px(4));
+        chatInput.setGravity(Gravity.CENTER_VERTICAL);
+        chatInput.setMinHeight(px(art("input_layer_chatEnter").getHeight()));
+        chatInput.setBackground(new Frame(art("input_layer_chatEnter"), null, null,
+                PANEL_CAP_UNITS));
+        chatInput.setPadding(px(6), 0, px(6), 0);
 
         LinearLayout.LayoutParams fieldParams = rowParams(ViewGroup.LayoutParams.WRAP_CONTENT);
         fieldParams.weight = 1;
         row.addView(chatInput, fieldParams);
 
-        TextView send = new TextView(target);
-        send.setText("发送");
-        send.setTextSize(TypedValue.COMPLEX_UNIT_PX, pxF(11));
-        send.setIncludeFontPadding(false);
-        send.setGravity(Gravity.CENTER);
-        send.setPadding(px(10), px(6), px(10), px(6));
-        send.setBackground(face(0x40FFFFFF, px(4)));
+        // The bubble the bar sent a line with, in place of the word for it: a button this size reads
+        // better as a shape than as lettering, and this is the shape the window already used.
+        ImageView send = handleButton(target, "input_button_chat", INPUT_ROW_UNITS);
+
         send.setOnClickListener(v -> submit());
 
         LinearLayout.LayoutParams sendParams = rowParams(ViewGroup.LayoutParams.WRAP_CONTENT);
-        sendParams.setMarginStart(px(4));
+        sendParams.setMarginStart(px(3));
         row.addView(send, sendParams);
 
         chatInput.setOnTouchListener((v, event) -> {
@@ -756,65 +881,87 @@ public final class NativeChat {
 
     /**
      * One of the handles. The button is also the drag handle, which is why it is padded out to
-     * something a thumb can find on a screen meant for a thumb.
+     * something a thumb can find on a screen meant for a thumb: the art is set into the room the row
+     * has for it, as near the top of the frame as the bar kept it and no nearer than that.
+     *
+     * The two forms of the window share their top edge, and the row each handle sits in is as high as
+     * the art behind it, so the room below is the only thing that differs between them. The art is
+     * therefore held at the same distance from the top in both, the way the grip beside it is: centring
+     * it in the row instead would move the "-" and the "+" a unit apart from one another, and the eye
+     * catches the handle jumping when the window is put away and brought back.
+     *
+     * The row's own right padding is nothing and the button's margin nothing, because the space to the
+     * right of the art is the inset this window keeps from its edge, and it has to come out the same
+     * number as the space above it. Two of the three are enough to place it exactly.
      */
-    private static ImageView iconButton(Activity target, Glyph glyph, View.OnTouchListener handle) {
+    private static ImageView handleButton(Activity target, String name, int rowUnits) {
         ImageView button = new ImageView(target);
-        button.setImageDrawable(glyph);
-        button.setPadding(px(9), px(9), px(9), px(9));
-        button.setBackground(face(0x40FFFFFF, px(4)));
-        button.setOnTouchListener(handle);
+        Bitmap face = art(name + NORMAL_EXT);
+        int slack = Math.max(0, rowUnits - face.getHeight());
+        int above = Math.min(HANDLE_INSET_UNITS, slack);
+
+        button.setScaleType(ImageView.ScaleType.MATRIX);
+        button.setImageDrawable(faces(name));
+        button.setPadding(px(HANDLE_PAD_UNITS), px(above), px(HANDLE_INSET_UNITS),
+                px(slack - above));
 
         return button;
     }
 
+    /** A handle is the last thing in its row, at its own width. */
     private static LinearLayout.LayoutParams buttonParams() {
-        LinearLayout.LayoutParams params = rowParams(ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.setMarginEnd(px(4));
-
-        return params;
-    }
-
-    private static GradientDrawable face(int fill, int corner) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(fill);
-        drawable.setCornerRadius(corner);
-        drawable.setStroke(px(1), PLATE_EDGE);
-
-        return drawable;
+        return rowParams(ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
     /**
-     * One of the handles: the line that puts the list away, and the two lines that bring it back.
-     * Drawn at the size the rest of the interface is magnified to, so the button sits in the window
-     * like the rest of it rather than at the system's own metrics.
+     * One of the chat bar's own canvases. The archives it came out of are read by the native side, so
+     * the pieces this window is drawn from are shipped as loose images beside it; they are decoded
+     * once and kept, because a map change rebuilds these windows and the art does not change with it.
      */
-    private static final class Glyph extends Drawable {
-        private final boolean expand;
-        private final int width = px(16);
-        private final int height = px(16);
-        private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private static Bitmap art(String name) {
+        Bitmap canvas = artCache.get(name);
 
-        Glyph(boolean expand) {
-            this.expand = expand;
-            stroke.setColor(TAB_LIT);
-            stroke.setStyle(Paint.Style.STROKE);
-            stroke.setStrokeCap(Paint.Cap.ROUND);
-            stroke.setStrokeWidth(Math.max(1, px(2)));
+        if (canvas == null) {
+            try (InputStream file = owner.getAssets().open(ART_DIR + name + ART_EXT)) {
+                canvas = BitmapFactory.decodeStream(file);
+            } catch (IOException unreadable) {
+                canvas = null;
+            }
+
+            if (canvas == null) {
+                // An absent canvas draws nothing rather than throwing the window away: a message
+                // window with no frame is still a message window, and a null here would take the
+                // reader's chat down with it.
+                canvas = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+            }
+
+            artCache.put(name, canvas);
+        }
+
+        return canvas;
+    }
+
+    /**
+     * One of the game's handles - the pill that puts the list away, the plus that brings it back, the
+     * bubble that sends the line - drawn at the size the interface is magnified to and held to the
+     * top-left of the room the view gives it, so the padding around it is what places it.
+     */
+    private static final class Art extends Drawable {
+        private final Bitmap image;
+        private final Rect target = new Rect();
+
+        Art(Bitmap canvas) {
+            image = canvas;
         }
 
         @Override
         public void draw(Canvas canvas) {
             Rect bounds = getBounds();
-            int middleX = bounds.centerX();
-            int middleY = bounds.centerY();
-            int half = Math.min(bounds.width(), bounds.height()) / 2 - px(1);
 
-            canvas.drawLine(middleX - half, middleY, middleX + half, middleY, stroke);
+            target.set(bounds.left, bounds.top, bounds.left + getIntrinsicWidth(),
+                    bounds.top + getIntrinsicHeight());
 
-            if (expand) {
-                canvas.drawLine(middleX, middleY - half, middleX, middleY + half, stroke);
-            }
+            canvas.drawBitmap(image, null, target, SMOOTH);
         }
 
         @Override
@@ -832,13 +979,111 @@ public final class NativeChat {
 
         @Override
         public int getIntrinsicWidth() {
-            return width;
+            return px(image.getWidth());
         }
 
         @Override
         public int getIntrinsicHeight() {
-            return height;
+            return px(image.getHeight());
         }
+    }
+
+    /**
+     * A frame drawn out of the chat bar's own strips. Each strip keeps its ends - the rounded corner
+     * and the border line run down the last few canvases of it - and the flat run between those ends
+     * takes whatever width the window has, which is how the original made one 574-unit-wide archive
+     * entry serve a bar of any width. Vertically, the strips above and below keep their own heights
+     * and the middle one is the only thing that grows.
+     *
+     * A frame with one strip and no middle is a plain horizontal slice stretched to the height it is
+     * given, which is what a tab and the row a line is typed into are.
+     */
+    private static final class Frame extends Drawable {
+        private final Bitmap top;
+        private final Bitmap middle;
+        private final Bitmap bottom;
+        private final int capUnits;
+        private final Rect source = new Rect();
+        private final Rect target = new Rect();
+
+        Frame(Bitmap above, Bitmap run, Bitmap below, int cap) {
+            top = above;
+            middle = run;
+            bottom = below;
+            capUnits = cap;
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            Rect bounds = getBounds();
+            int height = bounds.height();
+
+            if (middle == null) {
+                strip(canvas, top, bounds, 0, height);
+
+                return;
+            }
+
+            int above = px(top.getHeight());
+            int below = bottom == null ? 0 : px(bottom.getHeight());
+            int run = height - above - below;
+
+            strip(canvas, top, bounds, 0, above);
+
+            if (run > 0) {
+                strip(canvas, middle, bounds, above, run);
+            }
+
+            if (bottom != null) {
+                strip(canvas, bottom, bounds, height - below, below);
+            }
+        }
+
+        /** One strip, its two ends at their own size and everything between them pulled to fit. */
+        private void strip(Canvas canvas, Bitmap strip, Rect bounds, int offset, int height) {
+            if (height <= 0) {
+                return;
+            }
+
+            int cap = Math.min(capUnits, strip.getWidth() / 2);
+            int end = px(cap);
+            int top = bounds.top + offset;
+
+            source.set(0, 0, cap, strip.getHeight());
+            target.set(bounds.left, top, bounds.left + end, top + height);
+            canvas.drawBitmap(strip, source, target, SMOOTH);
+
+            source.set(cap, 0, strip.getWidth() - cap, strip.getHeight());
+            target.set(bounds.left + end, top, bounds.right - end, top + height);
+            canvas.drawBitmap(strip, source, target, SMOOTH);
+
+            source.set(strip.getWidth() - cap, 0, strip.getWidth(), strip.getHeight());
+            target.set(bounds.right - end, top, bounds.right, top + height);
+            canvas.drawBitmap(strip, source, target, SMOOTH);
+        }
+
+        @Override
+        public void setAlpha(int alpha) {
+        }
+
+        @Override
+        public void setColorFilter(ColorFilter colorFilter) {
+        }
+
+        @Override
+        public int getOpacity() {
+            return PixelFormat.TRANSLUCENT;
+        }
+    }
+
+    /** A handle, wearing the face the game drew for the state it is in. */
+    private static Drawable faces(String stem) {
+        StateListDrawable drawable = new StateListDrawable();
+
+        drawable.addState(PRESSED_STATE, new Art(art(stem + PRESSED_EXT)));
+        drawable.addState(ANY_STATE, new Art(art(stem + NORMAL_EXT)));
+
+        return drawable;
     }
 
     /**
@@ -874,6 +1119,34 @@ public final class NativeChat {
                 moveTo(positionX, positionY);
             }
         });
+    }
+
+    /**
+     * Bring the window to or from nothing. The two forms are moved together because they are one
+     * window: only the worn one is ever drawn, and the other is already blended to nothing, but both
+     * are told so that whichever the reader comes back to is at the strength the moment asks for.
+     *
+     * What is left of the way is what the rest of it takes, so an order partway through a fade turns
+     * around without either slowing down or jumping the remaining distance at once.
+     */
+    private static void fadeTo(float target) {
+        if (plate == null || bar == null || windows == null || fade == target) {
+            return;
+        }
+
+        if (fader != null) {
+            fader.cancel();
+        }
+
+        fader = ValueAnimator.ofFloat(fade, target);
+        fader.setDuration(Math.round(FADE_MS * Math.abs(target - fade)));
+        fader.addUpdateListener(animation -> {
+            fade = (float) animation.getAnimatedValue();
+
+            applyShown(plate, plateParams, !minimized);
+            applyShown(bar, barParams, minimized);
+        });
+        fader.start();
     }
 
     /**
@@ -1072,6 +1345,7 @@ public final class NativeChat {
 
         for (int i = 0; i < tabViews.length; ++i) {
             tabViews[i].setTextColor(i == index ? TAB_LIT : TAB_DIM);
+            tabViews[i].setBackground(tabFace(i == index));
         }
 
         followNewest = true;
