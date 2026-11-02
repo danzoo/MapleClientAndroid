@@ -194,7 +194,6 @@ add_library(OpenMapleClient SHARED
         src/Net/SocketWinsock.cpp
         src/Net/Handlers/AttackHandlers.cpp
         src/Net/Handlers/CashShopHandlers.cpp
-        src/Net/Handlers/CommonHandlers.cpp
         src/Net/Handlers/InventoryHandlers.cpp
         src/Net/Handlers/LoginHandlers.cpp
         src/Net/Handlers/MapObjectHandlers.cpp

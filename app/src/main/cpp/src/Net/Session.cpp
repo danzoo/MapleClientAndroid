@@ -22,6 +22,8 @@
 #include "../Configuration.h"
 #include "../Constants.h"
 #include "PacketError.h"
+#include "PacketSwitch.h"
+#include "Packets/CommonPackets.h"
 
 namespace ms {
 namespace {
@@ -44,7 +46,8 @@ Session::Session(std::unique_ptr<Forwarder> packet_forwarder) :
     header_pos_(0),
     link_(Link::Idle),
     had_connection_(false),
-    epoch_(0) {
+    epoch_(0),
+    dropped_(0) {
     socket_.set_handlers(
         [this](const int8_t *handshake) { on_io_handshake(handshake); },
         [this](const int8_t *bytes, size_t length) { on_io_bytes(bytes, length); },
@@ -203,6 +206,7 @@ void Session::on_io_handshake(const int8_t *handshake) {
     length_ = 0;
     pos_ = 0;
     header_pos_ = 0;
+    dropped_ = 0;
     link_.store(Link::Connected);
     had_connection_.store(true);
 
@@ -222,8 +226,6 @@ void Session::on_io_handshake(const int8_t *handshake) {
 }
 
 void Session::on_io_bytes(const int8_t *bytes, size_t available) {
-    bool overflow = false;
-
     while (available > 0) {
         // A packet is only ever started from a fresh position, and only a complete header can say how
         // long it is.
@@ -246,27 +248,83 @@ void Session::on_io_bytes(const int8_t *bytes, size_t available) {
 
         cryptography_.decrypt(buffer_, length_);
 
+        const uint16_t opcode = packet_opcode(buffer_, length_);
+        const PacketWeight weight = packet_weight(opcode);
+
         // The handler that eventually takes this may point the session at another server, and that
         // throws away whatever this stream still had in it. Handing the packet over as a copy of its
         // own is what makes that safe: the bytes left here belong to a connection that no longer
         // exists, but they are never read as a header again, because the fresh attempt resets the
         // positions when it reads its key.
-        {
-            std::lock_guard<std::mutex> lock(data_mutex_);
-            if (rx_.size() >= INBOX_LIMIT) {
-                overflow = true;
-                break;
-            }
-            rx_.emplace_back(buffer_, buffer_ + length_);
-        }
-
+        std::vector<int8_t> packet(buffer_, buffer_ + length_);
         pos_ = 0;
         length_ = 0;
+
+        if (weight == PacketWeight::Keepalive) {
+            // The server is asking whether this client exists, and a queue is not an answer. This is
+            // the one packet read from the stream that never joins the others.
+            answer_keepalive();
+            continue;
+        }
+
+        const size_t dropped_before = dropped_;
+        const Room room = queue_incoming(std::move(packet), weight == PacketWeight::Droppable);
+        if (room == Room::Full) {
+            give_up("inbox full and nothing droppable");
+            return;
+        }
+        if (dropped_ > dropped_before && (dropped_ == 1 || dropped_ % 64 == 0)) {
+            // The first one and then every sixty-fourth: a full inbox is worth knowing about, but a
+            // game that floods the log with every dropped effect stops being readable. The opcode
+            // rides along because a packet dropped that should not have been is only ever visible
+            // here - the game just fails to react to it somewhere else.
+            __android_log_print(ANDROID_LOG_WARN, "Session",
+                                "inbox full, %zu packets dropped, last opcode %hu", dropped_,
+                                opcode);
+        }
+    }
+}
+
+Session::Room Session::queue_incoming(std::vector<int8_t> &&packet, bool droppable) {
+    std::lock_guard<std::mutex> lock(data_mutex_);
+
+    if (rx_.size() < INBOX_LIMIT) {
+        rx_.push_back({std::move(packet), droppable});
+        return Room::Taken;
     }
 
-    if (overflow) {
-        give_up("inbox overflow");
+    if (droppable) {
+        // The inbox is full of what the game needs and this is what it does not.
+        dropped_++;
+        return Room::Dropped;
     }
+
+    const auto victim = std::find_if(rx_.begin(), rx_.end(), [](const Incoming &incoming) {
+        return incoming.droppable;
+    });
+
+    if (victim == rx_.end()) {
+        return Room::Full;
+    }
+
+    // Erase and append rather than overwrite the victim where it stands: the newcomer arrived after
+    // everything already in the queue, and a handler that reads a state update out of order is worse
+    // than the cosmetic packet it cost.
+    rx_.erase(victim);
+    rx_.push_back({std::move(packet), droppable});
+    dropped_++;
+
+    return Room::Taken;
+}
+
+void Session::answer_keepalive() {
+    // Built and written from here instead of dispatched like every other packet goes out:
+    // OutPacket::dispatch() reads Configuration for its packet log, and that map is written by the
+    // render thread.
+    PongPacket pong;
+    std::vector<int8_t> bytes = pong.build();
+
+    write(bytes.data(), bytes.size());
 }
 
 void Session::pump_send() {
@@ -326,14 +384,14 @@ void Session::write(int8_t *packet_bytes, size_t packet_length) {
 void Session::read() {
     const uint32_t epoch = epoch_.load();
 
-    std::deque<std::vector<int8_t>> batch;
+    std::deque<Incoming> batch;
     {
         std::lock_guard<std::mutex> lock(data_mutex_);
         batch.swap(rx_);
     }
 
     while (!batch.empty()) {
-        std::vector<int8_t> packet = std::move(batch.front());
+        std::vector<int8_t> packet = std::move(batch.front().bytes);
         batch.pop_front();
 
         if (epoch_.load() != epoch) {

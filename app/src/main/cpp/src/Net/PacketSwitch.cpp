@@ -18,7 +18,6 @@
 #include "../Configuration.h"
 #include "Handlers/AttackHandlers.h"
 #include "Handlers/CashShopHandlers.h"
-#include "Handlers/CommonHandlers.h"
 #include "Handlers/InventoryHandlers.h"
 #include "Handlers/LoginHandlers.h"
 #include "Handlers/MapObjectHandlers.h"
@@ -28,6 +27,7 @@
 #include "Handlers/PlayerInteractionHandlers.h"
 #include "Handlers/SetFieldHandlers.h"
 #include "Handlers/TestingHandlers.h"
+#include "NetConstants.h"
 
 namespace ms {
 static const std::unordered_map<uint16_t, std::string_view> op_name_map {
@@ -445,10 +445,36 @@ enum Opcode : uint16_t {
     SET_CASH_SHOP = 127
 };
 
-PacketSwitch::PacketSwitch() {
-    // Common handlers
-    emplace<PING, PingHandler>();
+uint16_t packet_opcode(const int8_t *bytes, size_t length) {
+    if (length < OPCODE_LENGTH) {
+        return 0xFFFF;
+    }
 
+    // Little-endian, the same order InPacket::read_ushort uses.
+    return static_cast<uint16_t>(static_cast<uint8_t>(bytes[0]))
+        | static_cast<uint16_t>(static_cast<uint8_t>(bytes[1]) << 8);
+}
+
+PacketWeight packet_weight(uint16_t opcode) {
+    switch (opcode) {
+        case PING:
+            return PacketWeight::Keepalive;
+
+        // Nothing that carries a line of text. A dropped chat, whisper or notice is a message the
+        // player never sees and never learns was sent - the queue cannot know that the world would
+        // look the same without it, and it is not its call to make.
+        case FIELD_EFFECT:
+        case SHOW_FOREIGN_EFFECT:
+        case SHOW_MOB_HP:
+        case CHAR_MOVED:
+            return PacketWeight::Droppable;
+
+        default:
+            return PacketWeight::Critical;
+    }
+}
+
+PacketSwitch::PacketSwitch() {
     // Login handlers
     emplace<LOGIN_RESULT, LoginResultHandler>();
     emplace<AFTER_LOGIN_ERROR, AfterLoginHandler>();
@@ -545,15 +571,11 @@ void PacketSwitch::forward(int8_t *bytes, size_t length) const {
     uint16_t opcode = recv.read_ushort();
 
     if (Configuration::get().get_show_packets()) {
-        if (opcode == PING) {
-            std::cout << "Received Packet: PING" << std::endl;
-        } else {
-            std::cout << "Received Packet: " << std::to_string(opcode) << ' ';
-            if (op_name_map.find(opcode) != op_name_map.end()) {
-                std::cout << '[' << op_name_map.at(opcode) << ']';
-            }
-            std::cout << std::endl;
+        std::cout << "Received Packet: " << std::to_string(opcode) << ' ';
+        if (op_name_map.find(opcode) != op_name_map.end()) {
+            std::cout << '[' << op_name_map.at(opcode) << ']';
         }
+        std::cout << std::endl;
     }
 
     if (opcode < handlers_.size()) {

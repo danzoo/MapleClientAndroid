@@ -16,6 +16,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <string_view>
 
@@ -23,6 +24,28 @@
 #include "PacketHandler.h"
 
 namespace ms {
+// How much an incoming packet matters, judged from its opcode alone - the only thing the network
+// thread is allowed to look at before a handler has run.
+enum class PacketWeight : uint8_t {
+    // Carries no game state and is answered where it is read, so it never joins the queue the render
+    // thread drains. A keepalive that has to wait for a frame is the client telling the server it is
+    // not there.
+    Keepalive,
+    // Cosmetic and self-contained: losing one leaves the world looking stale for a moment rather
+    // than wrong. This is a whitelist, deliberately short - a spawn dropped is a hole in the map
+    // until the next map change, a removal dropped is a ghost that never leaves, and a removal whose
+    // spawn was dropped is a lookup that finds nothing at all. Nothing that carries text belongs
+    // here, however throwaway the packet looks: a dropped message is a fact the player never gets.
+    Droppable,
+    // Everything else, including every opcode nobody has thought about yet.
+    Critical
+};
+
+// The opcode a decrypted packet carries, or 0xFFFF when it is too short to have one.
+uint16_t packet_opcode(const int8_t *bytes, size_t length);
+// How much a packet with this opcode matters.
+PacketWeight packet_weight(uint16_t opcode);
+
 // Class which contains the array of handler classes to use
 class PacketSwitch : public Forwarder {
 public:

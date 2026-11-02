@@ -78,7 +78,9 @@ public:
     // Start connecting using the address in hostip.txt and return at once: the attempt runs on the
     // network thread, so this says nothing about whether it succeeds.
     Error init(GLFMDisplay *pApp);
-    // Hand a packet to the network thread, or hold it if the connection is still being made.
+    // Hand a packet to the network thread, or hold it if the connection is still being made. Either
+    // thread may call it: the keepalive answer is written from the network thread, everything else
+    // from the render thread.
     void write(int8_t *bytes, size_t length);
     // Take the packets that arrived since the last call and give them to the packet handlers.
     void read();
@@ -117,6 +119,28 @@ private:
     // header, including a header that came in pieces. Network thread only.
     bool read_length(const int8_t *&bytes, size_t &available);
 
+    enum class Room {
+        // The packet is queued.
+        Taken,
+        // The packet was refused and something else was kept: either the newcomer itself, judged
+        // droppable, or an older one to make room for it.
+        Dropped,
+        // The queue is full and holds nothing that can be dropped.
+        Full
+    };
+
+    // Make room for one packet in the inbox, or say that there is none. Network thread only.
+    //
+    // A full inbox means the render thread has not asked for packets in a while, and the server has
+    // not stopped talking. Which packet loses is decided by packet_weight(): a droppable one already
+    // queued is the cheapest to forget, and if the incoming packet is itself droppable then it is the
+    // one that goes. When nothing in the queue can be dropped and the newcomer must be kept, the
+    // inbox is left exactly as it was and this says Full - a connection that cannot carry the packets
+    // the game needs is worse than no connection, because it pretends to be working.
+    Room queue_incoming(std::vector<int8_t> &&packet, bool droppable);
+    // Say that the connection is still there, without waiting for a frame to say it for us.
+    void answer_keepalive();
+
     Cryptography cryptography_;
     // Render thread only, and only from read().
     std::unique_ptr<Forwarder> packet_forwarder_;
@@ -146,8 +170,18 @@ private:
     // belongs to a connection and its key is only known once that connection's handshake has been
     // read.
     std::deque<std::vector<int8_t>> tx_;
-    // Complete packets, decrypted, waiting for a frame to hand them to a handler.
-    std::deque<std::vector<int8_t>> rx_;
+    // Complete packets, decrypted, waiting for a frame to hand them to a handler. The weight is
+    // decided when the packet is read, while the network thread still knows why it was dropped.
+    struct Incoming {
+        std::vector<int8_t> bytes;
+        bool droppable;
+    };
+
+    std::deque<Incoming> rx_;
+
+    // How many packets the inbox has thrown away since the last connection. Network thread only, and
+    // only ever read from that thread's own logging.
+    size_t dropped_;
 
     // The address hostip.txt gave at startup, and the address this session was last pointed at. A
     // bare reconnect() goes back to the first: after a hop to a channel server, that is still the
