@@ -36,6 +36,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * The message window built out of platform views instead of drawn into the game's glyph atlas.
@@ -207,6 +208,12 @@ public final class NativeChat {
     // and up from nothing when the reader first reaches the game.
     private static float fade = 1.0f;
     private static ValueAnimator fader = null;
+    // How far out of the way of the interface the window has come, between full strength and the
+    // strength it is readable at from underneath. `floating` is where the reader asked it to be and
+    // decides at once who wins a touch; this is the blend the eye is shown on the way there, so that
+    // going under and coming back are the same kind of event as the window coming and going.
+    private static float sink = 1.0f;
+    private static ValueAnimator sinker = null;
 
     /**
      * The plate's frame: the chat bar's top strip, the plain run below it, and its bottom strip.
@@ -287,7 +294,13 @@ public final class NativeChat {
                 fader = null;
             }
 
+            if (sinker != null) {
+                sinker.cancel();
+                sinker = null;
+            }
+
             fade = 1.0f;
+            sink = 1.0f;
 
             if (windows != null) {
                 if (plate != null) {
@@ -414,6 +427,10 @@ public final class NativeChat {
             applyShown(plate, plateParams, !minimized);
             applyShown(bar, barParams, minimized);
 
+            // The touch goes to the game at once and the strength eases out of the way behind it, so
+            // the reader can play immediately without the window blinking off under their hands.
+            sinkTo(value ? 1.0f : SUNK_ALPHA);
+
             if (!value) {
                 // Out of the way means the game is being played, and a window that still holds the
                 // focus keeps the keyboard up and the controller out of the game's own hands.
@@ -487,7 +504,10 @@ public final class NativeChat {
 
         // A window that has just come into the world is the reader's, not something to be worked
         // around; the game has the same state written down for it, because both are set as it opens.
+        // The strength is set with the standing, or a window built while the last one was still on its
+        // way under would come in already faded.
         floating = true;
+        sink = 1.0f;
 
         plate = new LinearLayout(target);
         plate.setOrientation(LinearLayout.VERTICAL);
@@ -634,7 +654,7 @@ public final class NativeChat {
     private static void style(WindowManager.LayoutParams params, boolean worn) {
         boolean reachable = worn && floating && fade >= 1.0f;
 
-        params.alpha = worn ? fade * (floating ? 1.0f : SUNK_ALPHA) : 0.0f;
+        params.alpha = worn ? fade * sink : 0.0f;
 
         if (reachable) {
             params.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
@@ -1125,9 +1145,6 @@ public final class NativeChat {
      * Bring the window to or from nothing. The two forms are moved together because they are one
      * window: only the worn one is ever drawn, and the other is already blended to nothing, but both
      * are told so that whichever the reader comes back to is at the strength the moment asks for.
-     *
-     * What is left of the way is what the rest of it takes, so an order partway through a fade turns
-     * around without either slowing down or jumping the remaining distance at once.
      */
     private static void fadeTo(float target) {
         if (plate == null || bar == null || windows == null || fade == target) {
@@ -1138,15 +1155,43 @@ public final class NativeChat {
             fader.cancel();
         }
 
-        fader = ValueAnimator.ofFloat(fade, target);
-        fader.setDuration(Math.round(FADE_MS * Math.abs(target - fade)));
-        fader.addUpdateListener(animation -> {
-            fade = (float) animation.getAnimatedValue();
+        fader = blend(fade, target, value -> fade = value);
+        fader.start();
+    }
+
+    /** Ease the window between full strength and the strength it sits out of the way at. */
+    private static void sinkTo(float target) {
+        if (plate == null || bar == null || windows == null || sink == target) {
+            return;
+        }
+
+        if (sinker != null) {
+            sinker.cancel();
+        }
+
+        sinker = blend(sink, target, value -> sink = value);
+        sinker.start();
+    }
+
+    /**
+     * One blend of this window's strength, written by whichever of the two asked for it. What is left
+     * of the way is what the rest of it takes, so an order partway through a blend turns around
+     * without either slowing down or jumping the remaining distance at once. The two run on their own
+     * clocks because they mean different things - one is the window coming and going, the other its
+     * way under and back out of the interface - and a reader can order either while the other is still
+     * moving.
+     */
+    private static ValueAnimator blend(float from, float target, Consumer<Float> write) {
+        ValueAnimator animator = ValueAnimator.ofFloat(from, target);
+        animator.setDuration(Math.round(FADE_MS * Math.abs(target - from)));
+        animator.addUpdateListener(animation -> {
+            write.accept((float) animation.getAnimatedValue());
 
             applyShown(plate, plateParams, !minimized);
             applyShown(bar, barParams, minimized);
         });
-        fader.start();
+
+        return animator;
     }
 
     /**
