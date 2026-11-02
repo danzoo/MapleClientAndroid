@@ -29,10 +29,6 @@ auto fn_move_mob = []<typename... T>(T && ...args) {
     MoveMobPacket(std::forward<T>(args)...).dispatch();
 };
 
-// How near the player can get before a chasing mob stops bothering to re-face them. Measured
-// against nothing, a mob standing on the player spins in place between two pixels.
-constexpr double CHASE_TURN = 4.0;
-
 // How long a mob spends coming in and going out. The time is named in Constants and the step is
 // whatever the updates it takes to spend it work out to.
 constexpr float FADE_STEP = Constants::TIMESTEP / Constants::MOB_FADE_MS;
@@ -71,6 +67,10 @@ Mob::Mob(int32_t oi,
     can_fly_ = src["fly"].size() > 0;
     can_hit_ = src["hit1"].size() > 0;
     can_move_ = src["move"].size() > 0 || can_fly_;
+    // Absent from the archive means the mob is held to the platform it was placed on, which is what
+    // every mob in the shipped set wants. A mob that is to be allowed off its own edge is given
+    // `crossEdge = 1` under `info` in its own Mob/<id>.img.
+    cross_edge_ = info["crossEdge"].get_bool();
 
     if (can_fly_) {
         animations_[Stance::STAND] = src["fly"];
@@ -122,7 +122,12 @@ Mob::Mob(int32_t oi,
     set_position(position);
     set_control(mode);
     phobj_.fhid = fh;
-    phobj_.set_flag(PhysicsObject::Flag::TURN_AT_EDGES);
+
+    if (!cross_edge_) {
+        // The one thing that holds a walking mob to the foothold under it. Left unarmed it walks over
+        // the end and is handed to whatever is below.
+        phobj_.set_flag(PhysicsObject::Flag::TURN_AT_EDGES);
+    }
 
     hp_percent_ = 0;
     dying_ = false;
@@ -258,40 +263,22 @@ int8_t Mob::update(const Physics &physics) {
     }
 
     if (!dying_) {
-        if (!can_fly_) {
-            if (aggro_) {
-                // Off after the player, so the end of the platform is not a barrier. The turn has
-                // to be switched off whole: left armed it stops the mob at the one place the hate
-                // is telling it to walk over. Walls are a separate check and still hold.
-                phobj_.clear_flag(PhysicsObject::Flag::TURN_AT_EDGES);
-            } else if (phobj_.is_flag_not_set(PhysicsObject::Flag::TURN_AT_EDGES)) {
-                flip_ = !flip_;
-                phobj_.set_flag(PhysicsObject::Flag::TURN_AT_EDGES);
+        if (!can_fly_ && !cross_edge_
+            && phobj_.is_flag_not_set(PhysicsObject::Flag::TURN_AT_EDGES)) {
+            // The flag is found down either because the physics layer stopped this mob at the end of
+            // its foothold, or because the wander clamp below predicted it walking past one. Either
+            // way this is where it turns round and is armed again.
+            flip_ = !flip_;
+            phobj_.set_flag(PhysicsObject::Flag::TURN_AT_EDGES);
 
-                if (stance_ == Stance::HIT) {
-                    set_stance(Stance::STAND);
-                }
+            if (stance_ == Stance::HIT) {
+                set_stance(Stance::STAND);
             }
         }
 
-        // Chasing settles the facing here rather than in next_move: the wander only picks a
-        // direction every couple of seconds, which is nowhere near often enough to follow someone
-        // walking past. Blows and skills still play out, they simply lose the say over where the
-        // mob goes the moment they are over.
-        if (aggro_ && can_move_ && stance_ != Stance::HIT
-            && stance_ != Stance::SKILL) {
-            const double deltax =
-                Stage::get().get_player().get_position().x() - phobj_.crnt_x();
-
-            if (deltax > CHASE_TURN || deltax < -CHASE_TURN) {
-                flip_ = deltax > 0.0;
-            }
-
-            if (stance_ == Stance::STAND) {
-                set_stance(Stance::MOVE);
-            }
-        }
-
+        // Where an angry mob goes is decided at the roll point in next_move, not here: re-deriving
+        // the facing every update is what made it glue itself to the player and walk him down, and
+        // the wander's own cadence is what gives the chase back up.
         switch (stance_) {
             case Stance::MOVE:
                 if (can_fly_) {
@@ -355,11 +342,11 @@ int8_t Mob::update(const Physics &physics) {
                 break;
         }
 
-        // A mob that wanders stays on the platform it is standing on. Off the end of it the
-        // foothold lookup hands the mob to whatever is below, so without this a slow walk to the
-        // edge becomes a drop it cannot climb back out of. Being after the player is the one
-        // reason to step over that edge; walls still stop it either way.
-        if (!aggro_ && !can_fly_ && !can_jump_ && phobj_.onground && phobj_.fhid) {
+        // A mob that is held to its platform stays on it. Off the end of one the foothold lookup
+        // hands the mob to whatever is below, so without this a slow walk to the edge becomes a drop
+        // it cannot climb back out of. Whether a mob is held is its archive's decision, not
+        // something the player's position gets to change; walls stop it either way.
+        if (!cross_edge_ && !can_fly_ && !can_jump_ && phobj_.onground && phobj_.fhid) {
             const Physics::Platform platform = physics.get_platform(phobj_.fhid);
             const double edgeleft =
                 platform.left + Constants::PLATFORM_EDGE_MARGIN;
@@ -421,31 +408,47 @@ int8_t Mob::update(const Physics &physics) {
 
 void Mob::next_move() {
     if (can_move_) {
-        switch (stance_) {
-            case Stance::HIT:
-            case Stance::STAND:
-                set_stance(Stance::MOVE);
-                flip_ = randomizer_.next_bool();
-                break;
-            case Stance::MOVE:
-            case Stance::JUMP:
-                if (can_jump_ && phobj_.onground && randomizer_.below(0.25f)) {
-                    set_stance(Stance::JUMP);
-                } else {
-                    switch (randomizer_.next_int(3)) {
-                        case 0: set_stance(Stance::STAND); break;
-                        case 1:
-                            set_stance(Stance::MOVE);
-                            flip_ = false;
-                            break;
-                        case 2:
-                            set_stance(Stance::MOVE);
-                            flip_ = true;
-                            break;
-                    }
-                }
+        // Being angry leans this decision rather than replacing it. Most rolls spend the next
+        // stance closing on the player and the rest are made as if nobody had hit it at all, so a
+        // chase is a run of these with the wander still in it. Once the two are touching the mob
+        // stops closing, because a mob that walks into the player only gets in the way.
+        const double deltax =
+            Stage::get().get_player().get_position().x() - phobj_.crnt_x();
 
-                break;
+        if (aggro_ && stance_ != Stance::SKILL
+            && (deltax > Constants::MOB_CHASE_RANGE
+                || deltax < -Constants::MOB_CHASE_RANGE)
+            && randomizer_.below(Constants::MOB_CHASE_CHANCE)) {
+            set_stance(Stance::MOVE);
+            flip_ = deltax > 0.0;
+        } else {
+            switch (stance_) {
+                case Stance::HIT:
+                case Stance::STAND:
+                    set_stance(Stance::MOVE);
+                    flip_ = randomizer_.next_bool();
+                    break;
+                case Stance::MOVE:
+                case Stance::JUMP:
+                    if (can_jump_ && phobj_.onground
+                        && randomizer_.below(0.25f)) {
+                        set_stance(Stance::JUMP);
+                    } else {
+                        switch (randomizer_.next_int(3)) {
+                            case 0: set_stance(Stance::STAND); break;
+                            case 1:
+                                set_stance(Stance::MOVE);
+                                flip_ = false;
+                                break;
+                            case 2:
+                                set_stance(Stance::MOVE);
+                                flip_ = true;
+                                break;
+                        }
+                    }
+
+                    break;
+            }
         }
 
         if (stance_ == Stance::MOVE && can_fly_) {
@@ -554,12 +557,6 @@ void Mob::set_control(int8_t mode) {
 }
 
 void Mob::set_aggro(bool aggro) {
-    if (aggro_ && !aggro && !can_fly_) {
-        // Coming off a chase with the edge turn switched off, so put it back before the update loop
-        // sees the flag down and reads it as something the mob has just walked into.
-        phobj_.set_flag(PhysicsObject::Flag::TURN_AT_EDGES);
-    }
-
     aggro_ = aggro;
 }
 

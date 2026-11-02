@@ -122,6 +122,14 @@ constexpr float MOB_FADE_MS = 320.0f;
 constexpr uint16_t MOB_WANDER_MS = 1600;
 constexpr uint16_t MOB_HIT_GRACE_MS = 240;
 
+// An angry mob is not handed a different movement loop; it only gets a say in the one the wander
+// already runs. This is how often its next stance is chosen to close on the player rather than
+// rolled as usual, and the horizontal distance under which it stops bothering to close - a mob's
+// origin is its foot and a snail is forty-odd pixels across, so this is about where the two are
+// already touching and walking on would mean standing on the player.
+constexpr float MOB_CHASE_CHANCE = 0.75f;
+constexpr double MOB_CHASE_RANGE = 40.0;
+
 // A bullet is given this long to reach its target, so a fast shot over a short distance and a slow
 // one over a long distance both land on the same frame (thirty-two updates). Its speed is only the
 // distance divided by that, clamped between these two so that neither a point-blank hit nor a

@@ -221,6 +221,9 @@ private:
     bool can_move_;
     bool can_jump_;
     bool can_fly_;
+    // Read off the mob's own archive, not off what is happening to it: whether the end of the
+    // foothold it is standing on is something it walks over.
+    bool cross_edge_;
     bool can_hit_;
     bool is_boss_;
 
