@@ -200,6 +200,64 @@ void UIMiniMap::remove_cursor() {
     UI::get().clear_tooltip(Tooltip::Parent::MINI_MAP);
 }
 
+bool UIMiniMap::interactive_at(Point<int16_t> cursorpos) const {
+    Point<int16_t> cursor_relative = cursorpos - position_;
+
+    if (list_npc_enabled_) {
+        // The panel the list opens to the right of the map, which is what dimension_ grew by. The
+        // scroll bar lives inside it, so the whole of it answers a press of its own.
+        Point<int16_t> base_dims =
+            type_ == Type::MAX ? max_dimensions_ : normal_dimensions_;
+        auto panel = Rectangle<int16_t>(
+            position_ + Point<int16_t>(base_dims.x(), 0), position_ + dimension_);
+
+        if (panel.contains(cursorpos)) {
+            return true;
+        }
+    }
+
+    auto *npcs = Stage::get().get_npcs().get_npcs();
+
+    for (auto npc = npcs->begin(); npc != npcs->end(); npc++) {
+        Point<int16_t> npc_pos =
+            (npc->second->get_position() + center_offset_) / scale_
+            + Point<int16_t>(map_draw_origin_x_, map_draw_origin_y_);
+        Rectangle<int16_t> marker_spot =
+            Rectangle<int16_t>(npc_pos - Point<int16_t>(4, 8), npc_pos);
+
+        if (type_ == Type::MAX) {
+            marker_spot.shift(Point<int16_t>(0, MAX_ADJ_));
+        }
+
+        if (marker_spot.contains(cursor_relative)) {
+            return true;
+        }
+    }
+
+    for (const auto &[sprite_name, sprite_pos] : static_marker_info_) {
+        Rectangle<int16_t> marker_spot =
+            Rectangle<int16_t>(sprite_pos, sprite_pos + 8);
+
+        if (type_ == Type::MAX) {
+            marker_spot.shift(Point<int16_t>(0, MAX_ADJ_));
+        }
+
+        if (marker_spot.contains(cursor_relative)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool UIMiniMap::is_in_drag_range(Point<int16_t> cursorpos) const {
+    uint16_t buttonid;
+
+    return !button_at(cursorpos, buttonid) && !interactive_at(cursorpos)
+           && Rectangle<int16_t>(position_, position_ + drag_area_)
+                  .contains(cursorpos);
+}
+
 Cursor::State UIMiniMap::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     Cursor::State dstate = UIDragElement::send_cursor(clicked, cursorpos);
 
@@ -464,7 +522,7 @@ void UIMiniMap::toggle_buttons() {
 
         set_npclist_active(list_npc_enabled_ && has_npcs);
 
-        drag_area_ = Point<int16_t>(dimension_.x(), 20);
+        drag_area_ = dimension_;
     }
 }
 

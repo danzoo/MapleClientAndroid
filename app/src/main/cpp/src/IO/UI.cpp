@@ -249,6 +249,12 @@ namespace ms {
                           || bound_to(KeyAction::Id::LEFT)
                           || bound_to(KeyAction::Id::RIGHT);
 
+            // Letting a direction go has to reach the character even while a window owns the
+            // keyboard. The player keeps its own record of which directions are held and drives from
+            // it every tick, so a release swallowed by one of the branches below leaves him running
+            // until that key is pressed and released again with nothing on the screen.
+            const bool direction_release = arrows && !pressed;
+
             auto statusbar = UI::get().get_element<UIStatusBar>();
             auto channel = UI::get().get_element<UIChannel>();
             auto worldmap = UI::get().get_element<UIWorldMap>();
@@ -362,7 +368,7 @@ namespace ms {
                 // TODO: (rich) fix
             }
 
-            if (!sent) {
+            if (!sent || direction_release) {
                 state_->send_key(mapping.type, mapping.action, pressed, escape);
             }
         }

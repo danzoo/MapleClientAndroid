@@ -194,7 +194,22 @@ namespace ms {
                                bool escape) {
         if (UIElement *focusedelement = get(focused_)) {
             if (focusedelement->is_active()) {
-                return focusedelement->send_key(action, pressed, escape);
+                focusedelement->send_key(action, pressed, escape);
+
+                // A second window can be holding the keyboard on top of the one that was asked, and
+                // the release still belongs to the character: stopping him is the only thing a
+                // let-go direction key does, and dropping it here leaves him running.
+                const bool direction = action == KeyAction::Id::LEFT
+                                       || action == KeyAction::Id::RIGHT
+                                       || action == KeyAction::Id::UP
+                                       || action == KeyAction::Id::DOWN;
+
+                if (direction && !pressed
+                    && type == KeyType::Id::ACTION) {
+                    Stage::get().send_key(type, action, pressed);
+                }
+
+                return;
             }
 
             // The window that had the focus has gone away on its own rather than being closed, so

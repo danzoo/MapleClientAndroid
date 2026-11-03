@@ -51,6 +51,11 @@ namespace ms {
         // Repeat held actions and forget a controller that went quiet. Call once per frame.
         void update();
 
+        // Whether the player is being steered right now - some direction is still being held down,
+        // by either stick, the d-pad or a bound slot. Touch is not counted, since a press the reader
+        // makes on the screen is the thing this gets asked about.
+        bool movement_held() const;
+
     private:
         // How far the stick has to be travelled to do anything, and how long a held input keeps
         // asking for its press, all live in Constants.h next to the rest of the tunables.

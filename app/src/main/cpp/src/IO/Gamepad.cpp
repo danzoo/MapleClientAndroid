@@ -312,6 +312,16 @@ namespace ms {
         stick_dirs_[1] = NONE;
     }
 
+    bool Gamepad::movement_held() const {
+        for (const Direction direction : kDirections) {
+            if (directions_[direction].holders != 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     void Gamepad::update() {
         if (!connected_) {
             return;

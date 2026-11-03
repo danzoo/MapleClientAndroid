@@ -22,6 +22,7 @@
 #include "../Constants.h"
 #include "../Template/EnumMap.h"
 #include "../../Net/Packets/MessagingPackets.h"
+#include "Gamepad.h"
 #include "Window.h"
 #include "glfm.h"
 
@@ -488,6 +489,14 @@ namespace ms {
     }
 
     void NativeChat::raise() {
+        // Not while a direction is still being held. A press that gets through to the game under a
+        // window that is out of the way is one the reader makes with the free hand while the other
+        // is still on the stick, and a window that comes up in the middle of a run takes the
+        // keyboard away from the game and leaves the reader steering nothing.
+        if (Gamepad::get().movement_held()) {
+            return;
+        }
+
         apply_floating(true);
     }
 

@@ -359,11 +359,16 @@ constexpr uint16_t GAMEPAD_CONNECT_TIMEOUT_MS = 5000;
 // a drink or waits out a cast, so this number is the packet rate of a key held down. A skill whose
 // conditions fail asks again on this clock but only reports on the chat bar's own, so the hold ends
 // up retrying often and reading as one line at a time.
+//
+// Held at half what it was because a dropped cast otherwise waits this long before it is asked for
+// again, which reads as the second skill of a hold lagging behind the first. What is left of that
+// gap is the skill's own animation: attacking_ is only let go when the animation ends, so this clock
+// cannot bring the next cast on sooner than the last one finishes.
 constexpr uint16_t GAMEPAD_WALK_REPEAT_MS = 100;
 constexpr uint16_t GAMEPAD_ATTACK_REPEAT_MS = 250;
 constexpr uint16_t GAMEPAD_PICKUP_REPEAT_MS = 100;
 constexpr uint16_t GAMEPAD_TALK_REPEAT_MS = 500;
-constexpr uint16_t GAMEPAD_USE_REPEAT_MS = 300;
+constexpr uint16_t GAMEPAD_USE_REPEAT_MS = 150;
 
 // The message window handed to android.widget, measured in interface units like every other window
 // so that its lettering lands at the height the interface is drawn at. The row height and the line

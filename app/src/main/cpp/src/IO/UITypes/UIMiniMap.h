@@ -44,6 +44,13 @@ protected:
     Button::State button_pressed(uint16_t buttonid) override;
 
 private:
+    // Every part of the window is a handle to move it by, except the parts that already answer a
+    // press of their own.
+    bool is_in_drag_range(Point<int16_t> cursorpos) const override;
+
+    // Whether a press at this spot belongs to something the minimap itself operates: the list it
+    // opens to the right (slider included) and the markers drawn on the map.
+    bool interactive_at(Point<int16_t> cursorpos) const;
     static constexpr int16_t CENTER_START_X_ = 64;
     static constexpr int16_t BTN_MIN_Y_ = 4;
     static constexpr int16_t ML_MR_Y_ = 17;
