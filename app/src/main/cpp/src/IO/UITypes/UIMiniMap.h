@@ -53,6 +53,7 @@ private:
     static constexpr int16_t LISTNPC_ITEM_WIDTH_ = 140;
     static constexpr int16_t LISTNPC_TEXT_WIDTH_ = 114;
     static constexpr Point<int16_t> WINDOW_UL_POS_ = Point<int16_t>(0, 0);
+    static constexpr int16_t NW_NE_FOOT_ = 10;
 
     void update_buttons();
 

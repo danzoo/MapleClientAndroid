@@ -565,8 +565,8 @@ void UIMiniMap::update_canvas() {
     // * 2). 27 = height of inner frame drawn on up and down borders
     normal_sprites_.emplace_back(
         MiddleCenter,
-        DrawArgument(Point<int16_t>(7, 10),
-                     Point<int16_t>(c_stretch + 114, m_stretch + 27)));
+        DrawArgument(Point<int16_t>(7, 10 + NW_NE_FOOT_),
+                     Point<int16_t>(c_stretch + 114, m_stretch + 27 - NW_NE_FOOT_)));
 
     if (has_map_) {
         normal_sprites_.emplace_back(
@@ -576,12 +576,12 @@ void UIMiniMap::update_canvas() {
     }
 
     normal_sprites_.emplace_back(Normal[MiddleLeft],
-                                 DrawArgument(Point<int16_t>(0, ML_MR_Y_),
-                                              Point<int16_t>(0, m_stretch)));
+                                 DrawArgument(Point<int16_t>(0, ML_MR_Y_ + NW_NE_FOOT_),
+                                              Point<int16_t>(0, m_stretch - NW_NE_FOOT_)));
     normal_sprites_.emplace_back(
         Normal[MiddleRight],
-        DrawArgument(Point<int16_t>(middle_right_x_, ML_MR_Y_),
-                     Point<int16_t>(0, m_stretch)));
+        DrawArgument(Point<int16_t>(middle_right_x_, ML_MR_Y_ + NW_NE_FOOT_),
+                     Point<int16_t>(0, m_stretch - NW_NE_FOOT_)));
     normal_sprites_.emplace_back(
         Normal[UpCenter],
         DrawArgument(Point<int16_t>(CENTER_START_X_, 0) + WINDOW_UL_POS_,
@@ -604,8 +604,8 @@ void UIMiniMap::update_canvas() {
     // Max sprites queue
     max_sprites_.emplace_back(
         MiddleCenter,
-        DrawArgument(Point<int16_t>(7, 50),
-                     Point<int16_t>(c_stretch + 114, m_stretch + 27)));
+        DrawArgument(Point<int16_t>(7, 50 + NW_NE_FOOT_),
+                     Point<int16_t>(c_stretch + 114, m_stretch + 27 - NW_NE_FOOT_)));
 
     if (has_map_) {
         max_sprites_.emplace_back(
@@ -616,12 +616,12 @@ void UIMiniMap::update_canvas() {
 
     max_sprites_.emplace_back(
         Max[MiddleLeft],
-        DrawArgument(Point<int16_t>(0, ML_MR_Y_ + MAX_ADJ_),
-                     Point<int16_t>(0, m_stretch)));
+        DrawArgument(Point<int16_t>(0, ML_MR_Y_ + MAX_ADJ_ + NW_NE_FOOT_),
+                     Point<int16_t>(0, m_stretch - NW_NE_FOOT_)));
     max_sprites_.emplace_back(
         Max[MiddleRight],
-        DrawArgument(Point<int16_t>(middle_right_x_, ML_MR_Y_ + MAX_ADJ_),
-                     Point<int16_t>(0, m_stretch)));
+        DrawArgument(Point<int16_t>(middle_right_x_, ML_MR_Y_ + MAX_ADJ_ + NW_NE_FOOT_),
+                     Point<int16_t>(0, m_stretch - NW_NE_FOOT_)));
     max_sprites_.emplace_back(
         Max[UpCenter],
         DrawArgument(Point<int16_t>(CENTER_START_X_, 0) + WINDOW_UL_POS_,
