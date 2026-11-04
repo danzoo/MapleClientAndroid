@@ -109,8 +109,6 @@ public:
         return false;
     }
 
-    virtual void remove_cursor();
-
     virtual Cursor::State send_cursor(bool clicked, Point<int16_t> cursorpos);
 
     virtual void send_scroll(double yoffset) {}

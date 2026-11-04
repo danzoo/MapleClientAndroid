@@ -45,8 +45,6 @@ public:
 
     void draw(Point<int16_t> position) const;
 
-    void remove_cursor();
-
     Cursor::State send_cursor(Point<int16_t> cursor, bool pressed);
 
     void send_scroll(double yoffset);

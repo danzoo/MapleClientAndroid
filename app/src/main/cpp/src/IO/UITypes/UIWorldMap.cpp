@@ -97,19 +97,8 @@ void UIWorldMap::draw(float alpha) const {
 
     base_img_.draw(position_ + base_position_);
 
-    if (!link_images_.empty()) {
-        for (const auto &[btnid, button] : buttons_) {
-            if (button.get()) {
-                if (btnid >= Buttons::BT_LINK0
-                    && button->get_state() == Button::State::MOUSEOVER) {
-                    if (link_images_.find(btnid) != link_images_.end()) {
-                        link_images_.at(btnid).draw(position_ + base_position_);
-                        break;
-                    }
-                }
-            }
-        }
-    }
+    // The region labels of a world used to appear only while the pointer stood on one; with the
+    // pointer gone there is nothing to stand on them, and a tap goes straight into that world.
 
     if (show_path_img_) {
         path_img_.draw(position_ + base_position_);
@@ -218,21 +207,18 @@ Button::State UIWorldMap::button_pressed(uint16_t buttonid) {
     return Button::State::NORMAL;
 }
 
-void UIWorldMap::remove_cursor() {
-    UIDragElement::remove_cursor();
-
-    UI::get().clear_tooltip(Tooltip::Parent::WORLD_MAP);
-
-    show_path_img_ = false;
-}
-
 Cursor::State UIWorldMap::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     if (Cursor::State new_state =
             search_text_.send_cursor(cursorpos, clicked)) {
         return new_state;
     }
 
+    if (!clicked) {
+        return UIDragElement::send_cursor(false, cursorpos);
+    }
+
     show_path_img_ = false;
+    bool on_spot = false;
 
     for (auto [path_pos, path_spot] : map_spots_) {
         Point<int16_t> p = path_pos + position_ + base_position_ - 10;
@@ -240,6 +226,8 @@ Cursor::State UIWorldMap::send_cursor(bool clicked, Point<int16_t> cursorpos) {
         Rectangle<int16_t> abs_bounds = Rectangle<int16_t>(p, d);
 
         if (abs_bounds.contains(cursorpos)) {
+            on_spot = true;
+
             path_img_ = path_spot.path;
             show_path_img_ = path_img_.is_valid();
 
@@ -250,6 +238,10 @@ Cursor::State UIWorldMap::send_cursor(bool clicked, Point<int16_t> cursorpos) {
                                path_spot.bolded);
             break;
         }
+    }
+
+    if (!on_spot) {
+        UI::get().clear_tooltip(Tooltip::Parent::WORLD_MAP);
     }
 
     return UIDragElement::send_cursor(clicked, cursorpos);

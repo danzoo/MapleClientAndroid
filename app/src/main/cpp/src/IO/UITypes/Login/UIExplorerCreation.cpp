@@ -461,22 +461,16 @@ Cursor::State UIExplorerCreation::send_cursor(bool clicked,
         Rectangle<int16_t>(backbounds.get_left_top() - TOUCH_PAD,
                            backbounds.get_right_bottom() + TOUCH_PAD);
 
-    if (backbounds.contains(cursorpos)) {
-        if (back_button_->get_state() == Button::State::NORMAL) {
-            Sound(Sound::Name::BUTTON_OVER).play();
-            back_button_->set_state(Button::State::MOUSEOVER);
-        } else if (clicked) {
-            Sound(Sound::Name::BUTTON_CLICK).play();
-            back_button_->set_state(button_pressed(Buttons::BT_BACK));
-
-            return Cursor::State::IDLE;
+    if (backbounds.contains(cursorpos)
+        && back_button_->get_state() != Button::State::DISABLED) {
+        if (!clicked) {
+            return Cursor::State::CAN_CLICK;
         }
 
-        return Cursor::State::CAN_CLICK;
-    }
+        Sound(Sound::Name::BUTTON_CLICK).play();
+        back_button_->set_state(button_pressed(Buttons::BT_BACK));
 
-    if (back_button_->get_state() == Button::State::MOUSEOVER) {
-        back_button_->set_state(Button::State::NORMAL);
+        return Cursor::State::IDLE;
     }
 
     // The field converts the pointer itself, because UI::send_cursor pokes the focused one without

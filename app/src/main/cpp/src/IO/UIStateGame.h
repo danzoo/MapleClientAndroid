@@ -99,10 +99,6 @@ private:
 
     void remove_icon();
 
-    void remove_cursors();
-
-    void remove_cursor(UIElement::Type type);
-
     template<class T, typename... Args>
     void emplace(Args &&... args);
 

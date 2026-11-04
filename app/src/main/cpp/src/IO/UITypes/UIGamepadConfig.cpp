@@ -26,6 +26,7 @@
 #include "../GamepadConfig.h"
 #include "../QuickSlots.h"
 #include "../UI.h"
+#include "../Window.h"
 #include "UINotice.h"
 
 namespace ms {
@@ -134,7 +135,22 @@ namespace ms {
             return dstate;
         }
 
-        if (clicked) {
+        if (clicked && !Window::get().is_hold_press()) {
+            // A tap says what stands in the cell; the cell is picked up by a hold or a drag.
+            GamepadConfig::Slot slot = slot_by_position(cursorpos);
+
+            if (slot < GamepadConfig::Slot::LENGTH) {
+                Keyboard::Mapping mapping = staged_[slot];
+
+                if (mapping.type == KeyType::Id::ITEM) {
+                    show_item(mapping.action);
+                } else if (mapping.type == KeyType::Id::SKILL) {
+                    show_skill(mapping.action);
+                }
+            } else if (tray_by_position(cursorpos) < 0) {
+                clear_tooltip();
+            }
+        } else if (clicked) {
             int16_t tray_slot = tray_by_position(cursorpos);
 
             if (tray_slot >= 0 && !tray_is_bound(tray_slot)) {
@@ -154,20 +170,6 @@ namespace ms {
                     return grab(*icon,
                                 cursorpos - position_ - slot_position(slot));
                 }
-            }
-        } else {
-            GamepadConfig::Slot slot = slot_by_position(cursorpos);
-
-            if (slot < GamepadConfig::Slot::LENGTH) {
-                Keyboard::Mapping mapping = staged_[slot];
-
-                if (mapping.type == KeyType::Id::ITEM) {
-                    show_item(mapping.action);
-                } else if (mapping.type == KeyType::Id::SKILL) {
-                    show_skill(mapping.action);
-                }
-            } else if (tray_by_position(cursorpos) < 0) {
-                clear_tooltip();
             }
         }
 

@@ -24,6 +24,7 @@
 #include "../../Net/Packets/PlayerPackets.h"
 #include "../Components/MapleButton.h"
 #include "../UI.h"
+#include "../Window.h"
 
 namespace ms {
 namespace {
@@ -456,12 +457,6 @@ void UISkillBook::doubleclick(Point<int16_t> cursorpos) {
     }
 }
 
-void UISkillBook::remove_cursor() {
-    UIDragElement::remove_cursor();
-
-    slider_.remove_cursor();
-}
-
 void UISkillBook::send_scroll(double yoffset) {
     if (slider_.isenabled()) {
         slider_.send_scroll(yoffset);
@@ -480,7 +475,9 @@ Cursor::State UISkillBook::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     if (slider_.isenabled()) {
         if (Cursor::State new_state =
                 slider_.send_cursor(cursor_relative, clicked)) {
-            clear_tooltip();
+            if (clicked) {
+                clear_tooltip();
+            }
 
             return new_state;
         }
@@ -492,6 +489,8 @@ Cursor::State UISkillBook::send_cursor(bool clicked, Point<int16_t> cursorpos) {
         position_ + SKILL_OFFSET_ + Point<int16_t>(-1 + ROW_WIDTH_, 0);
 
     if (!grabbing_) {
+        bool on_skill = false;
+
         for (size_t i = 0; i < skills_.size(); i++) {
             Point<int16_t> skill_position = skill_position_l;
 
@@ -504,27 +503,33 @@ Cursor::State UISkillBook::send_cursor(bool clicked, Point<int16_t> cursorpos) {
             bool inrange = bounds.contains(cursorpos - skill_position);
 
             if (inrange) {
-                if (clicked) {
-                    clear_tooltip();
-                    grabbing_ = true;
+                on_skill = true;
 
-                    int32_t skill_id = skills_[i].get_id();
-                    int32_t skill_level = skillbook_.get_level(skill_id);
-
-                    if (skill_level > 0
-                        && !SkillData::get(skill_id).is_passive()) {
-                        skills_[i].get_icon()->start_drag(cursorpos
-                                                          - skill_position);
-                        UI::get().drag_icon(skills_[i].get_icon());
-
-                        return Cursor::State::GRABBING;
-                    }
+                if (!clicked) {
                     return Cursor::State::IDLE;
                 }
-                skills_[i].get_icon()->set_state(
-                    StatefulIcon::State::MOUSEOVER);
-                show_skill(skills_[i].get_id());
 
+                // A tap on a skill shows what it does; only a hold picks the icon up for the
+                // quickslot, same split as the inventory.
+                if (!Window::get().is_hold_press()) {
+                    show_skill(skills_[i].get_id());
+
+                    return Cursor::State::IDLE;
+                }
+
+                clear_tooltip();
+                grabbing_ = true;
+
+                int32_t skill_id = skills_[i].get_id();
+                int32_t skill_level = skillbook_.get_level(skill_id);
+
+                if (skill_level > 0 && !SkillData::get(skill_id).is_passive()) {
+                    skills_[i].get_icon()->start_drag(cursorpos
+                                                      - skill_position);
+                    UI::get().drag_icon(skills_[i].get_icon());
+
+                    return Cursor::State::GRABBING;
+                }
                 return Cursor::State::IDLE;
             }
 
@@ -534,10 +539,9 @@ Cursor::State UISkillBook::send_cursor(bool clicked, Point<int16_t> cursorpos) {
             }
         }
 
-        for (size_t i = 0; i < skills_.size(); i++) {
-            skills_[i].get_icon()->set_state(StatefulIcon::State::NORMAL);
+        if (clicked && !on_skill) {
+            clear_tooltip();
         }
-        clear_tooltip();
     } else {
         grabbing_ = false;
     }

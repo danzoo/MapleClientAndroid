@@ -44,9 +44,9 @@ MapleComboBox::MapleComboBox(Type type,
     textures_[Button::State::PRESSED][1] = src["pressed"][1];
     textures_[Button::State::PRESSED][2] = src["pressed"][2];
 
-    textures_[Button::State::MOUSEOVER][0] = src["mouseOver"][0];
-    textures_[Button::State::MOUSEOVER][1] = src["mouseOver"][1];
-    textures_[Button::State::MOUSEOVER][2] = src["mouseOver"][2];
+    textures_[Button::State::SELECTED][0] = src["mouseOver"][0];
+    textures_[Button::State::SELECTED][1] = src["mouseOver"][1];
+    textures_[Button::State::SELECTED][2] = src["mouseOver"][2];
 
     textures_[Button::State::NORMAL][0] = src["normal"][0];
     textures_[Button::State::NORMAL][1] = src["normal"][1];
@@ -87,8 +87,6 @@ MapleComboBox::MapleComboBox(Type type,
                      options_.size() * HEIGHT - 2,
                      Color::Name::GALLERY,
                      1.0f);
-    current_rect_ =
-        ColorBox(width() - 2, HEIGHT - 2, Color::Name::GRAYOLIVE, 1.0f);
 
     Point<int16_t> option_pos =
         Point<int16_t>(
@@ -102,10 +100,6 @@ MapleComboBox::MapleComboBox(Type type,
                            option_pos.y() + (i * HEIGHT) + 1),
             Point<int16_t>(width() - 2, HEIGHT - 2));
     }
-
-    current_pos_ = 0;
-    current_shown_ = false;
-    last_shown_ = 0;
 
     position_ = pos;
     active_ = true;
@@ -142,11 +136,6 @@ void MapleComboBox::draw(Point<int16_t>) const {
             background_.draw(pos + Point<int16_t>(0, 2));
             rect_.draw(pos + Point<int16_t>(1, 3));
 
-            if (current_shown_) {
-                current_rect_.draw(
-                    DrawArgument(pos.x() + 1, pos.y() + current_pos_ + 3));
-            }
-
             for (size_t i = 0; i < option_text_.size(); i++) {
                 option_text_[i].draw(
                     DrawArgument(pos.x() + 6, pos.y() + (i * HEIGHT) - 4));
@@ -177,40 +166,26 @@ Point<int16_t> MapleComboBox::origin() const {
 
 Cursor::State MapleComboBox::send_cursor(bool clicked,
                                          Point<int16_t> cursorpos) {
-    Cursor::State ret = clicked ? Cursor::State::CLICKING : Cursor::State::IDLE;
-
-    current_shown_ = false;
-    option_text_[last_shown_].change_color(Color::Name::BLACK);
-
+    // The open list used to paint a highlight bar and recolour the label of whichever option the
+    // pointer rested on. There is no pointer to rest, so the list is drawn plain and the option a
+    // press lands on is the one that gets chosen.
     for (auto &[btnid, button] : buttons_) {
-        if (button->is_active()
-            && button->bounds(position_).contains(cursorpos)) {
-            if (button->get_state() == Button::State::NORMAL) {
-                Sound(Sound::Name::BUTTON_OVER).play();
-
-                button->set_state(Button::State::MOUSEOVER);
-                ret = Cursor::State::CAN_CLICK;
-            } else if (button->get_state() == Button::State::MOUSEOVER) {
-                if (clicked) {
-                    Sound(Sound::Name::BUTTON_CLICK).play();
-
-                    button->set_state(button_pressed(btnid));
-
-                    ret = Cursor::State::IDLE;
-                } else {
-                    ret = Cursor::State::CAN_CLICK;
-                    current_pos_ = btnid * HEIGHT;
-                    current_shown_ = true;
-                    last_shown_ = btnid;
-                    option_text_[btnid].change_color(Color::Name::WHITE);
-                }
-            }
-        } else if (button->get_state() == Button::State::MOUSEOVER) {
-            button->set_state(Button::State::NORMAL);
+        if (!button->is_active()
+            || !button->bounds(position_).contains(cursorpos)) {
+            continue;
         }
+
+        if (!clicked) {
+            return Cursor::State::CAN_CLICK;
+        }
+
+        Sound(Sound::Name::BUTTON_CLICK).play();
+        button->set_state(button_pressed(btnid));
+
+        return Cursor::State::IDLE;
     }
 
-    return ret;
+    return clicked ? Cursor::State::CLICKING : Cursor::State::IDLE;
 }
 
 bool MapleComboBox::in_combobox(Point<int16_t> cursorpos) {

@@ -778,7 +778,7 @@ void UIStatusBar::send_key(int32_t keycode, bool pressed, bool escape) {
             for (size_t i = Buttons::BT_MENU_QUEST;
                  i <= Buttons::BT_EVENT_DAILY;
                  i++) {
-                if (buttons_[i]->get_state() == Button::State::MOUSEOVER) {
+                if (buttons_[i]->get_state() == Button::State::SELECTED) {
                     button_pressed(i);
                 }
             }
@@ -828,7 +828,7 @@ void UIStatusBar::send_key(int32_t keycode, bool pressed, bool escape) {
                 }
             }
 
-            buttons_[id]->set_state(Button::State::MOUSEOVER);
+            buttons_[id]->set_state(Button::State::SELECTED);
         }
     }
 }
@@ -930,7 +930,7 @@ void UIStatusBar::toggle_menu() {
     buttons_[Buttons::BT_MENU_UNION]->set_active(menu_active_);
 
     if (menu_active_) {
-        buttons_[Buttons::BT_MENU_QUEST]->set_state(Button::State::MOUSEOVER);
+        buttons_[Buttons::BT_MENU_QUEST]->set_state(Button::State::SELECTED);
 
         Sound(Sound::Name::DLG_NOTICE).play();
     }
@@ -949,7 +949,7 @@ void UIStatusBar::toggle_setting() {
 
     if (setting_active_) {
         buttons_[Buttons::BT_SETTING_CHANNEL]->set_state(
-            Button::State::MOUSEOVER);
+            Button::State::SELECTED);
 
         Sound(Sound::Name::DLG_NOTICE).play();
     }
@@ -967,7 +967,7 @@ void UIStatusBar::toggle_community() {
 
     if (community_active_) {
         buttons_[Buttons::BT_COMMUNITY_FRIENDS]->set_state(
-            Button::State::MOUSEOVER);
+            Button::State::SELECTED);
 
         Sound(Sound::Name::DLG_NOTICE).play();
     }
@@ -986,7 +986,7 @@ void UIStatusBar::toggle_character() {
 
     if (character_active_) {
         buttons_[Buttons::BT_CHARACTER_INFO]->set_state(
-            Button::State::MOUSEOVER);
+            Button::State::SELECTED);
 
         Sound(Sound::Name::DLG_NOTICE).play();
     }
@@ -1002,7 +1002,7 @@ void UIStatusBar::toggle_event() {
 
     if (event_active_) {
         buttons_[Buttons::BT_EVENT_SCHEDULE]->set_state(
-            Button::State::MOUSEOVER);
+            Button::State::SELECTED);
 
         Sound(Sound::Name::DLG_NOTICE).play();
     }

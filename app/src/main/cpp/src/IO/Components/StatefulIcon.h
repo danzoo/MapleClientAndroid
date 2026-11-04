@@ -20,7 +20,10 @@
 namespace ms {
 class StatefulIcon : public Icon {
 public:
-    enum State : uint8_t { NORMAL, DISABLED, MOUSEOVER, LENGTH };
+    // SELECTED is the icon's highlighted look, drawn from the art the archives call mouseOver. It
+    // marks the icon whose preview is currently out -- nothing sets it merely because a finger is
+    // over an icon.
+    enum State : uint8_t { NORMAL, DISABLED, SELECTED, LENGTH };
 
     class Type : public Icon::Type {
     public:
@@ -52,7 +55,7 @@ public:
     StatefulIcon(std::unique_ptr<Type> type,
                  Texture normal_tx,
                  Texture disabled_tx,
-                 Texture mouseover_tx);
+                 Texture selected_tx);
 
     Texture get_texture() const override;
 

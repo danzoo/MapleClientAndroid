@@ -29,7 +29,6 @@ public:
     enum Name {
         /// UI
         BUTTON_CLICK,
-        BUTTON_OVER,
         CHAR_SELECT,
         DLG_NOTICE,
         MENU_DOWN,

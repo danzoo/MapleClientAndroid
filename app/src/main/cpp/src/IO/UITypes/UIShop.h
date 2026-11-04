@@ -33,8 +33,6 @@ public:
 
     void update() override;
 
-    void remove_cursor() override;
-
     Cursor::State send_cursor(bool clicked, Point<int16_t> position) override;
 
     void send_scroll(double yoffset) override;

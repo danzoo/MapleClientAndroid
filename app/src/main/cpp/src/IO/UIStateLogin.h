@@ -85,8 +85,6 @@ public:
     UIElement *get_front(Point<int16_t> pos) override;
 
 private:
-    void remove_cursor(UIElement::Type type);
-
     template<class T, typename... Args>
     void emplace(Args &&... args);
 

@@ -24,6 +24,7 @@
 #include "../../Net/Packets/InventoryPackets.h"
 #include "../Components/MapleButton.h"
 #include "../UI.h"
+#include "../Window.h"
 #include "../UITypes/UIKeyConfig.h"
 #include "UINotice.h"
 
@@ -56,7 +57,6 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
     UIDragElement<PosINV>(),
     inventory_(invent),
     tab_(InventoryType::Id::EQUIP),
-    ignore_tooltip_(false),
     sort_enabled_(false) {
     img::node Item = img::wz::ui["UIWindow2.img"]["Item"];
 
@@ -378,12 +378,9 @@ void UIItemInventory::doubleclick(Point<int16_t> cursorpos) {
             switch (tab_) {
                 case InventoryType::Id::EQUIP:
                     // Double-tapping an equip either wears it or pops a "can't equip" dialog;
-                    // either way the hover preview that led here must go, or it hangs over the
-                    // result (and over the dialog). ignore_tooltip_ also swallows the one hover
-                    // the touch layer sends on release, so the preview can't pop straight back
-                    // when the item stays in its slot (the can't-equip case).
+                    // either way the preview that the first tap raised must go, or it hangs over
+                    // the result (and over the dialog).
                     clear_tooltip();
-                    ignore_tooltip_ = true;
                     if (can_wear_equip(slot)) {
                         fn_equip_item(slot, inventory_.find_equipslot(item_id));
                         Sound(Sound::Name::DRAG_END).play();
@@ -411,8 +408,6 @@ bool UIItemInventory::send_icon(const Icon &icon, Point<int16_t> cursorpos) {
             equip = false;
         }
 
-        ignore_tooltip_ = true;
-
         return icon.drop_on_items(tab_, eqslot, slot, equip);
     }
 
@@ -430,7 +425,9 @@ Cursor::State UIItemInventory::send_cursor(bool pressed,
     Cursor::State dstate = UIDragElement::send_cursor(pressed, cursorpos);
 
     if (dragged_) {
-        clear_tooltip();
+        if (pressed) {
+            clear_tooltip();
+        }
 
         return dstate;
     }
@@ -441,7 +438,9 @@ Cursor::State UIItemInventory::send_cursor(bool pressed,
         Cursor::State sstate = slider_.send_cursor(cursor_relative, pressed);
 
         if (sstate != Cursor::State::IDLE) {
-            clear_tooltip();
+            if (pressed) {
+                clear_tooltip();
+            }
 
             return sstate;
         }
@@ -452,25 +451,28 @@ Cursor::State UIItemInventory::send_cursor(bool pressed,
     bool is_icon = icon && is_visible(slot);
 
     if (is_icon) {
-        if (pressed) {
-            Point<int16_t> slotpos = get_slotpos(slot);
-            icon->start_drag(cursor_relative - slotpos);
-            UI::get().drag_icon(icon);
-
-            clear_tooltip();
-
-            return Cursor::State::GRABBING;
-        }
-        if (!ignore_tooltip_) {
-            show_item(slot);
-
+        if (!pressed) {
             return Cursor::State::CAN_GRAB;
         }
-        ignore_tooltip_ = false;
 
-        return Cursor::State::CAN_GRAB;
+        // A tap previews, a hold picks the icon up. The touch layer tells the two apart with
+        // Window::is_hold_press(), because a press arrives for both.
+        if (!Window::get().is_hold_press()) {
+            show_item(slot);
+
+            return Cursor::State::IDLE;
+        }
+
+        Point<int16_t> slotpos = get_slotpos(slot);
+        icon->start_drag(cursor_relative - slotpos);
+        UI::get().drag_icon(icon);
+
+        return Cursor::State::GRABBING;
     }
-    clear_tooltip();
+
+    if (pressed) {
+        clear_tooltip();
+    }
 
     return UIElement::send_cursor(pressed, cursorpos);
 }
@@ -607,12 +609,6 @@ void UIItemInventory::toggle_active() {
         clear_new();
         clear_tooltip();
     }
-}
-
-void UIItemInventory::remove_cursor() {
-    UIDragElement::remove_cursor();
-
-    slider_.remove_cursor();
 }
 
 void UIItemInventory::show_item(int16_t slot) {

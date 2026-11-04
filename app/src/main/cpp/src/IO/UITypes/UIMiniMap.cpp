@@ -192,14 +192,6 @@ void UIMiniMap::update() {
     UIElement::update();
 }
 
-void UIMiniMap::remove_cursor() {
-    UIDragElement::remove_cursor();
-
-    list_npc_slider_.remove_cursor();
-
-    UI::get().clear_tooltip(Tooltip::Parent::MINI_MAP);
-}
-
 bool UIMiniMap::interactive_at(Point<int16_t> cursorpos) const {
     Point<int16_t> cursor_relative = cursorpos - position_;
 
@@ -295,9 +287,11 @@ Cursor::State UIMiniMap::send_cursor(bool clicked, Point<int16_t> cursorpos) {
 
             if (clicked) {
                 select_npclist(in_list ? list_index : -1);
-            } else if (in_list) {
-                UI::get().show_text(Tooltip::Parent::MINI_MAP,
-                                    list_npc_full_names_[list_index]);
+
+                if (in_list) {
+                    UI::get().show_text(Tooltip::Parent::MINI_MAP,
+                                        list_npc_full_names_[list_index]);
+                }
             }
 
             return Cursor::State::IDLE;
@@ -321,15 +315,17 @@ Cursor::State UIMiniMap::send_cursor(bool clicked, Point<int16_t> cursorpos) {
         if (marker_spot.contains(cursor_relative)) {
             found = true;
 
-            auto *n = static_cast<Npc *>(npc->second.get());
-            std::string name = n->get_name();
-            std::string func = n->get_func();
+            if (clicked) {
+                auto *n = static_cast<Npc *>(npc->second.get());
+                std::string name = n->get_name();
+                std::string func = n->get_func();
 
-            UI::get().show_map(Tooltip::Parent::MINI_MAP,
-                               name,
-                               func,
-                               {},
-                               false);
+                UI::get().show_map(Tooltip::Parent::MINI_MAP,
+                                   name,
+                                   func,
+                                   {},
+                                   false);
+            }
             break;
         }
     }
@@ -353,15 +349,22 @@ Cursor::State UIMiniMap::send_cursor(bool clicked, Point<int16_t> cursorpos) {
                 if (portal_name) {
                     found = true;
 
-                    UI::get().show_map(Tooltip::Parent::MINI_MAP,
-                                       portal_name,
-                                       "",
-                                       portal_tm,
-                                       false);
+                    if (clicked) {
+                        UI::get().show_map(Tooltip::Parent::MINI_MAP,
+                                           portal_name,
+                                           "",
+                                           portal_tm,
+                                           false);
+                    }
                     break;
                 }
             }
         }
+    }
+
+    // A press on the map itself, away from any marker, takes the preview back down.
+    if (clicked && !found) {
+        UI::get().clear_tooltip(Tooltip::Parent::MINI_MAP);
     }
 
     return Cursor::State::IDLE;

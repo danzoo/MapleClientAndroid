@@ -170,14 +170,6 @@ void UIEvent::update() {
     }
 }
 
-void UIEvent::remove_cursor() {
-    UIDragElement::remove_cursor();
-
-    UI::get().clear_tooltip(Tooltip::Parent::EVENT);
-
-    slider_.remove_cursor();
-}
-
 void UIEvent::send_scroll(double yoffset) {
     if (slider_.isenabled()) {
         slider_.send_scroll(yoffset);
@@ -199,8 +191,12 @@ Cursor::State UIEvent::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     int16_t row = row_by_position(yoff);
     int16_t col = col_by_position(xoff);
 
-    if (row > 0 && row < 4 && col > 0 && col < 6) {
-        show_item(row, col);
+    // The preview used to follow the pointer, so this raised on every position pass. Touch has no
+    // position pass between gestures, and a tap is the only deliberate act, so it raises on press.
+    if (clicked) {
+        if (row > 0 && row < 4 && col > 0 && col < 6) {
+            show_item(row, col);
+        }
     }
 
     return UIDragElement::send_cursor(clicked, cursorpos);

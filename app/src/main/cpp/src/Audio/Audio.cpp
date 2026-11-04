@@ -61,7 +61,6 @@ Error Sound::init() {
     img::node uisrc = img::wz::sound["UI.img"];
 
     add_sound(Sound::Name::BUTTON_CLICK, uisrc["BtMouseClick"]);
-    add_sound(Sound::Name::BUTTON_OVER, uisrc["BtMouseOver"]);
     add_sound(Sound::Name::CHAR_SELECT, uisrc["CharSelect"]);
     add_sound(Sound::Name::DLG_NOTICE, uisrc["DlgNotice"]);
     add_sound(Sound::Name::MENU_DOWN, uisrc["MenuDown"]);

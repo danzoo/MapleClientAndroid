@@ -39,8 +39,7 @@ TwoSpriteButton::TwoSpriteButton() : textures_({}, {}) {}
 
 void TwoSpriteButton::draw(Point<int16_t> parentpos) const {
     if (active_) {
-        bool selected = state_ == Button::State::MOUSEOVER
-                        || state_ == Button::State::PRESSED;
+        bool selected = is_highlighted();
 
         if (selected) {
             textures_[selected].draw(spos_ + parentpos);
@@ -51,8 +50,7 @@ void TwoSpriteButton::draw(Point<int16_t> parentpos) const {
 }
 
 Rectangle<int16_t> TwoSpriteButton::bounds(Point<int16_t> parentpos) const {
-    bool selected =
-        state_ == Button::State::MOUSEOVER || state_ == Button::State::PRESSED;
+    bool selected = is_highlighted();
     Point<int16_t> absp;
     Point<int16_t> dim;
 
@@ -68,15 +66,13 @@ Rectangle<int16_t> TwoSpriteButton::bounds(Point<int16_t> parentpos) const {
 }
 
 int16_t TwoSpriteButton::width() const {
-    bool selected =
-        state_ == Button::State::MOUSEOVER || state_ == Button::State::PRESSED;
+    bool selected = is_highlighted();
 
     return textures_[selected].width();
 }
 
 Point<int16_t> TwoSpriteButton::origin() const {
-    bool selected =
-        state_ == Button::State::MOUSEOVER || state_ == Button::State::PRESSED;
+    bool selected = is_highlighted();
 
     return textures_[selected].get_origin();
 }

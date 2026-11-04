@@ -314,7 +314,7 @@ Button::State UILogin::button_pressed(uint16_t id) {
             // next start may be reached by the process being killed rather than by it shutting down.
             Configuration::get().save();
 
-            return Button::State::MOUSEOVER;
+            return Button::State::SELECTED;
         case Buttons::BT_QUIT: Window::get().terminate(); return Button::State::PRESSED;
         default: return Button::State::NORMAL;
     }

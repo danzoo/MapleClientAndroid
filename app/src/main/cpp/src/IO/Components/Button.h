@@ -22,7 +22,11 @@ namespace ms {
 // Base class for different button types.
 class Button {
 public:
-    enum State { NORMAL, DISABLED, MOUSEOVER, PRESSED, IDENTITY, NUM_STATES };
+    // SELECTED keeps the art slot the PC client loaded as mouseOver, but it no longer means hover:
+    // touch has no pointer to hover with, so this is only the latched look of the thing the
+    // interface considers current -- an open menu's highlighted row, the active tab, a checked box.
+    // Nothing sets it just because a finger passed over a button.
+    enum State { NORMAL, DISABLED, SELECTED, PRESSED, IDENTITY, NUM_STATES };
 
     virtual ~Button() = default;
 
@@ -56,6 +60,12 @@ public:
     State get_state() const;
 
     bool is_pressed() const;
+
+    // Whether the button is wearing its highlight art rather than its plain art. TwoSpriteButton
+    // keeps only two textures, so the latched look and the held-down look share the second one.
+    bool is_highlighted() const {
+        return state_ == State::SELECTED || state_ == State::PRESSED;
+    }
 
 protected:
     State state_;

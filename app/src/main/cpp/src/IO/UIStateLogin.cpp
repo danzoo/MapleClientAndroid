@@ -89,7 +89,6 @@ Cursor::State UIStateLogin::send_cursor(Cursor::State cursorstate,
 
     if (auto *focusedelement = get(focused_)) {
         if (focusedelement->is_active()) {
-            remove_cursor(focusedelement->get_type());
             return focusedelement->send_cursor(clicked, cursorpos);
         }
 
@@ -98,7 +97,6 @@ Cursor::State UIStateLogin::send_cursor(Cursor::State cursorstate,
     }
 
     if (auto *front = get_front()) {
-        remove_cursor(front->get_type());
         return front->send_cursor(clicked, cursorpos);
     }
 
@@ -229,15 +227,5 @@ UIElement *UIStateLogin::get_front(Point<int16_t> pos) {
     }
 
     return nullptr;
-}
-
-void UIStateLogin::remove_cursor(UIElement::Type type) {
-    for (auto iter : elements_) {
-        auto &element = iter.second;
-
-        if (element && element->is_active() && element->get_type() != type) {
-            element->remove_cursor();
-        }
-    }
 }
 }  // namespace ms

@@ -23,6 +23,7 @@
 #include "../../Net/Packets/PlayerPackets.h"
 #include "../Components/MapleButton.h"
 #include "../UI.h"
+#include "../Window.h"
 #include "../UITypes/Login/UILoginNotice.h"
 #include "../UITypes/UINotice.h"
 
@@ -1075,7 +1076,24 @@ namespace ms {
             return dstate;
         }
 
-        if (clicked) {
+        if (!clicked) {
+            // Pure hit query: the row reports that an icon here may be carried, which is what lets
+            // the touch layer turn a hold or a swipe over it into a drag.
+            KeyConfig::Key key = key_by_position(cursorpos);
+
+            if (key < KeyConfig::Key::LENGTH
+                && get_staged_mapping(key).type != KeyType::Id::NONE) {
+                return Cursor::State::CAN_DRAG;
+            }
+
+            if (unbound_action_by_position(cursorpos) < KeyAction::Id::LENGTH) {
+                return Cursor::State::CAN_DRAG;
+            }
+
+            return UIElement::send_cursor(false, cursorpos);
+        }
+
+        if (Window::get().is_hold_press()) {
             KeyAction::Id icon_slot = unbound_action_by_position(cursorpos);
 
             if (icon_slot < KeyAction::Id::LENGTH) {
@@ -1099,10 +1117,8 @@ namespace ms {
 
                     if (mapping.type == KeyType::Id::ITEM) {
                         ficon = item_icons_[id].get();
-                        show_item(id);
                     } else if (mapping.type == KeyType::Id::SKILL) {
                         ficon = skill_icons_[id].get();
-                        show_skill(id);
                     } else if (is_action_mapping(mapping)) {
                         KeyAction::Id action =
                                 KeyAction::get_action_by_id(mapping.action);
@@ -1124,20 +1140,16 @@ namespace ms {
                 }
             }
         } else {
+            // A tap on a bound key says what is bound there.
             KeyConfig::Key key = key_by_position(cursorpos);
 
-            if (key < KeyConfig::Key::LENGTH)
-            {
+            if (key < KeyConfig::Key::LENGTH) {
                 Keyboard::Mapping mapping = get_staged_mapping(key);
 
-                if (mapping.type == KeyType::Id::ITEM || mapping.type == KeyType::Id::SKILL)
-                {
-                    int32_t id = mapping.action;
-
-                    if (mapping.type == KeyType::Id::ITEM)
-                        show_item(id);
-                    else
-                        show_skill(id);
+                if (mapping.type == KeyType::Id::ITEM) {
+                    show_item(mapping.action);
+                } else if (mapping.type == KeyType::Id::SKILL) {
+                    show_skill(mapping.action);
                 }
             }
         }

@@ -507,40 +507,26 @@ Cursor::State UICharSelect::send_cursor(bool clicked,
     Cursor::State ret = clicked ? Cursor::State::CLICKING : Cursor::State::IDLE;
 
     uint16_t matched = 0;
-    bool found = button_at(cursorpos, matched);
 
-    for (auto &[btnid, button] : buttons_) {
-        if (found && btnid == matched) {
-            if (button->get_state() == Button::State::NORMAL) {
-                Sound(Sound::Name::BUTTON_OVER).play();
-
-                button->set_state(Button::State::MOUSEOVER);
-                ret = Cursor::State::CAN_CLICK;
-            } else if (button->get_state() == Button::State::MOUSEOVER) {
-                if (clicked) {
-                    Sound(Sound::Name::BUTTON_CLICK).play();
-
-                    button->set_state(button_pressed(btnid));
-
-                    if (tab_active_ && btnid == tab_map_[tab_index_]) {
-                        button->set_state(Button::State::MOUSEOVER);
-                    }
-
-                    ret = Cursor::State::IDLE;
-                } else {
-                    if (!tab_active_ || btnid != tab_map_[tab_index_]) {
-                        ret = Cursor::State::CAN_CLICK;
-                    }
-                }
-            }
-        } else if (button->get_state() == Button::State::MOUSEOVER) {
-            if (!tab_active_ || btnid != tab_map_[tab_index_]) {
-                button->set_state(Button::State::NORMAL);
-            }
-        }
+    if (!button_at(cursorpos, matched)) {
+        return ret;
     }
 
-    return ret;
+    if (!clicked) {
+        return Cursor::State::CAN_CLICK;
+    }
+
+    Sound(Sound::Name::BUTTON_CLICK).play();
+
+    Button::State next_state = button_pressed(matched);
+
+    if (tab_active_ && matched == tab_map_[tab_index_]) {
+        next_state = Button::State::SELECTED;
+    }
+
+    buttons_[matched]->set_state(next_state);
+
+    return Cursor::State::IDLE;
 }
 
 void UICharSelect::send_key(int32_t keycode, bool pressed, bool escape) {
@@ -662,7 +648,7 @@ void UICharSelect::send_key(int32_t keycode, bool pressed, bool escape) {
                     auto state = btn->get_state();
 
                     if (state != Button::State::DISABLED) {
-                        btn->set_state(Button::State::MOUSEOVER);
+                        btn->set_state(Button::State::SELECTED);
                     }
                 }
             }

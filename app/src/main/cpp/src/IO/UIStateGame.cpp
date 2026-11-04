@@ -46,6 +46,39 @@ namespace ms {
         auto fn_enter_cashshop = []<typename... T>(T &&...args) {
             EnterCashShopPacket(std::forward<T>(args)...).dispatch();
         };
+
+        // A preview is raised in the name of the window that owns it, but those owners are
+        // spelled with Tooltip::Parent while hit-testing answers with UIElement::Type. The two
+        // enums number their cases differently, so the owner has to be translated before
+        // anything asks whether cursor and owner still agree; comparing the raw values made
+        // every preview disagree with every window.
+        UIElement::Type tooltip_owner(Tooltip::Parent parent) {
+            switch (parent) {
+                case Tooltip::Parent::EQUIP_INVENTORY:
+                    return UIElement::Type::EQUIP_INVENTORY;
+                case Tooltip::Parent::ITEM_INVENTORY:
+                    return UIElement::Type::ITEM_INVENTORY;
+                case Tooltip::Parent::SKILL_BOOK:
+                    return UIElement::Type::SKILL_BOOK;
+                case Tooltip::Parent::SHOP:
+                    return UIElement::Type::SHOP;
+                case Tooltip::Parent::EVENT:
+                    return UIElement::Type::EVENT;
+                case Tooltip::Parent::TEXT:
+                    return UIElement::Type::QUIT;
+                case Tooltip::Parent::KEY_CONFIG:
+                    return UIElement::Type::KEY_CONFIG;
+                case Tooltip::Parent::GAMEPAD_CONFIG:
+                    return UIElement::Type::GAMEPAD_CONFIG;
+                case Tooltip::Parent::WORLD_MAP:
+                    return UIElement::Type::WORLD_MAP;
+                case Tooltip::Parent::MINI_MAP:
+                    return UIElement::Type::MINI_MAP;
+                case Tooltip::Parent::NONE:
+                default:
+                    return UIElement::Type::NONE;
+            }
+        }
     }  // namespace
 
     UIStateGame::UIStateGame(uint8_t channel_count) :
@@ -151,26 +184,6 @@ namespace ms {
     void UIStateGame::remove_icon() {
         dragged_icon_->get().reset();
         dragged_icon_ = {};
-    }
-
-    void UIStateGame::remove_cursors() {
-        for (auto type: element_order_) {
-            auto *element = elements_[type].get();
-
-            if (element && element->is_active()) {
-                element->remove_cursor();
-            }
-        }
-    }
-
-    void UIStateGame::remove_cursor(UIElement::Type t) {
-        for (auto type: element_order_) {
-            auto *element = elements_[type].get();
-
-            if (element && element->is_active() && element->get_type() != t) {
-                element->remove_cursor();
-            }
-        }
     }
 
     void UIStateGame::doubleclick(Point<int16_t> pos) {
@@ -383,7 +396,6 @@ namespace ms {
                     // through - has no business being the first thing the eye comes to.
                     NativeChat::sink();
                 }
-                remove_cursor(focusedelement->get_type());
                 return focusedelement->send_cursor(clicked, cursorpos);
             }
 
@@ -402,16 +414,14 @@ namespace ms {
             // A tooltip must vanish as soon as the cursor is no longer over the window that
             // owns it — including when the cursor moves out to empty map space (front == null),
             // which is how a tap on the map dismisses an item preview.
-            if (tooltip_parent_ != UIElement::Type::NONE
-                && front_type != tooltip_parent_) {
+            if (tooltip_parent_ != Tooltip::Parent::NONE
+                && front_type != tooltip_owner(tooltip_parent_)) {
                 clear_tooltip(tooltip_parent_);
             }
 
             if (front) {
-                remove_cursor(front_type);
                 return front->send_cursor(clicked, cursorpos);
             }
-            remove_cursors();
             return Stage::get().send_cursor(clicked, cursorpos);
         }
         if (!dragged_) {
@@ -623,8 +633,6 @@ namespace ms {
                         Sound(Sound::Name::MENU_DOWN).play();
                     }
 
-                    element->remove_cursor();
-
                     if (dragged_icon_) {
                         if (element->get_type()
                             == icon_map_[dragged_icon_->get().get_type()]) {
@@ -653,7 +661,7 @@ namespace ms {
             focused_ = UIElement::Type::NONE;
         }
 
-        if (type == tooltip_parent_) {
+        if (type == tooltip_owner(tooltip_parent_)) {
             clear_tooltip(tooltip_parent_);
         }
 

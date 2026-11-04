@@ -38,8 +38,6 @@ public:
 
     void toggle_active() override;
 
-    void remove_cursor() override;
-
     Cursor::State send_cursor(bool pressed, Point<int16_t> position) override;
 
     void send_scroll(double yoffset) override;
@@ -185,7 +183,6 @@ private:
     InventoryType::Id tab_;
     InventoryType::Id new_tab_;
     int16_t new_slot_;
-    bool ignore_tooltip_;
 
     bool sort_enabled_;
     bool full_enabled_;

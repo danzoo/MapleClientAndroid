@@ -51,8 +51,6 @@ Cursor::State UIStateCashShop::send_cursor(Cursor::State cursorstate,
 
     if (auto *focusedelement = get(focused_)) {
         if (focusedelement->is_active()) {
-            remove_cursor(focusedelement->get_type());
-
             return focusedelement->send_cursor(clicked, cursorpos);
         }
         focused_ = UIElement::NONE;
@@ -60,8 +58,6 @@ Cursor::State UIStateCashShop::send_cursor(Cursor::State cursorstate,
         return cursorstate;
     }
     if (auto *front = get_front()) {
-        remove_cursor(front->get_type());
-
         return front->send_cursor(clicked, cursorpos);
     }
     return Cursor::State::IDLE;
@@ -106,16 +102,6 @@ UIElement *UIStateCashShop::get_front() {
     }
 
     return front;
-}
-
-void UIStateCashShop::remove_cursor(UIElement::Type type) {
-    for (auto iter : elements_) {
-        auto &element = iter.second;
-
-        if (element && element->is_active() && element->get_type() != type) {
-            element->remove_cursor();
-        }
-    }
 }
 
 template<class T, typename... Args>

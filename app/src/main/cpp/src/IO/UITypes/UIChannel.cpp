@@ -199,38 +199,25 @@ Cursor::State UIChannel::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     Cursor::State ret = clicked ? Cursor::State::CLICKING : Cursor::State::IDLE;
 
     for (size_t i = 0; i < channel_count_ + Buttons::CH; i++) {
-        if (buttons_[i]->is_active()
-            && buttons_[i]->bounds(position_).contains(cursorpos)) {
-            if (buttons_[i]->get_state() == Button::State::NORMAL) {
-                if (i < Buttons::CH) {
-                    Sound(Sound::Name::BUTTON_OVER).play();
-
-                    buttons_[i]->set_state(Button::State::MOUSEOVER);
-                    ret = Cursor::State::CAN_CLICK;
-                } else {
-                    buttons_[i]->set_state(Button::State::MOUSEOVER);
-                    ret = Cursor::State::IDLE;
-                }
-            } else if (buttons_[i]->get_state() == Button::State::MOUSEOVER) {
-                if (clicked) {
-                    if (i < Buttons::CH) {
-                        Sound(Sound::Name::BUTTON_CLICK).play();
-                    }
-
-                    buttons_[i]->set_state(button_pressed(i));
-
-                    ret = Cursor::State::IDLE;
-                } else {
-                    if (i < Buttons::CH) {
-                        ret = Cursor::State::CAN_CLICK;
-                    } else {
-                        ret = Cursor::State::IDLE;
-                    }
-                }
-            }
-        } else if (buttons_[i]->get_state() == Button::State::MOUSEOVER) {
-            buttons_[i]->set_state(Button::State::NORMAL);
+        if (!buttons_[i]->is_active()
+            || !buttons_[i]->bounds(position_).contains(cursorpos)) {
+            continue;
         }
+
+        if (!clicked) {
+            if (i < Buttons::CH) {
+                ret = Cursor::State::CAN_CLICK;
+            }
+
+            continue;
+        }
+
+        if (i < Buttons::CH) {
+            Sound(Sound::Name::BUTTON_CLICK).play();
+        }
+
+        buttons_[i]->set_state(button_pressed(i));
+        ret = Cursor::State::IDLE;
     }
 
     return ret;

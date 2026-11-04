@@ -22,6 +22,7 @@
 #include "../../Net/Packets/InventoryPackets.h"
 #include "../Components/MapleButton.h"
 #include "../UI.h"
+#include "../Window.h"
 #include "../UITypes/UIItemInventory.h"
 
 namespace ms {
@@ -235,7 +236,9 @@ Cursor::State UIEquipInventory::send_cursor(bool pressed,
     Cursor::State dstate = UIDragElement::send_cursor(pressed, cursorpos);
 
     if (dragged_) {
-        clear_tooltip();
+        if (pressed) {
+            clear_tooltip();
+        }
 
         return dstate;
     }
@@ -243,20 +246,29 @@ Cursor::State UIEquipInventory::send_cursor(bool pressed,
     EquipSlot::Id slot = slot_by_position(cursorpos);
 
     if (auto *icon = icons_[slot].get()) {
-        if (pressed) {
-            icon->start_drag(cursorpos - position_ - icon_positions_[slot]);
-
-            UI::get().drag_icon(icon);
-
-            clear_tooltip();
-
-            return Cursor::State::GRABBING;
+        if (!pressed) {
+            return Cursor::State::CAN_GRAB;
         }
-        show_equip(slot);
 
-        return Cursor::State::CAN_GRAB;
+        // A tap previews the worn piece; only a hold takes it off and starts carrying it.
+        if (!Window::get().is_hold_press()) {
+            show_equip(slot);
+
+            return Cursor::State::IDLE;
+        }
+
+        icon->start_drag(cursorpos - position_ - icon_positions_[slot]);
+
+        UI::get().drag_icon(icon);
+
+        clear_tooltip();
+
+        return Cursor::State::GRABBING;
     }
-    clear_tooltip();
+
+    if (pressed) {
+        clear_tooltip();
+    }
 
     return Cursor::State::IDLE;
 }

@@ -36,8 +36,6 @@ public:
 
     void toggle_active() override;
 
-    void remove_cursor() override;
-
     Cursor::State send_cursor(bool clicked, Point<int16_t> cursor_pos) override;
 
     void send_key(int32_t keycode, bool pressed, bool escape) override;

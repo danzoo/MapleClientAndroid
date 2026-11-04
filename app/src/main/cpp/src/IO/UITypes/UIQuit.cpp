@@ -162,12 +162,15 @@ Cursor::State UIQuit::send_cursor(bool clicked, Point<int16_t> cursorpos) {
 
     auto bounds = Rectangle<int16_t>(lt, rb);
 
-    if (bounds.contains(cursorpos)) {
-        UI::get().show_text(Tooltip::Parent::TEXT,
-                            std::to_string(hours_) + "Hour "
-                                + std::to_string(minutes_) + "Minute");
-    } else {
-        UI::get().clear_tooltip(Tooltip::Parent::TEXT);
+    // The play time read-out used to appear under the pointer; a tap on the strip shows it now.
+    if (clicked) {
+        if (bounds.contains(cursorpos)) {
+            UI::get().show_text(Tooltip::Parent::TEXT,
+                                std::to_string(hours_) + "Hour "
+                                    + std::to_string(minutes_) + "Minute");
+        } else {
+            UI::get().clear_tooltip(Tooltip::Parent::TEXT);
+        }
     }
 
     return UIElement::send_cursor(clicked, cursorpos);

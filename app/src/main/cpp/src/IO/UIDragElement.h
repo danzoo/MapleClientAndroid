@@ -24,16 +24,6 @@ template<typename T>
 // Base class for UI Windows which can be moved with the mouse cursor.
 class UIDragElement : public UIElement {
 public:
-    void remove_cursor() override {
-        UIElement::remove_cursor();
-
-        if (dragged_) {
-            dragged_ = false;
-
-            Setting<T>::get().save(Constants::to_view_space(position_));
-        }
-    }
-
     bool in_drag_range(Point<int16_t> cursorpos) const override {
         return is_in_drag_range(cursorpos);
     }

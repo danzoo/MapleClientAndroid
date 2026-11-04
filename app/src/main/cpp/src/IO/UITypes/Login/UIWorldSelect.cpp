@@ -218,37 +218,23 @@ Cursor::State UIWorldSelect::send_cursor(bool clicked,
     Cursor::State ret = clicked ? Cursor::State::CLICKING : Cursor::State::IDLE;
 
     for (auto &[btnid, button] : buttons_) {
-        if (button->is_active()
-            && button->bounds(position_).contains(cursorpos)) {
-            if (button->get_state() == Button::State::NORMAL) {
-                Sound(Sound::Name::BUTTON_OVER).play();
-
-                button->set_state(Button::State::MOUSEOVER);
-                ret = Cursor::State::CAN_CLICK;
-            } else if (button->get_state() == Button::State::PRESSED) {
-                if (clicked) {
-                    Sound(Sound::Name::BUTTON_CLICK).play();
-
-                    button->set_state(button_pressed(btnid));
-
-                    ret = Cursor::State::IDLE;
-                } else {
-                    ret = Cursor::State::CAN_CLICK;
-                }
-            } else if (button->get_state() == Button::State::MOUSEOVER) {
-                if (clicked) {
-                    Sound(Sound::Name::BUTTON_CLICK).play();
-
-                    button->set_state(button_pressed(btnid));
-
-                    ret = Cursor::State::IDLE;
-                } else {
-                    ret = Cursor::State::CAN_CLICK;
-                }
-            }
-        } else if (button->get_state() == Button::State::MOUSEOVER) {
-            button->set_state(Button::State::NORMAL);
+        if (!button->is_active()
+            || button->get_state() == Button::State::DISABLED
+            || !button->bounds(position_).contains(cursorpos)) {
+            continue;
         }
+
+        if (!clicked) {
+            ret = Cursor::State::CAN_CLICK;
+
+            continue;
+        }
+
+        Sound(Sound::Name::BUTTON_CLICK).play();
+
+        button->set_state(button_pressed(btnid));
+
+        ret = Cursor::State::IDLE;
     }
 
     return ret;

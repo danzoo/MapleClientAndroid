@@ -19,14 +19,14 @@ namespace ms {
 StatefulIcon::StatefulIcon(std::unique_ptr<Type> type,
                            Texture ntx,
                            Texture dtx,
-                           Texture motx) :
+                           Texture sel_tx) :
     Icon(std::move(type), ntx, -1) {
     ntx.shift({ 0, 32 });
     dtx.shift({ 0, 32 });
-    motx.shift({ 0, 32 });
+    sel_tx.shift({ 0, 32 });
     textures_[State::NORMAL] = ntx;
     textures_[State::DISABLED] = dtx;
-    textures_[State::MOUSEOVER] = motx;
+    textures_[State::SELECTED] = sel_tx;
 
     state_ = State::NORMAL;
 }

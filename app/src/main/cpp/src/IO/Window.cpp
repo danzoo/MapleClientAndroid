@@ -110,8 +110,6 @@ namespace ms {
 
     std::chrono::time_point<std::chrono::steady_clock> click_start_time;
 
-    bool sent = false;
-
     // Touch is the only pointer this device has. A single finger swiping vertically scrolls the
     // window under it, row by row; a finger put down on a window's title strip drags that window
     // right away; holding still for ~500 ms picks up an icon or grabs the slider thumb, exactly as
@@ -165,9 +163,9 @@ namespace ms {
     bool mousekey_callback(GLFMDisplay *display, int touch, GLFMTouchPhase phase,
                            double x, double y) {
         // While a scroll gesture owns the finger the cursor is frozen where scrolling began.
-        // send_scroll routes to the window under the cursor, so freezing it keeps that same
-        // window scrolling no matter where the finger drifts, and skipping the hover pass stops
-        // new item previews from popping up as the finger travels over them.
+        // send_scroll routes to the window under the cursor, so freezing it keeps that same window
+        // scrolling no matter where the finger drifts; the frozen position is also what the release
+        // reads, so the gesture cannot end as a tap somewhere else on the page.
         if (touch_mode != 2) {
             Window::get().move_cursor(x, y);
         }
@@ -270,8 +268,8 @@ namespace ms {
                     touch_mode = 2;  // a vertical swipe scrolls
                     scroll_last_y = y;
                     scroll_acc = 0.0;
-                    // Committing to a scroll dismisses any item preview the hover pass raised on
-                    // the way here; the cursor is frozen from now on, so none reappears.
+                    // Committing to a scroll takes down whatever preview was up: the finger is no
+                    // longer tapping the thing it started on, and the cursor stays where it is.
                     UI::get().clear_tooltip();
                     break;
                 }
@@ -285,7 +283,9 @@ namespace ms {
                     break;
                 }
 
-                UI::get().send_cursor(false);  // still hovering: keeps the item tooltip alive
+                // Still undecided: only move the cursor, so the hit query the release will press
+                // against stays under the finger.
+                UI::get().send_cursor(false);
                 break;
             }
             case GLFMTouchPhaseEnded:
@@ -374,19 +374,10 @@ namespace ms {
                         break;
                     }
 
-                    // A quick tap. Over an item it must only preview it — the tooltip is already
-                    // up from the hover phase — so skip the press that would grab the icon. Over
-                    // anything else (a button, say) the tap is a normal click.
-                    Cursor::State st = UI::get().get_cursor_state();
-                    bool over_item = st == Cursor::State::CAN_GRAB
-                                     || st == Cursor::State::GRABBING;
-
-                    if (!over_item) {
-                        if (sent)
-                            sent = false;
-                        else
-                            UI::get().send_cursor(true);
-                    }
+                    // A quick tap is a press of its own. The window it lands on decides what a
+                    // press that was not a hold means: an item takes it as "show me this", a
+                    // button as the click.
+                    UI::get().send_cursor(true);
                 }
 
                 auto diff_ms = ContinuousTimer::get().stop(start) / 1000;

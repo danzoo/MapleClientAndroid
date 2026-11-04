@@ -85,16 +85,6 @@ bool UIElement::is_in_range(Point<int16_t> cursorpos) const {
     return bounds.contains(cursorpos);
 }
 
-void UIElement::remove_cursor() {
-    for (auto &btit : buttons_) {
-        auto *button = btit.second.get();
-
-        if (button->get_state() == Button::State::MOUSEOVER) {
-            button->set_state(Button::State::NORMAL);
-        }
-    }
-}
-
 bool UIElement::button_at(Point<int16_t> pos, uint16_t &buttonid) const {
     constexpr int16_t TOUCH_PAD = 6;
 
@@ -104,6 +94,13 @@ bool UIElement::button_at(Point<int16_t> pos, uint16_t &buttonid) const {
     for (auto &btit : buttons_) {
         auto *button = btit.second.get();
         if (!button->is_active()) {
+            continue;
+        }
+
+        // A greyed button never armed under the old hover protocol, so a press could not fire it
+        // either. With the arming step gone, the match has to refuse it here or taps would start
+        // reaching disabled buttons.
+        if (button->get_state() == Button::State::DISABLED) {
             continue;
         }
 
@@ -128,37 +125,30 @@ bool UIElement::button_at(Point<int16_t> pos, uint16_t &buttonid) const {
     return exact || buttonid != 0;
 }
 
+// Two different things used to share this call, because the PC client drove its interface with a
+// pointer that was always somewhere: the pass with down == false painted the hover look and armed
+// the button, and only a press that arrived on an already-armed button fired it. On touch the
+// finger is nowhere between gestures, so the arming left every button wearing its hover art, and
+// a window reopened under the last touch position re-raised whatever had been hovered there.
+//
+// The two roles are separate now. down == false is a pure hit query: it only reports what the
+// touch layer needs to know about the spot (can this be clicked, grabbed, dragged, scrolled). It
+// changes no button state, plays no sound and raises no preview. down == true is the whole action:
+// a press that lands on a button fires it, because the hit query just said which one it is.
 Cursor::State UIElement::send_cursor(bool down, Point<int16_t> pos) {
-    Cursor::State ret = down ? Cursor::State::CLICKING : Cursor::State::IDLE;
-
     uint16_t matched = 0;
-    bool found = button_at(pos, matched);
 
-    for (auto &btit : buttons_) {
-        auto *button = btit.second.get();
-
-        if (found && btit.first == matched) {
-            if (button->get_state() == Button::State::NORMAL) {
-                Sound(Sound::Name::BUTTON_OVER).play();
-
-                button->set_state(Button::State::MOUSEOVER);
-                ret = Cursor::State::CAN_CLICK;
-            } else if (button->get_state() == Button::State::MOUSEOVER) {
-                if (down) {
-                    Sound(Sound::Name::BUTTON_CLICK).play();
-
-                    button->set_state(button_pressed(btit.first));
-
-                    ret = Cursor::State::IDLE;
-                } else {
-                    ret = Cursor::State::CAN_CLICK;
-                }
-            }
-        } else if (button->get_state() == Button::State::MOUSEOVER) {
-            button->set_state(Button::State::NORMAL);
-        }
+    if (!button_at(pos, matched)) {
+        return down ? Cursor::State::CLICKING : Cursor::State::IDLE;
     }
 
-    return ret;
+    if (!down) {
+        return Cursor::State::CAN_CLICK;
+    }
+
+    Sound(Sound::Name::BUTTON_CLICK).play();
+    buttons_[matched]->set_state(button_pressed(matched));
+
+    return Cursor::State::IDLE;
 }
 }  // namespace ms

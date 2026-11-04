@@ -86,13 +86,9 @@ private:
     Text selected_;
     ColorBox background_;
     ColorBox rect_;
-    ColorBox current_rect_;
     uint16_t rwidth_;
     static constexpr uint16_t HEIGHT = 16;
     std::map<uint16_t, std::unique_ptr<Button>> buttons_;
-    uint16_t current_pos_;
-    bool current_shown_;
-    uint16_t last_shown_;
     uint16_t selected_index_;
     Point<int16_t> selected_adj_;
     Point<int16_t> parent_pos_;

@@ -147,14 +147,6 @@ void Slider::draw(Point<int16_t> position) const {
     }
 }
 
-void Slider::remove_cursor() {
-    scrolling_ = false;
-
-    thumb_.set_state(Button::State::NORMAL);
-    next_.set_state(Button::State::NORMAL);
-    prev_.set_state(Button::State::NORMAL);
-}
-
 Point<int16_t> Slider::getthumbpos() const {
     int16_t y = row_ < row_max_
                     ? vertical_.first() + row_ * row_height_ + button_height_
@@ -230,8 +222,6 @@ Cursor::State Slider::send_cursor(Point<int16_t> cursor, bool pressed) {
             return Cursor::State::VSCROLL_IDLE;
         }
 
-        prev_.set_state(Button::State::MOUSEOVER);
-
         return Cursor::State::VSCROLL;
     }
 
@@ -248,8 +238,6 @@ Cursor::State Slider::send_cursor(Point<int16_t> cursor, bool pressed) {
 
             return Cursor::State::VSCROLL_IDLE;
         }
-
-        next_.set_state(Button::State::MOUSEOVER);
 
         return Cursor::State::VSCROLL;
     }

@@ -28,7 +28,7 @@ namespace ms {
     }
 
     textures_[Button::State::PRESSED] = src["pressed"]["0"];
-    textures_[Button::State::MOUSEOVER] = src["mouseOver"]["0"];
+    textures_[Button::State::SELECTED] = src["mouseOver"]["0"];
     textures_[Button::State::DISABLED] = src["disabled"]["0"];
 
     active_ = true;

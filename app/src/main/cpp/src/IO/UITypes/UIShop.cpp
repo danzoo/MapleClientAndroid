@@ -232,13 +232,6 @@ Button::State UIShop::button_pressed(uint16_t buttonid) {
     return Button::State::PRESSED;
 }
 
-void UIShop::remove_cursor() {
-    UIDragElement::remove_cursor();
-
-    buy_slider_.remove_cursor();
-    sell_slider_.remove_cursor();
-}
-
 Cursor::State UIShop::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     Point<int16_t> cursoroffset = cursorpos - position_;
     last_cursor_pos_ = cursoroffset;
@@ -247,7 +240,9 @@ Cursor::State UIShop::send_cursor(bool clicked, Point<int16_t> cursorpos) {
         Cursor::State bstate = buy_slider_.send_cursor(cursoroffset, clicked);
 
         if (bstate != Cursor::State::IDLE) {
-            clear_tooltip();
+            if (clicked) {
+                clear_tooltip();
+            }
 
             return bstate;
         }
@@ -257,80 +252,64 @@ Cursor::State UIShop::send_cursor(bool clicked, Point<int16_t> cursorpos) {
         Cursor::State sstate = sell_slider_.send_cursor(cursoroffset, clicked);
 
         if (sstate != Cursor::State::IDLE) {
-            clear_tooltip();
+            if (clicked) {
+                clear_tooltip();
+            }
 
             return sstate;
         }
     }
 
-    int16_t xoff = cursoroffset.x();
-    int16_t yoff = cursoroffset.y();
-    int16_t slot = slot_by_position(yoff);
-
-    if (slot >= 0 && slot <= 8) {
-        if (xoff >= buy_x_ && xoff <= buy_width_) {
-            show_item(slot, true);
-        } else if (xoff >= sell_x_ && xoff <= sell_x_ + sell_width_) {
-            show_item(slot, false);
-        } else {
-            clear_tooltip();
-        }
-    } else {
-        clear_tooltip();
-    }
-
     Cursor::State ret = clicked ? Cursor::State::CLICKING : Cursor::State::IDLE;
+    bool matched = false;
 
     for (size_t i = 0; i < Buttons::NUM_BUTTONS; i++) {
-        if (buttons_[i]->is_active()
-            && buttons_[i]->bounds(position_).contains(cursorpos)) {
-            if (buttons_[i]->get_state() == Button::State::NORMAL) {
-                if (i >= Buttons::BUY_ITEM && i <= Buttons::EXIT) {
-                    Sound(Sound::Name::BUTTON_OVER).play();
+        if (!buttons_[i]->is_active()
+            || buttons_[i]->get_state() == Button::State::DISABLED
+            || !buttons_[i]->bounds(position_).contains(cursorpos)) {
+            continue;
+        }
 
-                    buttons_[i]->set_state(Button::State::MOUSEOVER);
-                    ret = Cursor::State::CAN_CLICK;
-                } else {
-                    buttons_[i]->set_state(Button::State::MOUSEOVER);
-                    ret = Cursor::State::IDLE;
-                }
-            } else if (buttons_[i]->get_state() == Button::State::MOUSEOVER) {
-                if (clicked) {
-                    if (i >= Buttons::BUY_ITEM && i <= Buttons::CASH) {
-                        if (i >= Buttons::OVERALL && i <= Buttons::CASH) {
-                            Sound(Sound::Name::TAB).play();
-                        } else {
-                            if (i != Buttons::CHECKBOX) {
-                                Sound(Sound::Name::BUTTON_CLICK).play();
-                            }
-                        }
+        matched = true;
 
-                        buttons_[i]->set_state(button_pressed(i));
-
-                        ret = Cursor::State::IDLE;
-                    } else {
-                        buttons_[i]->set_state(button_pressed(i));
-
-                        ret = Cursor::State::IDLE;
-                    }
-                } else {
-                    if (i >= Buttons::BUY_ITEM && i <= Buttons::EXIT) {
-                        ret = Cursor::State::CAN_CLICK;
-                    } else {
-                        ret = Cursor::State::IDLE;
-                    }
-                }
-            } else if (buttons_[i]->get_state() == Button::State::PRESSED) {
-                if (clicked) {
-                    if (i >= Buttons::OVERALL && i <= Buttons::CASH) {
-                        Sound(Sound::Name::TAB).play();
-
-                        ret = Cursor::State::IDLE;
-                    }
-                }
+        if (!clicked) {
+            if (i >= Buttons::BUY_ITEM && i <= Buttons::EXIT) {
+                ret = Cursor::State::CAN_CLICK;
             }
-        } else if (buttons_[i]->get_state() == Button::State::MOUSEOVER) {
-            buttons_[i]->set_state(Button::State::NORMAL);
+
+            continue;
+        }
+
+        if (i >= Buttons::BUY_ITEM && i <= Buttons::CASH) {
+            if (i >= Buttons::OVERALL && i <= Buttons::CASH) {
+                Sound(Sound::Name::TAB).play();
+            } else if (i != Buttons::CHECKBOX) {
+                Sound(Sound::Name::BUTTON_CLICK).play();
+            }
+        }
+
+        buttons_[i]->set_state(button_pressed(i));
+
+        ret = Cursor::State::IDLE;
+    }
+
+    // The list preview used to follow the pointer; it is a tap now. It runs after the buttons so
+    // that the row button, which clears the preview to select a fresh row, does not undo it.
+    if (clicked) {
+        int16_t xoff = cursoroffset.x();
+        int16_t yoff = cursoroffset.y();
+        int16_t slot = slot_by_position(yoff);
+
+        if (slot >= 0 && slot <= 8) {
+            if (xoff >= buy_x_ && xoff <= buy_width_) {
+                show_item(slot, true);
+            } else if (xoff >= sell_x_ && xoff <= sell_x_ + sell_width_) {
+                show_item(slot, false);
+            } else if (!matched) {
+                clear_tooltip();
+            }
+        } else if (!matched) {
+            clear_tooltip();
         }
     }
 
