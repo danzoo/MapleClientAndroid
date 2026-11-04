@@ -97,7 +97,7 @@ void UINotice::draw(bool textfield) const {
 
         question_.draw(position_ + Point<int16_t>(13, 13));
     } else {
-        int16_t pos_y = height_ >= 32 ? height_ : 32;
+        const int16_t pos_y = band_height();
 
         center_.draw(DrawArgument(start, Point<int16_t>(0, pos_y)));
         start.shift_y(pos_y);
@@ -116,17 +116,25 @@ void UINotice::draw(bool textfield) const {
     bottombox_.draw(start);
 }
 
-int16_t UINotice::box2offset(bool textfield) const {
-    int16_t offset = top_.height() + centerbox_.height() + box_.height()
-                     + height_ - (textfield ? 0 : 16);
+int16_t UINotice::band_height() const {
+    return height_ >= 32 ? height_ : 32;
+}
 
-    if (type_ == NoticeType::OK) {
-        if (height_ < 34) {
-            offset += 15;
-        }
+int16_t UINotice::box2offset(bool textfield) const {
+    if (!textfield) {
+        // The white band draw() actually produces is the last four rows of
+        // centerbox_, all of box_, and the first two rows of bottombox_; the
+        // rest of those three pieces is blue. The button goes in the middle of
+        // that band, so its offset has to be measured from the band's own top
+        // and height rather than from the pieces' nominal edges.
+        const int16_t white_top =
+            top_.height() + band_height() + centerbox_.height() - 4;
+        const int16_t white_height = 4 + box_.height() + 2;
+
+        return white_top + (white_height - 16) / 2;
     }
 
-    return offset;
+    return top_.height() + centerbox_.height() + box_.height() + height_;
 }
 
 UIYesNo::UIYesNo(std::string message,

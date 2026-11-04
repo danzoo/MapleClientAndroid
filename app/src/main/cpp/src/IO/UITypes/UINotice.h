@@ -36,6 +36,8 @@ protected:
 
     void draw(bool textfield) const;
 
+    int16_t band_height() const;
+
     int16_t box2offset(bool textfield) const;
 
 private:
