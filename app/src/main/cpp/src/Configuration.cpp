@@ -66,7 +66,6 @@ Configuration::Configuration() {
     settings.emplace<GamepadBindings>();
     settings.emplace<PosOPTIONMENU>();
     settings.emplace<PosCHARINFO>();
-    settings.emplace<MiniMapType>();
     settings.emplace<MiniMapSimpleMode>();
     settings.emplace<MiniMapDefaultHelpers>();
 

@@ -232,11 +232,9 @@ void Stage::check_portals() {
 
         player_.respawn(startpos, map_info_.is_underwater());
     } else if (warpinfo.valid) {
+        // Which map this lands on is the server's to answer, so nothing here records the door's own
+        // target: a door the server won't open leaves the character on the map it is actually on.
         fn_change_map(false, -1, warpinfo.name, false);
-
-        CharStats &stats = Stage::get().get_player().get_stats();
-
-        stats.set_mapid(warpinfo.mapid);
 
         Sound(Sound::Name::PORTAL).play();
     }

@@ -72,6 +72,10 @@ void SetFieldHandler::change_map(InPacket &recv, int32_t) const {
     int32_t mapid = recv.read_int();
     int8_t portalid = recv.read_byte();
 
+    // This is the map the server put the character on, so it is where the stats learn it; a channel
+    // switch afterwards loads from here.
+    Stage::get().get_player().get_stats().set_mapid(mapid);
+
     transition(mapid, portalid);
 }
 

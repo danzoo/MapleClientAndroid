@@ -172,6 +172,11 @@ void ServerMessageHandler::handle(InPacket &recv) const {
         NativeChat::send_line("[Notice] " + message,
                               NativeChat::LineType::BLUE,
                               NativeChat::NOTICE);
+    } else if (type == 8) {
+        // A notice this project defines for itself: the server's way of saying a thing the player
+        // just tried didn't work, in the same red the interface uses for a skill that fell through.
+        NativeChat::send_line(message, NativeChat::LineType::RED,
+                              NativeChat::BATTLE);
     } else if (type == 7) {
         recv.read_int();  // npcid
     }

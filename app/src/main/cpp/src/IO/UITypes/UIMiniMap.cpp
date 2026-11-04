@@ -34,8 +34,10 @@ UIMiniMap::UIMiniMap(const CharStats &stats) :
     list_npc_offset_ = 0;
     selected_ = -1;
 
-    type_ = Setting<MiniMapType>::get().load();
-    user_type_ = type_;
+    // The map a session opens on is the expanded one; update() still narrows a
+    // map that carries no miniMap canvas at all.
+    type_ = Type::MAX;
+    user_type_ = Type::MAX;
     simple_mode_ = Setting<MiniMapSimpleMode>::get().load();
 
     std::string node = simple_mode_ ? "MiniMapSimpleMode" : "MiniMap";
