@@ -475,9 +475,7 @@ Cursor::State UISkillBook::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     if (slider_.isenabled()) {
         if (Cursor::State new_state =
                 slider_.send_cursor(cursor_relative, clicked)) {
-            if (clicked) {
-                clear_tooltip();
-            }
+            clear_tooltip();
 
             return new_state;
         }
@@ -539,7 +537,10 @@ Cursor::State UISkillBook::send_cursor(bool clicked, Point<int16_t> cursorpos) {
             }
         }
 
-        if (clicked && !on_skill) {
+        // A preview is drawn at the cursor, so the hit query is already the frame in which it is
+        // wrong: waiting for the press to dismiss it shows it once at the place the finger came
+        // down. Emptying the cell under the cursor takes it down on the way in.
+        if (!on_skill) {
             clear_tooltip();
         }
     } else {

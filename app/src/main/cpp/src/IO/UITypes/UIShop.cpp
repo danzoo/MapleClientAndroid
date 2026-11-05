@@ -240,9 +240,7 @@ Cursor::State UIShop::send_cursor(bool clicked, Point<int16_t> cursorpos) {
         Cursor::State bstate = buy_slider_.send_cursor(cursoroffset, clicked);
 
         if (bstate != Cursor::State::IDLE) {
-            if (clicked) {
-                clear_tooltip();
-            }
+            clear_tooltip();
 
             return bstate;
         }
@@ -252,9 +250,7 @@ Cursor::State UIShop::send_cursor(bool clicked, Point<int16_t> cursorpos) {
         Cursor::State sstate = sell_slider_.send_cursor(cursoroffset, clicked);
 
         if (sstate != Cursor::State::IDLE) {
-            if (clicked) {
-                clear_tooltip();
-            }
+            clear_tooltip();
 
             return sstate;
         }
@@ -294,23 +290,20 @@ Cursor::State UIShop::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     }
 
     // The list preview used to follow the pointer; it is a tap now. It runs after the buttons so
-    // that the row button, which clears the preview to select a fresh row, does not undo it.
-    if (clicked) {
-        int16_t xoff = cursoroffset.x();
-        int16_t yoff = cursoroffset.y();
-        int16_t slot = slot_by_position(yoff);
+    // that the row button, which clears the preview to select a fresh row, does not undo it. The
+    // preview goes down on the hit query too, because it is drawn at the cursor -- waiting for the
+    // press would show it once at wherever the finger came down. See UISkillBook::send_cursor.
+    int16_t xoff = cursoroffset.x();
+    int16_t yoff = cursoroffset.y();
+    int16_t slot = slot_by_position(yoff);
+    bool on_row = slot >= 0 && slot <= 8;
+    bool on_buy = on_row && xoff >= buy_x_ && xoff <= buy_width_;
+    bool on_sell = on_row && xoff >= sell_x_ && xoff <= sell_x_ + sell_width_;
 
-        if (slot >= 0 && slot <= 8) {
-            if (xoff >= buy_x_ && xoff <= buy_width_) {
-                show_item(slot, true);
-            } else if (xoff >= sell_x_ && xoff <= sell_x_ + sell_width_) {
-                show_item(slot, false);
-            } else if (!matched) {
-                clear_tooltip();
-            }
-        } else if (!matched) {
-            clear_tooltip();
-        }
+    if (clicked && (on_buy || on_sell)) {
+        show_item(slot, on_buy);
+    } else if (!matched && !on_buy && !on_sell) {
+        clear_tooltip();
     }
 
     return ret;

@@ -17,6 +17,7 @@
 
 #include "../Configuration.h"
 #include "../Constants.h"
+#include "UI.h"
 #include "UIElement.h"
 
 namespace ms {
@@ -38,6 +39,10 @@ public:
             if (is_in_drag_range(cursorpos)) {
                 cursor_offset_ = cursorpos - position_;
                 dragged_ = true;
+                // A preview says what stands under the cursor in this window. The moment the window
+                // itself is being carried, the cell it described is no longer there, so the picture
+                // goes with the first motion rather than outliving the drag.
+                UI::get().clear_tooltip();
 
                 return UIElement::send_cursor(clicked, cursorpos);
             }

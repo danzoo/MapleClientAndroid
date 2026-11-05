@@ -236,10 +236,6 @@ Cursor::State UIEquipInventory::send_cursor(bool pressed,
     Cursor::State dstate = UIDragElement::send_cursor(pressed, cursorpos);
 
     if (dragged_) {
-        if (pressed) {
-            clear_tooltip();
-        }
-
         return dstate;
     }
 
@@ -266,9 +262,9 @@ Cursor::State UIEquipInventory::send_cursor(bool pressed,
         return Cursor::State::GRABBING;
     }
 
-    if (pressed) {
-        clear_tooltip();
-    }
+    // Nothing worn under the cursor: the preview of the piece that was there is already wrong,
+    // because it is drawn at the cursor. See UISkillBook::send_cursor.
+    clear_tooltip();
 
     return Cursor::State::IDLE;
 }

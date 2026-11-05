@@ -425,10 +425,6 @@ Cursor::State UIItemInventory::send_cursor(bool pressed,
     Cursor::State dstate = UIDragElement::send_cursor(pressed, cursorpos);
 
     if (dragged_) {
-        if (pressed) {
-            clear_tooltip();
-        }
-
         return dstate;
     }
 
@@ -438,9 +434,7 @@ Cursor::State UIItemInventory::send_cursor(bool pressed,
         Cursor::State sstate = slider_.send_cursor(cursor_relative, pressed);
 
         if (sstate != Cursor::State::IDLE) {
-            if (pressed) {
-                clear_tooltip();
-            }
+            clear_tooltip();
 
             return sstate;
         }
@@ -470,9 +464,9 @@ Cursor::State UIItemInventory::send_cursor(bool pressed,
         return Cursor::State::GRABBING;
     }
 
-    if (pressed) {
-        clear_tooltip();
-    }
+    // Same rule as the skill book: the preview is drawn at the cursor, so it has to go the moment
+    // the cursor is no longer over an item, not only when the finger presses again.
+    clear_tooltip();
 
     return UIElement::send_cursor(pressed, cursorpos);
 }
