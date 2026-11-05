@@ -70,18 +70,15 @@ namespace ms {
         buttons_[Buttons::CLOSE] = std::make_unique<MapleButton>(
                 BtClose3,
                 Point<int16_t>(dimension_.x() - 18, 3));
+        // These four are the keyboard editor's own buttons -- same art, same canvas origins -- so
+        // their positions come out of the pictures rather than the code, exactly like UIKeyConfig.
         buttons_[Buttons::DEFAULT] =
-                std::make_unique<MapleButton>(buttons["Default"],
-                                              Point<int16_t>(20, 460));
+                std::make_unique<MapleButton>(buttons["Default"]);
         buttons_[Buttons::DELETE] =
-                std::make_unique<MapleButton>(buttons["Delete"],
-                                              Point<int16_t>(83, 460));
-        buttons_[Buttons::OK] = std::make_unique<MapleButton>(buttons["OK"],
-                                                              Point<int16_t>(536,
-                                                                            460));
+                std::make_unique<MapleButton>(buttons["Delete"]);
+        buttons_[Buttons::OK] = std::make_unique<MapleButton>(buttons["OK"]);
         buttons_[Buttons::CANCEL] =
-                std::make_unique<MapleButton>(buttons["Cancel"],
-                                              Point<int16_t>(582, 460));
+                std::make_unique<MapleButton>(buttons["Cancel"]);
 
         drag_area_ = dimension_;
 
@@ -135,53 +132,55 @@ namespace ms {
             return dstate;
         }
 
-        if (clicked && !Window::get().is_hold_press()) {
-            // A tap says what stands in the cell; the cell is picked up by a hold or a drag.
-            GamepadConfig::Slot slot = slot_by_position(cursorpos);
-
-            if (slot < GamepadConfig::Slot::LENGTH) {
-                Keyboard::Mapping mapping = staged_[slot];
-
-                if (mapping.type == KeyType::Id::ITEM) {
-                    show_item(mapping.action);
-                } else if (mapping.type == KeyType::Id::SKILL) {
-                    show_skill(mapping.action);
-                }
-            } else if (tray_by_position(cursorpos) < 0) {
-                clear_tooltip();
+        if (!clicked) {
+            // Pure hit query: a cell whose icon may be carried says so, which is what lets the touch
+            // layer turn a hold or a swipe over it into a drag.
+            if (can_drag(cursorpos)) {
+                return Cursor::State::CAN_DRAG;
             }
-        } else if (clicked) {
-            int16_t tray_slot = tray_by_position(cursorpos);
 
-            if (tray_slot >= 0 && !tray_is_bound(tray_slot)) {
+            return UIElement::send_cursor(false, cursorpos);
+        }
+
+        // A press either carries the cell's icon off or reads the cell, and which one it is comes
+        // from what stands there.
+        GamepadConfig::Slot slot = slot_by_position(cursorpos);
+        int16_t tray_slot = tray_by_position(cursorpos);
+
+        if (tray_slot >= 0) {
+            if (!tray_is_bound(tray_slot)) {
                 grabbed_ = GamepadConfig::Slot::LENGTH;
                 Point<int16_t> offset = cursorpos - position_
                                         - tray_position(tray_slot);
 
                 return grab(*tray_[tray_slot].icon, offset);
             }
+        } else if (slot < GamepadConfig::Slot::LENGTH) {
+            Keyboard::Mapping mapping = staged_[slot];
+            // An item or a skill has a card behind it, so a light tap reads it and only a held press
+            // carries it off. A bare function has nothing to describe, so its tap picks it up -- the
+            // way both were worked before the pointer went away.
+            bool card = (mapping.type == KeyType::Id::ITEM
+                         || mapping.type == KeyType::Id::SKILL)
+                        && !Window::get().is_hold_press();
 
-            GamepadConfig::Slot slot = slot_by_position(cursorpos);
-
-            if (slot < GamepadConfig::Slot::LENGTH) {
-                if (Icon *icon = slot_icons_[slot].get()) {
-                    grabbed_ = slot;
-
-                    return grab(*icon,
-                                cursorpos - position_ - slot_position(slot));
+            if (card) {
+                if (mapping.type == KeyType::Id::ITEM) {
+                    show_item(mapping.action);
+                } else {
+                    show_skill(mapping.action);
                 }
+            } else if (Icon *icon = slot_icons_[slot].get()) {
+                grabbed_ = slot;
+
+                return grab(*icon,
+                            cursorpos - position_ - slot_position(slot));
             }
+        } else if (!Window::get().is_hold_press()) {
+            clear_tooltip();
         }
 
-        Cursor::State ret = UIElement::send_cursor(clicked, cursorpos);
-
-        // Telling the touch layer that this icon can be picked up is what lets a drag that never
-        // paused start as a grab.
-        if (!clicked && ret == Cursor::State::IDLE && can_drag(cursorpos)) {
-            ret = Cursor::State::CAN_DRAG;
-        }
-
-        return ret;
+        return UIElement::send_cursor(true, cursorpos);
     }
 
     bool UIGamepadConfig::send_icon(const Icon &icon, Point<int16_t> cursorpos) {
@@ -201,16 +200,18 @@ namespace ms {
         if (binding) {
             GamepadConfig::Slot slot = slot_by_position(cursorpos);
 
-            if (slot < GamepadConfig::Slot::LENGTH && slot != grabbed_) {
-                unstage(grabbed_);
-                stage(slot, *binding);
+            if (slot < GamepadConfig::Slot::LENGTH) {
+                if (slot != grabbed_) {
+                    unstage(grabbed_);
+                    stage(slot, *binding);
+                }
             }
-        }
-
-        // Dropping back onto the tray is how a binding is taken off a controller input without
-        // replacing it with another one.
-        if (tray_by_position(cursorpos) >= 0) {
-            unstage(grabbed_);
+            // Let go anywhere else -- the tray, the plate, the buttons -- and the input gives the
+            // binding back. The quick-slot bar is the one other target, and UIStateGame::drop_icon
+            // hands the drop to that bar before this window ever sees it.
+            else {
+                unstage(grabbed_);
+            }
         }
 
         grabbed_ = GamepadConfig::Slot::LENGTH;
@@ -311,14 +312,28 @@ namespace ms {
     }
 
     void UIGamepadConfig::reset() {
+        dirty_ = false;
+
         for (uint8_t slot = 0; slot < GamepadConfig::Slot::LENGTH; ++slot) {
             auto input = static_cast<GamepadConfig::Slot>(slot);
 
-            staged_[input] = GamepadConfig::get().mapping(input);
-            slot_icons_[input] = make_icon(staged_[input], input);
-        }
+            Keyboard::Mapping mapping = GamepadConfig::get().mapping(input);
 
-        dirty_ = false;
+            // A binding can name a function this window no longer hands out -- the set shrank when
+            // the English-lettered actions were taken off the sheet. An input like that would draw
+            // nothing and could not be dragged clear, so it is emptied here and left as a change
+            // waiting for the usual save, which is what deletes the row on the server.
+            if (mapping.type != KeyType::Id::NONE
+                && mapping.type != KeyType::Id::ITEM
+                && mapping.type != KeyType::Id::SKILL
+                && !action_texture(KeyAction::get_action_by_id(mapping.action))) {
+                mapping = {};
+                dirty_ = true;
+            }
+
+            staged_[input] = mapping;
+            slot_icons_[input] = make_icon(mapping, input);
+        }
     }
 
     void UIGamepadConfig::stage(GamepadConfig::Slot slot,

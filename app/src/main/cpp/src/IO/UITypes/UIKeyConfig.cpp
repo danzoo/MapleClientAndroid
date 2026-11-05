@@ -1093,64 +1093,64 @@ namespace ms {
             return UIElement::send_cursor(false, cursorpos);
         }
 
-        if (Window::get().is_hold_press()) {
-            KeyAction::Id icon_slot = unbound_action_by_position(cursorpos);
+        // A press either carries the icon off or reads the cell, and which one it is comes from what
+        // stands there: an item or a skill has a card behind it, a bare function has nothing to
+        // describe, so a light tap on one picks it up the way it did before the pointer went away.
+        KeyConfig::Key key_slot = key_by_position(cursorpos);
+        Keyboard::Mapping mapping = key_slot < KeyConfig::Key::LENGTH
+                                    ? get_staged_mapping(key_slot)
+                                    : Keyboard::Mapping();
+        bool card = (mapping.type == KeyType::Id::ITEM
+                     || mapping.type == KeyType::Id::SKILL)
+                    && !Window::get().is_hold_press();
 
-            if (icon_slot < KeyAction::Id::LENGTH) {
-                if (auto *icon = action_icons_[icon_slot].get()) {
-                    icon->start_drag(cursorpos - position_
-                                     - unbound_actions_pos_[icon_slot]);
-                    UI::get().drag_icon(icon);
-
-                    return Cursor::State::GRABBING;
-                }
+        if (card) {
+            if (mapping.type == KeyType::Id::ITEM) {
+                show_item(mapping.action);
+            } else {
+                show_skill(mapping.action);
             }
 
-            KeyConfig::Key key_slot = key_by_position(cursorpos);
+            return UIElement::send_cursor(clicked, cursorpos);
+        }
 
-            if (key_slot < KeyConfig::Key::LENGTH) {
-                Keyboard::Mapping mapping = get_staged_mapping(key_slot);
+        KeyAction::Id icon_slot = unbound_action_by_position(cursorpos);
 
-                if (mapping.type != KeyType::Id::NONE) {
-                    int32_t id = mapping.action;
-                    Icon *ficon = nullptr;
+        if (icon_slot < KeyAction::Id::LENGTH) {
+            if (auto *icon = action_icons_[icon_slot].get()) {
+                icon->start_drag(cursorpos - position_
+                                 - unbound_actions_pos_[icon_slot]);
+                UI::get().drag_icon(icon);
 
-                    if (mapping.type == KeyType::Id::ITEM) {
-                        ficon = item_icons_[id].get();
-                    } else if (mapping.type == KeyType::Id::SKILL) {
-                        ficon = skill_icons_[id].get();
-                    } else if (is_action_mapping(mapping)) {
-                        KeyAction::Id action =
-                                KeyAction::get_action_by_id(mapping.action);
-                        if (action < KeyAction::Id::LENGTH)
-                            ficon = action_icons_[action].get();
-                    } else {
-                        std::cout << "Invalid icon type for key mapping: ("
-                                  << mapping.type << ", " << mapping.action << ")"
-                                  << std::endl;
-                    }
-
-                    if (ficon) {
-                        clear_tooltip();
-                        ficon->start_drag(cursorpos - position_
-                                          - keys_pos_[key_slot]);
-                        UI::get().drag_icon(ficon);
-                        return Cursor::State::GRABBING;
-                    }
-                }
+                return Cursor::State::GRABBING;
             }
-        } else {
-            // A tap on a bound key says what is bound there.
-            KeyConfig::Key key = key_by_position(cursorpos);
+        }
 
-            if (key < KeyConfig::Key::LENGTH) {
-                Keyboard::Mapping mapping = get_staged_mapping(key);
+        if (key_slot < KeyConfig::Key::LENGTH && mapping.type != KeyType::Id::NONE) {
+            int32_t id = mapping.action;
+            Icon *ficon = nullptr;
 
-                if (mapping.type == KeyType::Id::ITEM) {
-                    show_item(mapping.action);
-                } else if (mapping.type == KeyType::Id::SKILL) {
-                    show_skill(mapping.action);
-                }
+            if (mapping.type == KeyType::Id::ITEM) {
+                ficon = item_icons_[id].get();
+            } else if (mapping.type == KeyType::Id::SKILL) {
+                ficon = skill_icons_[id].get();
+            } else if (is_action_mapping(mapping)) {
+                KeyAction::Id action =
+                        KeyAction::get_action_by_id(mapping.action);
+                if (action < KeyAction::Id::LENGTH)
+                    ficon = action_icons_[action].get();
+            } else {
+                std::cout << "Invalid icon type for key mapping: ("
+                          << mapping.type << ", " << mapping.action << ")"
+                          << std::endl;
+            }
+
+            if (ficon) {
+                clear_tooltip();
+                ficon->start_drag(cursorpos - position_ - keys_pos_[key_slot]);
+                UI::get().drag_icon(ficon);
+
+                return Cursor::State::GRABBING;
             }
         }
 

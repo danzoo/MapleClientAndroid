@@ -29,10 +29,19 @@
 namespace ms {
     namespace {
         // The functions offered for binding, and what each is drawn with. One icon of this list is
-        // what a binding tray hands out; a function whose lettering was drawn in Chinese for this
-        // client is named in the controller sheet and takes its glyph from there, and every other
-        // one takes the keyboard editor's art, copied into the same sheet under its index there.
+        // what a binding tray hands out. Everything left here is lettered in Chinese: the words
+        // drawn for this client are named in the controller sheet and take their glyph from there,
+        // and the seven faces are the keyboard editor's smiley art under their own indices. The
+        // English-lettered actions the keyboard editor also offers were dropped from this window,
+        // so they are no longer something a controller input can be bound to.
         const std::vector<QuickSlots::Function> kTray = {
+            {KeyAction::Id::FACE1, nullptr, 100},
+            {KeyAction::Id::FACE2, nullptr, 101},
+            {KeyAction::Id::FACE3, nullptr, 102},
+            {KeyAction::Id::FACE4, nullptr, 103},
+            {KeyAction::Id::FACE5, nullptr, 104},
+            {KeyAction::Id::FACE6, nullptr, 105},
+            {KeyAction::Id::FACE7, nullptr, 106},
             {KeyAction::Id::EQUIPMENT, "equipment", 0},
             {KeyAction::Id::ITEMS, "items", 1},
             {KeyAction::Id::STATS, "stats", 2},
@@ -54,26 +63,11 @@ namespace ms {
             {KeyAction::Id::GUILD_CHAT, "guildchat", 18},
             {KeyAction::Id::PARTY, "party", 19},
             {KeyAction::Id::NOTIFIER, "notifier", 20},
-            {KeyAction::Id::MAPLE_NEWS, nullptr, 21},
             {KeyAction::Id::CASHSHOP, "cashshop", 22},
             {KeyAction::Id::ALLIANCE_CHAT, "alliancechat", 23},
-            {KeyAction::Id::MANAGE_LEGION, nullptr, 25},
             {KeyAction::Id::MEDALS, "medals", 26},
             {KeyAction::Id::BOSS_PARTY, "bossparty", 27},
             {KeyAction::Id::PROFESSION, "profession", 29},
-            {KeyAction::Id::ITEM_POT, nullptr, 30},
-            {KeyAction::Id::EVENT, nullptr, 31},
-            {KeyAction::Id::SILENT_CRUSADE, nullptr, 33},
-            {KeyAction::Id::BATTLE_ANALYSIS, nullptr, 35},
-            {KeyAction::Id::GUIDE, nullptr, 39},
-            {KeyAction::Id::ENHANCE_EQUIP, nullptr, 41},
-            {KeyAction::Id::MONSTER_COLLECTION, nullptr, 42},
-            {KeyAction::Id::SOUL_WEAPON, nullptr, 43},
-            {KeyAction::Id::CHAR_INFO, nullptr, 44},
-            {KeyAction::Id::CHANGE_CHANNEL, nullptr, 45},
-            {KeyAction::Id::MAIN_MENU, nullptr, 46},
-            {KeyAction::Id::PICTURE_MODE, nullptr, 47},
-            {KeyAction::Id::MAPLE_ACHIEVEMENT, nullptr, 48},
             {KeyAction::Id::PICKUP, "pickup", 49},
             {KeyAction::Id::SIT, "sit", 50},
             {KeyAction::Id::ATTACK, "attack", 51},
@@ -83,14 +77,6 @@ namespace ms {
             {KeyAction::Id::RIGHT, "right", -1},
             {KeyAction::Id::UP, "up", -1},
             {KeyAction::Id::DOWN, "down", -1},
-            {KeyAction::Id::FACE1, nullptr, 100},
-            {KeyAction::Id::FACE2, nullptr, 101},
-            {KeyAction::Id::FACE3, nullptr, 102},
-            {KeyAction::Id::FACE4, nullptr, 103},
-            {KeyAction::Id::FACE5, nullptr, 104},
-            {KeyAction::Id::FACE6, nullptr, 105},
-            {KeyAction::Id::FACE7, nullptr, 106},
-            {KeyAction::Id::MUTE, nullptr, 202},
             {KeyAction::Id::MONSTER_BOOK, "monsterbook", 1000},
             {KeyAction::Id::TO_SPOUSE, "tospouse", 1001},
         };

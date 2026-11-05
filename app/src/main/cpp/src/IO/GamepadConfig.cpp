@@ -133,16 +133,15 @@ namespace ms {
         using Action = KeyAction::Id;
 
         switch (slot) {
-            case Slot::DPAD_UP:
+            // Only the left stick carries a movement direction by default. The d-pad starts empty
+            // so a player who wants it binds it himself, and the two sources can never claim one
+            // direction from each other.
             case Slot::LS_UP:
                 return {KeyType::Id::ACTION, Action::UP};
-            case Slot::DPAD_RIGHT:
             case Slot::LS_RIGHT:
                 return {KeyType::Id::ACTION, Action::RIGHT};
-            case Slot::DPAD_DOWN:
             case Slot::LS_DOWN:
                 return {KeyType::Id::ACTION, Action::DOWN};
-            case Slot::DPAD_LEFT:
             case Slot::LS_LEFT:
                 return {KeyType::Id::ACTION, Action::LEFT};
             case Slot::L1:
@@ -155,8 +154,6 @@ namespace ms {
                 return {KeyType::Id::MENU, Action::SKILLS};
             case Slot::START:
                 return {KeyType::Id::MENU, Action::MENU};
-            case Slot::SELECT:
-                return {KeyType::Id::MENU, Action::MAIN_MENU};
             case Slot::Y:
                 return {KeyType::Id::ACTION, Action::PICKUP};
             case Slot::X:
@@ -169,10 +166,17 @@ namespace ms {
                 return {KeyType::Id::MENU, Action::WORLD_MAP};
             case Slot::RS_PRESS:
                 return {KeyType::Id::MENU, Action::MINI_MAP};
+            case Slot::DPAD_UP:
+            case Slot::DPAD_RIGHT:
+            case Slot::DPAD_DOWN:
+            case Slot::DPAD_LEFT:
             case Slot::RS_UP:
             case Slot::RS_RIGHT:
             case Slot::RS_DOWN:
             case Slot::RS_LEFT:
+                // Select used to be the escape of the old main menu. That action is no longer
+                // offered in this window, so the slot starts empty like the sticks' directions.
+            case Slot::SELECT:
             default:
                 return {};
         }
