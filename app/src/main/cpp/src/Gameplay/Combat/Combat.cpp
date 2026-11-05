@@ -19,6 +19,7 @@
 #include "../../IO/Messages.h"
 #include "../../Net/Packets/AttackAndSkillPackets.h"
 #include "../../Net/Packets/GameplayPackets.h"
+#include "../Physics/FootholdTree.h"
 
 namespace ms {
 namespace {
@@ -36,11 +37,13 @@ auto fn_use_skill = []<typename... T>(T && ...args) {
 Combat::Combat(Player &player,
                MapChars &chars,
                MapMobs &mobs,
-               MapReactors &reactors) :
+               MapReactors &reactors,
+               const FootholdTree &terrain) :
     player_(player),
     chars_(chars),
     mobs_(mobs),
     reactors_(reactors),
+    terrain_(terrain),
     attack_results_([&](const AttackResult &attack) { apply_attack(attack); }),
     bullet_effects_(
         [&](const BulletEffect &effect) { apply_bullet_effect(effect); }),
@@ -67,19 +70,25 @@ void Combat::update() {
 
         if (mobs_.contains(target_oid)) {
             mb.target = mobs_.get_mob_body_position(target_oid);
-            bool apply = mb.bullet.update(mb.target);
+            Bullet::Flight flight = mb.bullet.update(mb.target);
 
-            if (apply) {
-                apply_damage_effect(mb.damageeffect);
-            } else {
-                // A projectile that is still travelling counts as a blow this mob has coming for
-                // it, so a death reported over the network keeps waiting until the arrow lands.
-                mobs_.expect_hit(target_oid, 2 * Constants::TIMESTEP);
+            switch (flight) {
+                case Bullet::Flight::ARRIVED:
+                    apply_damage_effect(mb.damageeffect);
+                    break;
+                case Bullet::Flight::FLYING:
+                    // A projectile that is still travelling counts as a blow this mob has
+                    // coming for it, so a death reported over the network keeps waiting until
+                    // the arrow lands. A shot stopped by a wall renews nothing, so the pending
+                    // hit expires on its own.
+                    mobs_.expect_hit(target_oid, 2 * Constants::TIMESTEP);
+                    break;
+                case Bullet::Flight::BLOCKED: break;
             }
 
-            return apply;
+            return flight != Bullet::Flight::FLYING;
         }
-        return mb.bullet.update(mb.target);
+        return mb.bullet.update(mb.target) != Bullet::Flight::FLYING;
     });
 
     damage_numbers_.remove_if([](DamageNumber &dn) { return dn.update(); });
@@ -132,13 +141,18 @@ void Combat::apply_move(const SpecialMove &move) {
         uint8_t mobcount = attack.mobcount;
         AttackResult result = attack;
 
+        // The projectile leaves from the muzzle, so that is where the line to a target is
+        // judged from, and only an attack that flies something can be stopped by a wall.
+        Point<int16_t> muzzle = Bullet::muzzle(origin, attack.toleft);
+        const bool projectile = attack.bullet != 0;
+
         MapObjects *mob_objs = mobs_.get_mobs();
         MapObjects *reactor_objs = reactors_.get_reactors();
 
         std::vector<int32_t> mob_targets =
-            find_closest(mob_objs, range, origin, mobcount, true);
+            find_closest(mob_objs, range, origin, mobcount, true, muzzle, projectile);
         std::vector<int32_t> reactor_targets =
-            find_closest(reactor_objs, range, origin, mobcount, false);
+            find_closest(reactor_objs, range, origin, mobcount, false, muzzle, projectile);
 
         mobs_.send_attack(result, attack, mob_targets, mobcount);
         result.attacker = player_.get_oid();
@@ -174,7 +188,9 @@ std::vector<int32_t> Combat::find_closest(MapObjects *objs,
                                           Rectangle<int16_t> range,
                                           Point<int16_t> origin,
                                           uint8_t objcount,
-                                          bool use_mobs) const {
+                                          bool use_mobs,
+                                          Point<int16_t> muzzle,
+                                          bool projectile) const {
     std::multimap<uint16_t, int32_t> distances;
 
     for (auto &mmo : *objs) {
@@ -182,6 +198,13 @@ std::vector<int32_t> Combat::find_closest(MapObjects *objs,
             const Mob *mob = static_cast<const Mob *>(mmo.second.get());
 
             if (mob && mob->is_alive() && mob->is_in_range(range)) {
+                Point<int16_t> body = mob->get_body_position();
+                Point<int16_t> wall;
+
+                if (projectile && terrain_.blocks_line(muzzle, body, wall)) {
+                    continue;
+                }
+
                 int32_t oid = mob->get_oid();
                 uint16_t distance = mob->get_position().distance(origin);
                 distances.emplace(distance, oid);
@@ -193,8 +216,15 @@ std::vector<int32_t> Combat::find_closest(MapObjects *objs,
 
             if (reactor && reactor->is_hittable()
                 && reactor->is_in_range(range)) {
+                Point<int16_t> pos = reactor->get_position();
+                Point<int16_t> wall;
+
+                if (projectile && terrain_.blocks_line(muzzle, pos, wall)) {
+                    continue;
+                }
+
                 int32_t oid = reactor->get_oid();
-                uint16_t distance = reactor->get_position().distance(origin);
+                uint16_t distance = pos.distance(origin);
                 distances.emplace(distance, oid);
             }
         }
@@ -302,7 +332,8 @@ void Combat::extract_effects(const Char &user,
     if (result.bullet) {
         Bullet bullet { move.get_bullet(user, result.bullet),
                         user.get_position(),
-                        result.toleft };
+                        result.toleft,
+                        terrain_ };
 
         for (const auto &[oid, vec] : result.damage_lines) {
             if (mobs_.contains(oid)) {

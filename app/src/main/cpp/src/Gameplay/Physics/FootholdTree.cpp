@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "FootholdTree.h"
 
+#include <cmath>
 #include <iostream>
 
 namespace ms {
@@ -69,6 +70,9 @@ FootholdTree::FootholdTree(const img::node &src) {
                 }
 
                 if (foothold.is_wall()) {
+                    // A wall is one column wide, so it can't join the index of platforms below;
+                    // it gets its own so a straight run can be tested against it.
+                    walls_by_x_.emplace(foothold.x1(), id);
                     continue;
                 }
 
@@ -352,5 +356,49 @@ const Foothold &FootholdTree::get_foothold(uint16_t fhid) const {
 
 Range<int16_t> FootholdTree::get_borders() const {
     return borders_;
+}
+
+bool FootholdTree::blocks_line(Point<int16_t> from,
+                               Point<int16_t> to,
+                               Point<int16_t> &cross) const {
+    return sweep_walls(from, to, false, cross);
+}
+
+bool FootholdTree::first_crossing(Point<int16_t> from,
+                                  Point<int16_t> to,
+                                  Point<int16_t> &cross) const {
+    return sweep_walls(from, to, true, cross);
+}
+
+bool FootholdTree::sweep_walls(Point<int16_t> from,
+                               Point<int16_t> to,
+                               bool include_end,
+                               Point<int16_t> &cross) const {
+    if (from.x() == to.x()) {
+        return false;
+    }
+
+    const int16_t direction = to.x() > from.x() ? 1 : -1;
+    const int16_t last = include_end ? to.x() : to.x() - direction;
+    const double slope =
+        static_cast<double>(to.y() - from.y()) / (to.x() - from.x());
+
+    for (int16_t x = from.x() + direction;
+         direction > 0 ? x <= last : x >= last;
+         x += direction) {
+        const double y = from.y() + slope * (x - from.x());
+        const int16_t crossed = static_cast<int16_t>(std::round(y));
+
+        auto range = walls_by_x_.equal_range(x);
+
+        for (auto iter = range.first; iter != range.second; ++iter) {
+            if (get_fh(iter->second).vcontains(crossed)) {
+                cross = Point<int16_t>(x, crossed);
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 }  // namespace ms

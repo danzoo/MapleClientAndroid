@@ -20,14 +20,25 @@
 #include <utility>
 
 #include "../../Constants.h"
+#include "../Physics/FootholdTree.h"
 
 namespace ms {
 
-Bullet::Bullet(Animation a, Point<int16_t> origin, bool toleft) :
+Point<int16_t> Bullet::muzzle(Point<int16_t> origin, bool toleft) {
+    return Point<int16_t>(origin.x() + (toleft ? -30 : 30), origin.y() - 26);
+}
+
+Bullet::Bullet(Animation a,
+               Point<int16_t> origin,
+               bool toleft,
+               const FootholdTree &terrain) :
     animation_(std::move(a)),
+    terrain_(&terrain),
     flip_(toleft) {
-    move_obj_.set_x(origin.x() + (toleft ? -30.0 : 30.0));
-    move_obj_.set_y(origin.y() - 26.0);
+    const Point<int16_t> start = muzzle(origin, toleft);
+
+    move_obj_.set_x(start.x());
+    move_obj_.set_y(start.y());
 }
 
 void Bullet::draw(double viewx, double viewy, float alpha) const {
@@ -61,11 +72,29 @@ bool Bullet::settarget(Point<int16_t> target) {
     return false;
 }
 
-bool Bullet::update(Point<int16_t> target) {
+Bullet::Flight Bullet::update(Point<int16_t> target) {
     animation_.update();
+
+    const Point<int16_t> before = move_obj_.get_position();
+
     move_obj_.move();
 
+    const Point<int16_t> after = move_obj_.get_position();
+
+    // A wall this step runs into ends the flight where it meets it, not where the step was
+    // heading.
+    Point<int16_t> wall;
+
+    if (terrain_->first_crossing(before, after, wall)) {
+        move_obj_.set_x(wall.x());
+        move_obj_.set_y(wall.y());
+
+        return Flight::BLOCKED;
+    }
+
     int16_t xdelta = target.x() - move_obj_.get_x();
-    return move_obj_.hspeed > 0.0 ? xdelta < 10 : xdelta > 10;
+    bool arrived = move_obj_.hspeed > 0.0 ? xdelta < 10 : xdelta > 10;
+
+    return arrived ? Flight::ARRIVED : Flight::FLYING;
 }
 }  // namespace ms

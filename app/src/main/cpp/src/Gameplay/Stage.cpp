@@ -56,7 +56,7 @@ Stage::Stage() :
     state_(State::INACTIVE),
     map_id_(10000),
     level_before_(1),
-    combat_(player_, chars_, mobs_, reactors_),
+    combat_(player_, chars_, mobs_, reactors_, physics_.get_fht()),
     mob_combat_(player_, chars_, mobs_),
     exp_before_(0) {}
 

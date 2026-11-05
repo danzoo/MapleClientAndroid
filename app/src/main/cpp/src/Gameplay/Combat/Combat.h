@@ -23,12 +23,15 @@
 #include "RegularAttack.h"
 
 namespace ms {
+class FootholdTree;
+
 class Combat {
 public:
     Combat(Player &player,
            MapChars &chars,
            MapMobs &mobs,
-           MapReactors &reactors);
+           MapReactors &reactors,
+           const FootholdTree &terrain);
 
     // Draw bullets, damage numbers etc.
     void draw(double viewx, double viewy, float alpha) const;
@@ -78,11 +81,15 @@ private:
 
     void apply_move(const SpecialMove &move);
 
+    // A shot only reaches what it has a clear line to, so the muzzle the line starts from and
+    // whether this attack flies anything at all both come along; a swing needs neither.
     std::vector<int32_t> find_closest(MapObjects *objs,
                                       Rectangle<int16_t> range,
                                       Point<int16_t> origin,
                                       uint8_t objcount,
-                                      bool use_mobs) const;
+                                      bool use_mobs,
+                                      Point<int16_t> muzzle,
+                                      bool projectile) const;
 
     void apply_use_movement(const SpecialMove &move);
 
@@ -109,6 +116,7 @@ private:
     MapChars &chars_;
     MapMobs &mobs_;
     MapReactors &reactors_;
+    const FootholdTree &terrain_;
 
     std::unordered_map<int32_t, Skill> skills_;
     RegularAttack regular_attack_;

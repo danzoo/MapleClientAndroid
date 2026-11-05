@@ -15,25 +15,41 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <cstdint>
+
 #include "../Graphics/Animation.h"
 #include "../Physics/PhysicsObject.h"
 #include "../Template/Point.h"
 
 namespace ms {
+class FootholdTree;
+
 // Represents a projectile on a map.
 class Bullet {
 public:
-    Bullet(Animation animation, Point<int16_t> origin, bool toleft);
+    enum class Flight { FLYING, ARRIVED, BLOCKED };
+
+    // Where a shot leaves the character. The flight starts here and a target is judged from
+    // here, so the line an obstacle is tested against is the line the projectile travels.
+    static Point<int16_t> muzzle(Point<int16_t> origin, bool toleft);
+
+    Bullet(Animation animation,
+           Point<int16_t> origin,
+           bool toleft,
+           const FootholdTree &terrain);
 
     void draw(double viewx, double viewy, float alpha) const;
 
     bool settarget(Point<int16_t> target);
 
-    bool update(Point<int16_t> target);
+    Flight update(Point<int16_t> target);
 
 private:
     Animation animation_;
     MovingObject move_obj_;
+    // Held as a pointer so a bullet stays copyable: the effects it belongs to are queued and
+    // then carried into a list, and they have to survive both moves.
+    const FootholdTree *terrain_;
     bool flip_;
 };
 }  // namespace ms
