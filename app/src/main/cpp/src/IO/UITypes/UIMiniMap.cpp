@@ -292,7 +292,8 @@ Cursor::State UIMiniMap::send_cursor(bool clicked, Point<int16_t> cursorpos) {
 
                 if (in_list) {
                     UI::get().show_text(Tooltip::Parent::MINI_MAP,
-                                        list_npc_full_names_[list_index]);
+                                        list_npc_full_names_[list_index],
+                                        cursorpos);
                 }
             }
 
@@ -326,7 +327,8 @@ Cursor::State UIMiniMap::send_cursor(bool clicked, Point<int16_t> cursorpos) {
                                    name,
                                    func,
                                    {},
-                                   false);
+                                   false,
+                                   cursorpos);
             }
             break;
         }
@@ -356,7 +358,8 @@ Cursor::State UIMiniMap::send_cursor(bool clicked, Point<int16_t> cursorpos) {
                                            portal_name,
                                            "",
                                            portal_tm,
-                                           false);
+                                           false,
+                                           cursorpos);
                     }
                     break;
                 }

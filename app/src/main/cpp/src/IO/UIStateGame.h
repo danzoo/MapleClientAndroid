@@ -16,6 +16,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <optional>
 
 #include "../Character/CharStats.h"
@@ -25,6 +26,7 @@
 #include "Components/MapTooltip.h"
 #include "Components/SkillTooltip.h"
 #include "Components/TextTooltip.h"
+#include "NativeTooltip.h"
 #include "UIState.h"
 
 namespace ms {
@@ -64,23 +66,31 @@ public:
 
     void clear_tooltip() override;
 
-    void show_equip(Tooltip::Parent parent, int16_t slot) override;
+    void show_equip(Tooltip::Parent parent,
+                    int16_t slot,
+                    Point<int16_t> anchor) override;
 
-    void show_item(Tooltip::Parent parent, int32_t itemid) override;
+    void show_item(Tooltip::Parent parent,
+                   int32_t itemid,
+                   Point<int16_t> anchor) override;
 
     void show_skill(Tooltip::Parent parent,
                     int32_t skill_id,
                     int32_t level,
                     int32_t masterlevel,
-                    int64_t expiration) override;
+                    int64_t expiration,
+                    Point<int16_t> anchor) override;
 
-    void show_text(Tooltip::Parent parent, std::string text) override;
+    void show_text(Tooltip::Parent parent,
+                   std::string text,
+                   Point<int16_t> anchor) override;
 
     void show_map(Tooltip::Parent parent,
                   std::string name,
                   std::string description,
                   int32_t mapid,
-                  bool bolded) override;
+                  bool bolded,
+                  Point<int16_t> anchor) override;
 
     Iterator pre_add(UIElement::Type type, bool toggled, bool focused) override;
 
@@ -115,6 +125,18 @@ private:
     MapTooltip ma_tooltip_;
     std::optional<std::reference_wrapper<Tooltip>> tooltip_;
     Tooltip::Parent tooltip_parent_;
+
+    // Where the preview that is raised now stands. Set by whichever window raised it, to the middle
+    // of the piece that was touched, and held until another preview replaces it - so a preview does
+    // not slide around while the reader taps the same piece over and over.
+    Point<int16_t> tooltip_anchor_;
+
+    // Bumped every time a preview is asked for or taken away, so the native window is told once per
+    // change instead of once per frame; the three fields below record what was last handed over.
+    mutable uint32_t tooltip_version_;
+    mutable uint32_t native_version_;
+    mutable Point<int16_t> native_position_;
+    mutable bool native_shown_;
 
     std::optional<std::reference_wrapper<Icon>> dragged_icon_;
     std::chrono::time_point<std::chrono::steady_clock> time_rel_grabbed =

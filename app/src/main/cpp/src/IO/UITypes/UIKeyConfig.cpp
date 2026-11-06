@@ -1105,10 +1105,16 @@ namespace ms {
                     && !Window::get().is_hold_press();
 
         if (card) {
+            // The middle of the cell that took the tap - the same 32x32 rectangle
+            // key_by_position tested - so the card stands on the key it describes instead of
+            // following the finger around it.
+            const Point<int16_t> centre =
+                position_ + keys_pos_[key_slot] + Point<int16_t>(16, 16);
+
             if (mapping.type == KeyType::Id::ITEM) {
-                show_item(mapping.action);
+                show_item(mapping.action, centre);
             } else {
-                show_skill(mapping.action);
+                show_skill(mapping.action, centre);
             }
 
             return UIElement::send_cursor(clicked, cursorpos);
@@ -1207,11 +1213,11 @@ namespace ms {
     }
 
 /// UI: Tooltip
-    void UIKeyConfig::show_item(int32_t item_id) {
-        UI::get().show_item(Tooltip::Parent::KEY_CONFIG, item_id);
+    void UIKeyConfig::show_item(int32_t item_id, Point<int16_t> anchor) {
+        UI::get().show_item(Tooltip::Parent::KEY_CONFIG, item_id, anchor);
     }
 
-    void UIKeyConfig::show_skill(int32_t skill_id) {
+    void UIKeyConfig::show_skill(int32_t skill_id, Point<int16_t> anchor) {
         int32_t level = skillbook_.get_level(skill_id);
         int32_t masterlevel = skillbook_.get_masterlevel(skill_id);
         int64_t expiration = skillbook_.get_expiration(skill_id);
@@ -1220,7 +1226,8 @@ namespace ms {
                              skill_id,
                              level,
                              masterlevel,
-                             expiration);
+                             expiration,
+                             anchor);
     }
 
     void UIKeyConfig::clear_tooltip() {

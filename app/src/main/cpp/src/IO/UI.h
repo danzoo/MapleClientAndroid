@@ -99,23 +99,34 @@ namespace ms {
         // Clear whichever tooltip is currently raised, whatever its parent.
         void clear_tooltip();
 
-        void show_equip(Tooltip::Parent parent, int16_t slot);
+        // Every one of these takes the point the preview is to stand at: the middle of the piece
+        // that was touched, or the finger itself where there is no piece to be the middle of. See
+        // UIState.h.
+        void show_equip(Tooltip::Parent parent,
+                        int16_t slot,
+                        Point<int16_t> anchor);
 
-        void show_item(Tooltip::Parent parent, int32_t item_id);
+        void show_item(Tooltip::Parent parent,
+                       int32_t item_id,
+                       Point<int16_t> anchor);
 
         void show_skill(Tooltip::Parent parent,
                         int32_t skill_id,
                         int32_t level,
                         int32_t masterlevel,
-                        int64_t expiration);
+                        int64_t expiration,
+                        Point<int16_t> anchor);
 
-        void show_text(Tooltip::Parent parent, std::string text);
+        void show_text(Tooltip::Parent parent,
+                       std::string text,
+                       Point<int16_t> anchor);
 
         void show_map(Tooltip::Parent parent,
                       std::string name,
                       std::string description,
                       int32_t mapid,
-                      bool bolded);
+                      bool bolded,
+                      Point<int16_t> anchor);
 
         // Send a menu action without going through a key mapping, used by the gamepad.
         void send_action(KeyAction::Id action);

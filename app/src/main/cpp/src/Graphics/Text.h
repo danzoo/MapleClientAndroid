@@ -29,6 +29,11 @@ public:
 
     enum Background { NONE, NAMETAG };
 
+    // The pixel size and weight a font id stands for, in the units the pass lays itself out in. A
+    // preview that is handed to the platform instead of being painted out of the glyph atlas carries
+    // these with it, because the platform has to be told how big to letter the same words.
+    static void metrics(Font id, float &px, bool &bold);
+
     class Layout {
     public:
         struct Word {
@@ -130,6 +135,17 @@ public:
     VerticalInk ink_vertical() const;
 
     const std::string &get_text() const;
+
+    // The three things a native preview needs to reproduce this text itself: where each run starts,
+    // which code points it holds, and how it was lettered. Wrapping and alignment are already
+    // settled in the layout, so the platform is only ever asked to draw a run at a stated pen.
+    const Layout &layout() const { return layout_; }
+
+    const std::vector<uint32_t> &codepoints() const { return text_as_values_; }
+
+    Font font() const { return font_; }
+
+    Color::Name color() const { return color_; }
 
 private:
     void reset_layout();

@@ -18,15 +18,37 @@
 #include <imgwz/node.hpp>
 
 #include "../Graphics/Texture.h"
+#include "../NativeTooltip.h"
 
 namespace ms {
 class MapleFrame {
 public:
+    // The rectangle a frame leaves for its content. The center texture is stretched over exactly
+    // this, and every border piece is drawn outside of it, so text that stays inside is guaranteed
+    // to stay inside the art.
+    struct Box {
+        int16_t left;
+        int16_t top;
+        int16_t right;
+        int16_t bottom;
+    };
+
     MapleFrame(const img::node &src);
 
     MapleFrame();
 
     void draw(Point<int16_t> position, int16_t width, int16_t height) const;
+
+    // The same frame written out for the native window. The nine pieces keep the order they were
+    // drawn in, because some of them are drawn over others - a frame that arranged them neatly
+    // would put different art on top and read as a different frame.
+    void build(NativeTooltip::List &list,
+               Point<int16_t> position,
+               int16_t width,
+               int16_t height,
+               const std::string &asset) const;
+
+    Box inner_box(Point<int16_t> position, int16_t width, int16_t height) const;
 
 private:
     Texture center_;

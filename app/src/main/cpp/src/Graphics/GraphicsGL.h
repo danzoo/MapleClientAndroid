@@ -393,9 +393,6 @@ namespace ms {
         // Logical line height for a face.
         int16_t font_linespace(Text::Font id) const;
 
-        // The logical pixel size and weight a Text::Font id stands for.
-        static void font_metrics(Text::Font id, float &px, bool &bold);
-
         class LayoutBuilder {
         public:
             LayoutBuilder(GraphicsGL &graphics,
@@ -421,6 +418,9 @@ namespace ms {
                           Color::Name color);
 
             void add_line();
+
+            // Flushes the line being built and moves the pen down to the next one.
+            void start_line();
 
             GraphicsGL &graphics_;
             Text::Font id_;

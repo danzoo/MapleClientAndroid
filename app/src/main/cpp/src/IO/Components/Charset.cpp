@@ -16,7 +16,7 @@
 #include "Charset.h"
 
 namespace ms {
-Charset::Charset(const img::node &src, Alignment alignment) :
+Charset::Charset(const img::node &src, Alignment alignment, const std::string &asset) :
     alignment_(alignment) {
     for (const auto &sub : src) {
         std::string name = sub.name();
@@ -31,7 +31,19 @@ Charset::Charset(const img::node &src, Alignment alignment) :
             c = '/';
         }
 
+        auto held = chars_.find(c);
+
+        if (held != chars_.end()) {
+            // Two canvases of a set can be looked up by the same letter - the requirement sets hold
+            // both a percent sign and a "reqPOP" label, whose first letter is only ever reached for
+            // the label. The pass that drew them kept whichever came first, so the names have to be
+            // kept with it; a set that recorded the second one's canvas against the first one's
+            // file would draw the wrong picture in the wrong place.
+            continue;
+        }
+
         chars_.emplace(c, sub);
+        names_.emplace(c, asset + "/" + name);
     }
 }
 
@@ -43,6 +55,54 @@ void Charset::draw(int8_t c, const DrawArgument &args) const {
     if (iter != chars_.end()) {
         iter->second.draw(args);
     }
+}
+
+void Charset::build_character(NativeTooltip::List &list,
+                              int8_t c,
+                              const DrawArgument &args) const {
+    auto held = chars_.find(c);
+
+    if (held == chars_.end()) {
+        return;
+    }
+
+    auto name = names_.find(c);
+
+    if (name != names_.end()) {
+        list.picture(held->second, args, name->second);
+    }
+}
+
+int16_t Charset::build(NativeTooltip::List &list,
+                       const std::string &text,
+                       int16_t hspace,
+                       const DrawArgument &args) const {
+    int16_t shift = 0;
+
+    switch (alignment_) {
+        case Charset::Alignment::CENTER:
+            // The pass this mirrors counted the run and drew none of it, because that is what the
+            // window has always looked like. No preview asks for a centered set.
+            shift -= hspace * static_cast<int16_t>(text.size()) / 2;
+            break;
+        case Charset::Alignment::LEFT:
+            for (char c : text) {
+                build_character(list, c, args + Point<int16_t>(shift, 0));
+                shift += hspace;
+            }
+
+            break;
+        case Charset::Alignment::RIGHT:
+            for (auto iter = text.rbegin(); iter != text.rend(); ++iter) {
+                char c = *iter;
+                shift += hspace;
+                build_character(list, c, args - Point<int16_t>(shift, 0));
+            }
+
+            break;
+    }
+
+    return shift;
 }
 
 int16_t Charset::getw(int8_t c) const {

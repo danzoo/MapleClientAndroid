@@ -43,6 +43,11 @@ public:
 
     Point<int16_t> get_dimensions() const;
 
+    // The canvas itself. Only the pictures that are not in the shared art - an item's or a skill's
+    // own icon - are taken this far, because a native window cannot read an archive and has to be
+    // handed the pixels.
+    const img::bitmap &bitmap() const { return bitmap_; }
+
 private:
     static img::node find_child(const img::node &source, const std::string &link);
 

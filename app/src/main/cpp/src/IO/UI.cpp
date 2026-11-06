@@ -440,36 +440,46 @@ namespace ms {
         state_->clear_tooltip();
     }
 
-    void UI::show_equip(Tooltip::Parent parent, int16_t slot) {
-        state_->show_equip(parent, slot);
+    void UI::show_equip(Tooltip::Parent parent,
+                        int16_t slot,
+                        Point<int16_t> anchor) {
+        state_->show_equip(parent, slot, anchor);
     }
 
-    void UI::show_item(Tooltip::Parent parent, int32_t item_id) {
-        state_->show_item(parent, item_id);
+    void UI::show_item(Tooltip::Parent parent,
+                       int32_t item_id,
+                       Point<int16_t> anchor) {
+        state_->show_item(parent, item_id, anchor);
     }
 
     void UI::show_skill(Tooltip::Parent parent,
                         int32_t skill_id,
                         int32_t level,
                         int32_t masterlevel,
-                        int64_t expiration) {
-        state_->show_skill(parent, skill_id, level, masterlevel, expiration);
+                        int64_t expiration,
+                        Point<int16_t> anchor) {
+        state_->show_skill(parent, skill_id, level, masterlevel, expiration,
+                           anchor);
     }
 
-    void UI::show_text(Tooltip::Parent parent, std::string text) {
-        state_->show_text(parent, std::move(text));
+    void UI::show_text(Tooltip::Parent parent,
+                       std::string text,
+                       Point<int16_t> anchor) {
+        state_->show_text(parent, std::move(text), anchor);
     }
 
     void UI::show_map(Tooltip::Parent parent,
                       std::string name,
                       std::string description,
                       int32_t mapid,
-                      bool bolded) {
+                      bool bolded,
+                      Point<int16_t> anchor) {
         state_->show_map(parent,
                          std::move(name),
                          std::move(description),
                          mapid,
-                         bolded);
+                         bolded,
+                         anchor);
     }
 
     void UI::send_action(KeyAction::Id action) {

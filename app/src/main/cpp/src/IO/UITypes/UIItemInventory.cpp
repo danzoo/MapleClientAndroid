@@ -606,11 +606,19 @@ void UIItemInventory::toggle_active() {
 }
 
 void UIItemInventory::show_item(int16_t slot) {
+    // The preview stands in the middle of the slot that was touched rather than under the finger,
+    // so that where inside the slot the finger happened to land says nothing about where the words
+    // appear. The same choice of slot table the drawing makes, so the anchor and the art agree.
+    const Point<int16_t> centre =
+        position_
+        + (full_enabled_ ? get_full_slotpos(slot) : get_slotpos(slot))
+        + Point<int16_t>(ICON_WIDTH_ / 2, ICON_HEIGHT_ / 2);
+
     if (tab_ == InventoryType::Id::EQUIP) {
-        UI::get().show_equip(Tooltip::Parent::ITEM_INVENTORY, slot);
+        UI::get().show_equip(Tooltip::Parent::ITEM_INVENTORY, slot, centre);
     } else {
         int32_t item_id = inventory_.get_item_id(tab_, slot);
-        UI::get().show_item(Tooltip::Parent::ITEM_INVENTORY, item_id);
+        UI::get().show_item(Tooltip::Parent::ITEM_INVENTORY, item_id, centre);
     }
 }
 

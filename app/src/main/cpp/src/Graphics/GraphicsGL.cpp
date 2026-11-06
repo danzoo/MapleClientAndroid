@@ -393,48 +393,10 @@ namespace ms {
                              static_cast<float>(box_width) / static_cast<float>(panel_layout_width));
     }
 
-    void GraphicsGL::font_metrics(Text::Font id, float &px, bool &bold) {
-        switch (id) {
-            case Text::Font::A11B:
-                px = 11.0f;
-                bold = true;
-                break;
-            case Text::Font::A12M:
-                px = 12.0f;
-                bold = false;
-                break;
-            case Text::Font::A12B:
-                px = 12.0f;
-                bold = true;
-                break;
-            case Text::Font::A13M:
-                px = 13.0f;
-                bold = false;
-                break;
-            case Text::Font::A13B:
-                px = 13.0f;
-                bold = true;
-                break;
-            case Text::Font::A15B:
-                px = 15.0f;
-                bold = true;
-                break;
-            case Text::Font::A18M:
-                px = 18.0f;
-                bold = false;
-                break;
-            case Text::Font::A11M:
-            default:
-                px = 11.0f;
-                bold = false;
-                break;
-        }
-    }
-
     int16_t GraphicsGL::font_linespace(Text::Font id) const {
         float px;
         bool bold;
-        font_metrics(id, px, bold);
+        Text::metrics(id, px, bold);
 
         return static_cast<int16_t>(px * 1.35 + 1);
     }
@@ -450,7 +412,7 @@ namespace ms {
 
         float px;
         bool bold;
-        font_metrics(id, px, bold);
+        Text::metrics(id, px, bold);
 
         float advance = 0.0f;
         AndroidText::measure(codepoint, px, bold, advance);
@@ -471,7 +433,7 @@ namespace ms {
 
         float px;
         bool bold;
-        font_metrics(id, px, bold);
+        Text::metrics(id, px, bold);
 
         const float density = atlas.text_scale;
 
@@ -934,6 +896,15 @@ namespace ms {
         return builder.finish(first, offset);
     }
 
+    namespace {
+    // A run of digits is one word as far as wrapping goes. Chinese has no spaces for the layout to
+    // break on, so a whole sentence arrives as a single run and every break inside it is chosen by
+    // the width alone - which is how 「每提高10级」 came apart between the 1 and the 0.
+    bool is_digit(uint32_t codepoint) {
+        return codepoint >= '0' && codepoint <= '9';
+    }
+    }  // namespace
+
     size_t GraphicsGL::LayoutBuilder::add(const unsigned int *text,
                                           size_t prev,
                                           size_t first,
@@ -1002,6 +973,25 @@ namespace ms {
 
         int16_t wordwidth = 0;
 
+        if (linebreak && skip > 0) {
+            // A run that opens with a break marker used to be placed without ever being measured,
+            // because the measuring below is skipped the moment a break is seen. Any sentence with
+            // no spaces in it - which is every Chinese one - is a single run, so it landed as one
+            // line straight past the wrap. The marker is applied here and the glyphs after it are
+            // measured and split as a run of their own.
+            add_word(prev, first, last_font, last_color);
+
+            start_line();
+
+            size_t content = first + skip;
+
+            for (size_t pos = first; pos < content; pos++) {
+                advances_.push_back(ax_);
+            }
+
+            return add(text, content, content, last);
+        }
+
         if (!linebreak) {
             for (size_t i = first; i < last; i++) {
                 auto c = text[i];
@@ -1023,6 +1013,22 @@ namespace ms {
                         return last;
                     }
 
+                    // The overflow only says where the line runs out, not where the word does. A
+                    // break that fell inside a number is moved back to the front of it, so the whole
+                    // number goes to the next line instead of being split into two.
+                    size_t split = i;
+
+                    while (split > first && is_digit(text[split - 1])) {
+                        split--;
+                    }
+
+                    // Kept only when something actually precedes the digits. A number too wide for
+                    // the column on its own has to be broken somewhere, and backing up to the start
+                    // of the run would ask for the same split again for ever.
+                    if (split > first) {
+                        i = split;
+                    }
+
                     prev = add(text, prev, first, i);
                     return add(text, prev, i, last);
                 }
@@ -1037,15 +1043,7 @@ namespace ms {
         }
 
         if (newline) {
-            add_line();
-
-            endy_ = ay_;
-            ax_ = 0;
-            ay_ += graphics_.font_linespace(id_);
-
-            if (!lines_.empty()) {
-                ay_ -= line_adj_;
-            }
+            start_line();
         }
 
         for (size_t pos = first; pos < last; pos++) {
@@ -1235,6 +1233,18 @@ namespace ms {
 
         lines_.push_back({words_, {line_x, line_y}});
         words_.clear();
+    }
+
+    void GraphicsGL::LayoutBuilder::start_line() {
+        add_line();
+
+        endy_ = ay_;
+        ax_ = 0;
+        ay_ += graphics_.font_linespace(id_);
+
+        if (!lines_.empty()) {
+            ay_ -= line_adj_;
+        }
     }
 
 // void GraphicsGL::draw_text(const DrawArgument &args,

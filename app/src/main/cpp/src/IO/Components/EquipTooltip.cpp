@@ -21,6 +21,24 @@
 #include "../../Gameplay/Stage.h"
 
 namespace ms {
+namespace {
+// The columns text is laid out in, measured from the left edge of the panel: the name across the top
+// of it, and everything else under the divider. The attack summary is a column of digits, and the
+// label over it is right-aligned to the edge those digits end at.
+constexpr int16_t NAME_X = 17;
+constexpr int16_t STAT_X = 13;
+constexpr int16_t DESC_X = 9;
+constexpr int16_t SUMMARY_X = 239;
+constexpr int16_t SUMMARY_W = 11;
+
+// Two labels are not laid out from the left of their column: the potential line is centred on the
+// panel, and the attack label ends where its digits end. Their origin is the anchor, not the column,
+// so reading either from STAT_X makes the word grow leftwards out of the frame.
+constexpr int16_t POTFLAG_X = 130;
+constexpr int16_t ATKINC_X = SUMMARY_X + SUMMARY_W - 2;
+}  // namespace
+
+// TODO: Add blue dot next to name
 EquipTooltip::EquipTooltip() {
     img::node Item = img::wz::ui["UIToolTip.img"]["Item"];
     img::node Frame = Item["Frame"];
@@ -46,6 +64,13 @@ EquipTooltip::EquipTooltip() {
     potential_[Equip::Potential::POT_UNIQUE] = ItemIcon["3"];
     potential_[Equip::Potential::POT_LEGENDARY] = ItemIcon["4"];
 
+    potential_names_[Equip::Potential::POT_NONE] = "";
+    potential_names_[Equip::Potential::POT_HIDDEN] = "ItemIcon/0";
+    potential_names_[Equip::Potential::POT_RARE] = "ItemIcon/1";
+    potential_names_[Equip::Potential::POT_EPIC] = "ItemIcon/2";
+    potential_names_[Equip::Potential::POT_UNIQUE] = "ItemIcon/3";
+    potential_names_[Equip::Potential::POT_LEGENDARY] = "ItemIcon/4";
+
     requirements_.push_back(MapleStat::Id::LEVEL);
     requirements_.push_back(MapleStat::Id::STR);
     requirements_.push_back(MapleStat::Id::DEX);
@@ -65,22 +90,38 @@ EquipTooltip::EquipTooltip() {
     req_stat_textures_[MapleStat::Id::LUK][false] = EquipCannot["reqLUK"];
     req_stat_textures_[MapleStat::Id::LUK][true] = EquipCan["reqLUK"];
 
+    req_stat_names_[MapleStat::Id::LEVEL][false] = "Equip/Cannot/reqLEV";
+    req_stat_names_[MapleStat::Id::LEVEL][true] = "Equip/Can/reqLEV";
+    req_stat_names_[MapleStat::Id::FAME][false] = "Equip/Cannot/reqPOP";
+    req_stat_names_[MapleStat::Id::FAME][true] = "Equip/Can/reqPOP";
+    req_stat_names_[MapleStat::Id::STR][false] = "Equip/Cannot/reqSTR";
+    req_stat_names_[MapleStat::Id::STR][true] = "Equip/Can/reqSTR";
+    req_stat_names_[MapleStat::Id::DEX][false] = "Equip/Cannot/reqDEX";
+    req_stat_names_[MapleStat::Id::DEX][true] = "Equip/Can/reqDEX";
+    req_stat_names_[MapleStat::Id::INT][false] = "Equip/Cannot/reqINT";
+    req_stat_names_[MapleStat::Id::INT][true] = "Equip/Can/reqINT";
+    req_stat_names_[MapleStat::Id::LUK][false] = "Equip/Cannot/reqLUK";
+    req_stat_names_[MapleStat::Id::LUK][true] = "Equip/Can/reqLUK";
+
     req_stat_positions_[MapleStat::Id::LEVEL] = Point<int16_t>(97, 47);
     req_stat_positions_[MapleStat::Id::STR] = Point<int16_t>(97, 62);
     req_stat_positions_[MapleStat::Id::LUK] = Point<int16_t>(177, 62);
     req_stat_positions_[MapleStat::Id::DEX] = Point<int16_t>(97, 71);
     req_stat_positions_[MapleStat::Id::INT] = Point<int16_t>(177, 71);
 
-    reqset_[false] = Charset(EquipCannot, Charset::Alignment::LEFT);
-    reqset_[true] = Charset(EquipCan, Charset::Alignment::LEFT);
+    reqset_[false] = Charset(EquipCannot, Charset::Alignment::LEFT, "Equip/Cannot");
+    reqset_[true] = Charset(EquipCan, Charset::Alignment::LEFT, "Equip/Can");
 
-    lvset_[false] = Charset(EquipCannot, Charset::Alignment::LEFT);
-    lvset_[true] = Charset(Equip["YellowNumber"], Charset::Alignment::LEFT);
+    lvset_[false] = Charset(EquipCannot, Charset::Alignment::LEFT, "Equip/Cannot");
+    lvset_[true] = Charset(Equip["YellowNumber"], Charset::Alignment::LEFT,
+                           "Equip/YellowNumber");
 
     atkincset_[false] =
-        Charset(Equip["Summary"]["decline"], Charset::Alignment::RIGHT);
+        Charset(Equip["Summary"]["decline"], Charset::Alignment::RIGHT,
+                "Equip/Summary/decline");
     atkincset_[true] =
-        Charset(Equip["Summary"]["incline"], Charset::Alignment::RIGHT);
+        Charset(Equip["Summary"]["incline"], Charset::Alignment::RIGHT,
+                "Equip/Summary/incline");
 
     jobs_back_ = Equip["Job"]["normal"];
     jobs_[false][0] = Equip["Job"]["disable"]["0"];
@@ -107,6 +148,19 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
 
     inv_pos_ = ivp;
     inv_pos_preview_ = 0;
+
+    // The panel is as wide as the art that caps it, and every wrap is taken from that, held back
+    // from its right edge by the same margin the text is placed off its left. A wrap that runs to
+    // the edge itself lays the last line of a long name over the frame.
+    int16_t panel_w = top_.width();
+    int16_t edge = panel_w - Tooltip::TEXT_MARGIN;
+    int16_t name_w = edge - NAME_X;
+    int16_t desc_w = edge - DESC_X;
+    int16_t potflag_w = edge - STAT_X;
+
+    // Right-aligned against the edge the attack summary's digits end at, so the label sits over them
+    // whatever it says.
+    int16_t atkinc_w = SUMMARY_X + SUMMARY_W - STAT_X;
 
     const Player &player = Stage::get().get_player();
 
@@ -204,38 +258,35 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
 
                 prank_preview_ = equip.get_potrank();
 
+                Color::Name potcolor_preview = Color::Name::WHITE;
+                std::string potstr_preview;
+
                 switch (prank_preview_) {
                     case Equip::Potential::POT_HIDDEN:
-                        potflag_preview_ = Text(Text::Font::A11M,
-                                                Text::Alignment::CENTER,
-                                                Color::Name::RED);
-                        potflag_preview_.change_text("(Hidden Potential)");
+                        potcolor_preview = Color::Name::RED;
+                        potstr_preview = "（未知潜能）";
                         break;
                     case Equip::Potential::POT_RARE:
-                        potflag_preview_ = Text(Text::Font::A11M,
-                                                Text::Alignment::CENTER,
-                                                Color::Name::WHITE);
-                        potflag_preview_.change_text("(Rare Item)");
+                        potstr_preview = "（稀有潜能）";
                         break;
                     case Equip::Potential::POT_EPIC:
-                        potflag_preview_ = Text(Text::Font::A11M,
-                                                Text::Alignment::CENTER,
-                                                Color::Name::WHITE);
-                        potflag_preview_.change_text("(Epic Item)");
+                        potstr_preview = "（史诗潜能）";
                         break;
                     case Equip::Potential::POT_UNIQUE:
-                        potflag_preview_ = Text(Text::Font::A11M,
-                                                Text::Alignment::CENTER,
-                                                Color::Name::WHITE);
-                        potflag_preview_.change_text("(Unique Item)");
+                        potstr_preview = "（独特潜能）";
                         break;
                     case Equip::Potential::POT_LEGENDARY:
-                        potflag_preview_ = Text(Text::Font::A11M,
-                                                Text::Alignment::CENTER,
-                                                Color::Name::WHITE);
-                        potflag_preview_.change_text("(Legendary Item)");
+                        potstr_preview = "（传说潜能）";
                         break;
                     default: height_preview_ -= 16; break;
+                }
+
+                if (prank_preview_ != Equip::Potential::POT_NONE) {
+                    potflag_preview_ = Text(Text::Font::A11M,
+                                            Text::Alignment::CENTER,
+                                            potcolor_preview,
+                                            potstr_preview,
+                                            potflag_w);
                 }
 
                 Color::Name namecolor;
@@ -265,10 +316,10 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
 
                 switch (reqGender) {
                     case 0:  // Male
-                        namestr += " (M)";
+                        namestr += "（男）";
                         break;
                     case 1:  // Female
-                        namestr += " (F)";
+                        namestr += "（女）";
                         break;
                     case 2:  // Unisex
                     default: break;
@@ -284,11 +335,12 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
                                      Text::Alignment::LEFT,
                                      namecolor,
                                      namestr,
-                                     400);
+                                     name_w);
                 atkinc_preview_ = Text(Text::Font::A11M,
                                        Text::Alignment::RIGHT,
                                        Color::Name::DUSTYGRAY,
-                                       "ATT INCREASE");
+                                       "攻击提升",
+                                       atkinc_w);
 
                 std::string desctext = itemdata.get_desc();
                 has_desc_preview_ = !desctext.empty();
@@ -298,14 +350,14 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
                                          Text::Alignment::LEFT,
                                          Color::Name::WHITE,
                                          desctext,
-                                         250);
+                                         desc_w);
                     height_preview_ += desc_preview_.height() + 10;
                 }
 
                 category_preview_ = Text(Text::Font::A11M,
                                          Text::Alignment::LEFT,
                                          Color::Name::WHITE,
-                                         "Type: " + equipdata.get_type());
+                                         "类型：" + equipdata.get_type());
 
                 is_weapon_preview_ = equipdata.is_weapon();
 
@@ -315,7 +367,7 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
                         Text(Text::Font::A11M,
                              Text::Alignment::LEFT,
                              Color::Name::WHITE,
-                             "Attack Speed: " + weapon.getspeedstring());
+                             "攻击速度：" + weapon.getspeedstring());
                 } else {
                     height_preview_ -= 18;
                 }
@@ -328,19 +380,19 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
                         Text(Text::Font::A11M,
                              Text::Alignment::LEFT,
                              Color::Name::WHITE,
-                             "Remaining Enhancements: "
+                             "剩余强化次数："
                                  + std::to_string(equip.get_slots()));
 
                     std::string vicious = std::to_string(equip.get_vicious());
 
                     if (equip.get_vicious() > 1) {
-                        vicious.append(" (MAX) ");
+                        vicious.append("（上限）");
                     }
 
                     hammers_preview_ = Text(Text::Font::A11M,
                                             Text::Alignment::LEFT,
                                             Color::Name::WHITE,
-                                            "Hammers Applied: " + vicious);
+                                            "强化锤使用次数：" + vicious);
                 } else {
                     height_preview_ -= 36;
                 }
@@ -366,7 +418,7 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
                             Text::Font::A11M,
                             Text::Alignment::LEFT,
                             Color::Name::WHITE,
-                            EquipStat::names[es] + std::string(": ") + statstr);
+                            EquipStat::names[es] + std::string("：") + statstr);
                     } else {
                         height_preview_ -= 18;
                     }
@@ -446,38 +498,35 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
 
     prank_ = equip.get_potrank();
 
+    Color::Name potcolor = Color::Name::WHITE;
+    std::string potstr;
+
     switch (prank_) {
         case Equip::Potential::POT_HIDDEN:
-            potflag_ = Text(Text::Font::A11M,
-                            Text::Alignment::CENTER,
-                            Color::Name::RED);
-            potflag_.change_text("(Hidden Potential)");
+            potcolor = Color::Name::RED;
+            potstr = "（未知潜能）";
             break;
         case Equip::Potential::POT_RARE:
-            potflag_ = Text(Text::Font::A11M,
-                            Text::Alignment::CENTER,
-                            Color::Name::WHITE);
-            potflag_.change_text("(Rare Item)");
+            potstr = "（稀有潜能）";
             break;
         case Equip::Potential::POT_EPIC:
-            potflag_ = Text(Text::Font::A11M,
-                            Text::Alignment::CENTER,
-                            Color::Name::WHITE);
-            potflag_.change_text("(Epic Item)");
+            potstr = "（史诗潜能）";
             break;
         case Equip::Potential::POT_UNIQUE:
-            potflag_ = Text(Text::Font::A11M,
-                            Text::Alignment::CENTER,
-                            Color::Name::WHITE);
-            potflag_.change_text("(Unique Item)");
+            potstr = "（独特潜能）";
             break;
         case Equip::Potential::POT_LEGENDARY:
-            potflag_ = Text(Text::Font::A11M,
-                            Text::Alignment::CENTER,
-                            Color::Name::WHITE);
-            potflag_.change_text("(Legendary Item)");
+            potstr = "（传说潜能）";
             break;
         default: height_ -= 16; break;
+    }
+
+    if (prank_ != Equip::Potential::POT_NONE) {
+        potflag_ = Text(Text::Font::A11M,
+                        Text::Alignment::CENTER,
+                        potcolor,
+                        potstr,
+                        potflag_w);
     }
 
     Color::Name namecolor;
@@ -497,10 +546,10 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
 
     switch (reqGender) {
         case 0:  // Male
-            namestr += " (M)";
+            namestr += "（男）";
             break;
         case 1:  // Female
-            namestr += " (F)";
+            namestr += "（女）";
             break;
         case 2:  // Unisex
         default: break;
@@ -513,11 +562,12 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
     }
 
     name_ =
-        Text(Text::Font::A12B, Text::Alignment::LEFT, namecolor, namestr, 400);
+        Text(Text::Font::A12B, Text::Alignment::LEFT, namecolor, namestr, name_w);
     atkinc_ = Text(Text::Font::A11M,
                    Text::Alignment::RIGHT,
                    Color::Name::DUSTYGRAY,
-                   "ATT INCREASE");
+                   "攻击提升",
+                   atkinc_w);
 
     std::string desctext = itemdata.get_desc();
     has_desc_ = !desctext.empty();
@@ -527,14 +577,14 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
                      Text::Alignment::LEFT,
                      Color::Name::WHITE,
                      desctext,
-                     250);
+                     desc_w);
         height_ += desc_.height() + 10;
     }
 
     category_ = Text(Text::Font::A11M,
                      Text::Alignment::LEFT,
                      Color::Name::WHITE,
-                     "Type: " + equipdata.get_type());
+                     "类型：" + equipdata.get_type());
 
     is_weapon_ = equipdata.is_weapon();
 
@@ -543,7 +593,7 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
         wepspeed_ = Text(Text::Font::A11M,
                          Text::Alignment::LEFT,
                          Color::Name::WHITE,
-                         "Attack Speed: " + weapon.getspeedstring());
+                         "攻击速度：" + weapon.getspeedstring());
     } else {
         height_ -= 18;
     }
@@ -555,18 +605,18 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
             Text::Font::A11M,
             Text::Alignment::LEFT,
             Color::Name::WHITE,
-            "Remaining Enhancements: " + std::to_string(equip.get_slots()));
+            "剩余强化次数：" + std::to_string(equip.get_slots()));
 
         std::string vicious = std::to_string(equip.get_vicious());
 
         if (equip.get_vicious() > 1) {
-            vicious.append(" (MAX) ");
+            vicious.append("（上限）");
         }
 
         hammers_ = Text(Text::Font::A11M,
                         Text::Alignment::LEFT,
                         Color::Name::WHITE,
-                        "Hammers Applied: " + vicious);
+                        "强化锤使用次数：" + vicious);
     } else {
         height_ -= 36;
     }
@@ -589,20 +639,24 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
                 Text(Text::Font::A11M,
                      Text::Alignment::LEFT,
                      Color::Name::WHITE,
-                     EquipStat::names[es] + std::string(": ") + statstr);
+                     EquipStat::names[es] + std::string("：") + statstr);
         } else {
             height_ -= 18;
         }
     }
 }
 
-void EquipTooltip::draw(Point<int16_t> pos) const {
+bool EquipTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
     if (inv_pos_ == 0) {
-        return;
+        return false;
     }
 
-    draw_preview(pos);
+    build_preview(list, pos);
 
+    // The same clamp the pass that used to draw this worked out, for the same reason: the pair of
+    // panels is placed against the finger that opened it and has to come back inside the interface's
+    // screen when the finger is near an edge - and the width it holds itself to is the width of both
+    // panels when there are two.
     int16_t max_width = Constants::Constants::get().get_ui_viewwidth();
     int16_t max_height = Constants::Constants::get().get_ui_viewheight();
     int16_t cur_width = pos.x() + top_.width();
@@ -629,29 +683,35 @@ void EquipTooltip::draw(Point<int16_t> pos) const {
         pos.shift_y(adj_y * -1);
     }
 
-    top_.draw(pos);
-    mid_.draw(
-        DrawArgument(pos + Point<int16_t>(0, 13), Point<int16_t>(0, height_)));
-    bot_.draw(pos + Point<int16_t>(0, height_ + 13));
-    cover_.draw(pos);
+    list.picture(top_, DrawArgument(pos), "Frame/top");
+    list.picture(mid_,
+                 DrawArgument(pos + Point<int16_t>(0, 13),
+                              Point<int16_t>(0, height_)),
+                 "Frame/line");
+    list.picture(bot_,
+                 DrawArgument(pos + Point<int16_t>(0, height_ + 13)),
+                 "Frame/bottom");
+    list.picture(cover_, DrawArgument(pos), "Frame/cover");
 
-    name_.draw(pos + Point<int16_t>(17, 7));
+    list.text(name_, pos + Point<int16_t>(17, 7));
 
     if (prank_ != Equip::Potential::POT_NONE) {
-        potflag_.draw(pos + Point<int16_t>(130, 20));
+        list.text(potflag_, pos + Point<int16_t>(POTFLAG_X, 20));
         pos.shift_y(16);
     }
 
     pos.shift_y(44);
 
-    line_.draw(pos);
+    list.picture(line_, DrawArgument(pos), "Frame/dotline");
 
-    atkinc_.draw(pos + Point<int16_t>(248, 4));
-    base_.draw(pos + Point<int16_t>(12, 10));
-    type_[false].draw(pos + Point<int16_t>(12, 10));
-    item_icon_.draw(DrawArgument(pos + Point<int16_t>(18, 82), 2.0f, 2.0f));
-    potential_[prank_].draw(pos + Point<int16_t>(12, 10));
-    item_cover_.draw(pos + Point<int16_t>(12, 10));
+    list.text(atkinc_, pos + Point<int16_t>(ATKINC_X, 4));
+    list.picture(base_, DrawArgument(pos + Point<int16_t>(12, 10)), "ItemIcon/base");
+    list.picture(type_[false], DrawArgument(pos + Point<int16_t>(12, 10)), "ItemIcon/old");
+    list.icon(item_icon_, DrawArgument(pos + Point<int16_t>(18, 82), 2.0f, 2.0f));
+    list.picture(potential_[prank_],
+                 DrawArgument(pos + Point<int16_t>(12, 10)),
+                 potential_names_[prank_]);
+    list.picture(item_cover_, DrawArgument(pos + Point<int16_t>(12, 10)), "ItemIcon/cover");
 
     int16_t atkincnum = 0;
     std::string atkincstr = std::to_string(atkincnum);
@@ -672,48 +732,62 @@ void EquipTooltip::draw(Point<int16_t> pos) const {
         atkinc_pos = false;
     }
 
-    atkincset_[atkinc_pos].draw(atkincstr, 11, pos + Point<int16_t>(239, 26));
+    atkincset_[atkinc_pos].build(list,
+                             atkincstr,
+                             SUMMARY_W,
+                             pos + Point<int16_t>(SUMMARY_X, 26));
 
     pos.shift_y(12);
 
     for (MapleStat::Id ms : requirements_) {
         Point<int16_t> reqpos = req_stat_positions_[ms];
         bool reqok = can_equip_[ms];
-        req_stat_textures_[ms][reqok].draw(pos + reqpos);
+        list.picture(req_stat_textures_[ms][reqok],
+                     DrawArgument(pos + reqpos),
+                     req_stat_names_[ms][reqok]);
 
         if (ms != MapleStat::Id::LEVEL) {
-            reqset_[reqok].draw(req_stat_strings_[ms],
+            reqset_[reqok].build(list,
+                                 req_stat_strings_[ms],
+                                 6,
+                                 pos + reqpos + Point<int16_t>(54, 0));
+        } else {
+            lvset_[reqok].build(list,
+                                req_stat_strings_[ms],
                                 6,
                                 pos + reqpos + Point<int16_t>(54, 0));
-        } else {
-            lvset_[reqok].draw(req_stat_strings_[ms],
-                               6,
-                               pos + reqpos + Point<int16_t>(54, 0));
         }
     }
 
     pos.shift_y(88);
 
     Point<int16_t> job_position(pos + Point<int16_t>(10, 14));
-    jobs_back_.draw(job_position);
+    list.picture(jobs_back_, DrawArgument(job_position), "Equip/Job/normal");
+
+    const bool jobok = can_equip_[MapleStat::Id::JOB];
 
     for (const auto &jbit : okjobs_) {
-        jobs_[can_equip_[MapleStat::Id::JOB]].at(jbit).draw(job_position);
+        list.picture(jobs_[jobok].at(jbit),
+                     DrawArgument(job_position),
+                     std::string("Equip/Job/") + (jobok ? "enable/" : "disable/")
+                         + std::to_string(jbit));
     }
 
-    line_.draw(pos + Point<int16_t>(0, 47));
+    list.picture(line_,
+                 DrawArgument(pos + Point<int16_t>(0, 47)),
+                 "Frame/dotline");
 
     pos.shift_y(49);
 
-    int16_t stat_x = 13;
+    int16_t stat_x = STAT_X;
     int16_t stat_y = 15;
 
-    category_.draw(pos + Point<int16_t>(stat_x, 0));
+    list.text(category_, pos + Point<int16_t>(stat_x, 0));
 
     pos.shift_y(stat_y);
 
     if (is_weapon_) {
-        wepspeed_.draw(pos + Point<int16_t>(stat_x, 0));
+        list.text(wepspeed_, pos + Point<int16_t>(stat_x, 0));
         pos.shift_y(stat_y);
     }
 
@@ -722,29 +796,32 @@ void EquipTooltip::draw(Point<int16_t> pos) const {
             continue;
         }
 
-        label.draw(pos + Point<int16_t>(stat_x, 0));
+        list.text(label, pos + Point<int16_t>(stat_x, 0));
         pos.shift_y(stat_y);
     }
 
     if (has_slots_) {
-        slots_.draw(pos + Point<int16_t>(stat_x, 0));
+        list.text(slots_, pos + Point<int16_t>(stat_x, 0));
         pos.shift_y(stat_y);
-        hammers_.draw(pos + Point<int16_t>(stat_x, 0));
+        list.text(hammers_, pos + Point<int16_t>(stat_x, 0));
         pos.shift_y(stat_y);
     }
 
     if (has_desc_) {
         pos.shift_y(13);
-        line_.draw(pos);
-        desc_.draw(pos + Point<int16_t>(9, 3));
+        list.picture(line_, DrawArgument(pos), "Frame/dotline");
+        list.text(desc_, pos + Point<int16_t>(DESC_X, 3));
     }
+
+    return true;
 }
 
-void EquipTooltip::draw_preview(Point<int16_t> pos) const {
+void EquipTooltip::build_preview(NativeTooltip::List &list, Point<int16_t> pos) const {
     if (inv_pos_preview_ == 0) {
         return;
     }
 
+    // The piece already worn sits to the right of the piece under the finger, at its own width away.
     pos.shift_x(top_.width());
 
     int16_t max_width = Constants::Constants::get().get_ui_viewwidth();
@@ -763,30 +840,36 @@ void EquipTooltip::draw_preview(Point<int16_t> pos) const {
         pos.shift_y(adj_y * -1);
     }
 
-    top_.draw(pos);
-    mid_.draw(DrawArgument(pos + Point<int16_t>(0, 13),
-                           Point<int16_t>(0, height_preview_)));
-    bot_.draw(pos + Point<int16_t>(0, height_preview_ + 13));
-    cover_.draw(pos);
+    list.picture(top_, DrawArgument(pos), "Frame/top");
+    list.picture(mid_,
+                 DrawArgument(pos + Point<int16_t>(0, 13),
+                              Point<int16_t>(0, height_preview_)),
+                 "Frame/line");
+    list.picture(bot_,
+                 DrawArgument(pos + Point<int16_t>(0, height_preview_ + 13)),
+                 "Frame/bottom");
+    list.picture(cover_, DrawArgument(pos), "Frame/cover");
 
-    name_preview_.draw(pos + Point<int16_t>(17, 7));
+    list.text(name_preview_, pos + Point<int16_t>(17, 7));
 
     if (prank_preview_ != Equip::Potential::POT_NONE) {
-        potflag_preview_.draw(pos + Point<int16_t>(130, 20));
+        list.text(potflag_preview_, pos + Point<int16_t>(POTFLAG_X, 20));
         pos.shift_y(16);
     }
 
     pos.shift_y(44);
 
-    line_.draw(pos);
+    list.picture(line_, DrawArgument(pos), "Frame/dotline");
 
-    atkinc_preview_.draw(pos + Point<int16_t>(248, 4));
-    base_.draw(pos + Point<int16_t>(12, 10));
-    type_[false].draw(pos + Point<int16_t>(12, 10));
-    item_icon_preview_.draw(
-        DrawArgument(pos + Point<int16_t>(18, 82), 2.0f, 2.0f));
-    potential_[prank_preview_].draw(pos + Point<int16_t>(12, 10));
-    item_cover_.draw(pos + Point<int16_t>(12, 10));
+    list.text(atkinc_preview_, pos + Point<int16_t>(ATKINC_X, 4));
+    list.picture(base_, DrawArgument(pos + Point<int16_t>(12, 10)), "ItemIcon/base");
+    list.picture(type_[false], DrawArgument(pos + Point<int16_t>(12, 10)), "ItemIcon/old");
+    list.icon(item_icon_preview_,
+              DrawArgument(pos + Point<int16_t>(18, 82), 2.0f, 2.0f));
+    list.picture(potential_[prank_preview_],
+                 DrawArgument(pos + Point<int16_t>(12, 10)),
+                 potential_names_[prank_preview_]);
+    list.picture(item_cover_, DrawArgument(pos + Point<int16_t>(12, 10)), "ItemIcon/cover");
 
     int16_t atkincnum = 0;
     std::string atkincstr = std::to_string(atkincnum);
@@ -807,49 +890,62 @@ void EquipTooltip::draw_preview(Point<int16_t> pos) const {
         atkinc_pos = false;
     }
 
-    atkincset_[atkinc_pos].draw(atkincstr, 11, pos + Point<int16_t>(239, 26));
+    atkincset_[atkinc_pos].build(list,
+                             atkincstr,
+                             SUMMARY_W,
+                             pos + Point<int16_t>(SUMMARY_X, 26));
 
     pos.shift_y(12);
 
     for (MapleStat::Id ms : requirements_) {
         Point<int16_t> reqpos = req_stat_positions_[ms];
         bool reqok = can_equip_preview_[ms];
-        req_stat_textures_[ms][reqok].draw(pos + reqpos);
+        list.picture(req_stat_textures_[ms][reqok],
+                     DrawArgument(pos + reqpos),
+                     req_stat_names_[ms][reqok]);
 
         if (ms != MapleStat::Id::LEVEL) {
-            reqset_[reqok].draw(req_stat_strings_preview_[ms],
+            reqset_[reqok].build(list,
+                                 req_stat_strings_preview_[ms],
+                                 6,
+                                 pos + reqpos + Point<int16_t>(54, 0));
+        } else {
+            lvset_[reqok].build(list,
+                                req_stat_strings_preview_[ms],
                                 6,
                                 pos + reqpos + Point<int16_t>(54, 0));
-        } else {
-            lvset_[reqok].draw(req_stat_strings_preview_[ms],
-                               6,
-                               pos + reqpos + Point<int16_t>(54, 0));
         }
     }
 
     pos.shift_y(88);
 
     Point<int16_t> job_position(pos + Point<int16_t>(10, 14));
-    jobs_back_.draw(job_position);
+    list.picture(jobs_back_, DrawArgument(job_position), "Equip/Job/normal");
+
+    const bool jobok = can_equip_preview_[MapleStat::Id::JOB];
 
     for (const auto &jbit : okjobs_preview_) {
-        jobs_[can_equip_preview_[MapleStat::Id::JOB]].at(jbit).draw(
-            job_position);
+        list.picture(jobs_[jobok].at(jbit),
+                     DrawArgument(job_position),
+                     std::string("Equip/Job/") + (jobok ? "enable/" : "disable/")
+                         + std::to_string(jbit));
     }
 
-    line_.draw(pos + Point<int16_t>(0, 47));
+    list.picture(line_,
+                 DrawArgument(pos + Point<int16_t>(0, 47)),
+                 "Frame/dotline");
 
     pos.shift_y(49);
 
-    int16_t stat_x = 13;
+    int16_t stat_x = STAT_X;
     int16_t stat_y = 15;
 
-    category_preview_.draw(pos + Point<int16_t>(stat_x, 0));
+    list.text(category_preview_, pos + Point<int16_t>(stat_x, 0));
 
     pos.shift_y(stat_y);
 
     if (is_weapon_preview_) {
-        wepspeed_preview_.draw(pos + Point<int16_t>(stat_x, 0));
+        list.text(wepspeed_preview_, pos + Point<int16_t>(stat_x, 0));
         pos.shift_y(stat_y);
     }
 
@@ -858,21 +954,21 @@ void EquipTooltip::draw_preview(Point<int16_t> pos) const {
             continue;
         }
 
-        label.draw(pos + Point<int16_t>(stat_x, 0));
+        list.text(label, pos + Point<int16_t>(stat_x, 0));
         pos.shift_y(stat_y);
     }
 
     if (has_slots_preview_) {
-        slots_preview_.draw(pos + Point<int16_t>(stat_x, 0));
+        list.text(slots_preview_, pos + Point<int16_t>(stat_x, 0));
         pos.shift_y(stat_y);
-        hammers_preview_.draw(pos + Point<int16_t>(stat_x, 0));
+        list.text(hammers_preview_, pos + Point<int16_t>(stat_x, 0));
         pos.shift_y(stat_y);
     }
 
     if (has_desc_preview_) {
         pos.shift_y(-4);
-        line_.draw(pos);
-        desc_preview_.draw(pos + Point<int16_t>(9, 8));
+        list.picture(line_, DrawArgument(pos), "Frame/dotline");
+        list.text(desc_preview_, pos + Point<int16_t>(DESC_X, 8));
     }
 }
 }  // namespace ms

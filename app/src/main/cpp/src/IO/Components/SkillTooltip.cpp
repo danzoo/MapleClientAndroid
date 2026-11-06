@@ -20,6 +20,16 @@
 #include "../Data/SkillData.h"
 
 namespace ms {
+namespace {
+// The description sits right of the skill icon rather than inside the text margin, so it has its own
+// left edge and only shares the right one.
+constexpr int16_t DESC_OFFSET = 73;
+
+// The frame is anchored at its horizontal centre this far from the left edge of the preview, so the
+// content edges it leaves can be worked out before anything is placed.
+constexpr int16_t FRAME_CENTER_X = 176;
+}  // namespace
+
 SkillTooltip::SkillTooltip() {
     img::node Frame = img::wz::ui["UIToolTip.img"]["Item"]["Frame2"];
 
@@ -56,30 +66,26 @@ void SkillTooltip::set_skill(int32_t id,
     std::string descstr = data.get_desc();
 
     if (masterlevel > 0) {
-        const std::string mltag = "Master Level";
+        // The archive writes this tag itself, in Chinese, but with the number as published rather
+        // than the number this skill really has - so the number is replaced in place and no second
+        // tag is added beside it. The colon comes in both a full-width and a half-width form in the
+        // files, so the number is found by scanning for digits inside the bracket instead of after
+        // one particular colon.
+        const std::string mltag = "最高等级";
         const std::string mlstr = std::to_string(masterlevel);
+        const std::string digits = "0123456789";
+
         size_t mlstart = descstr.find(mltag);
-        size_t mlpos = descstr.find(':', mlstart) + 2;
-        size_t mlend = descstr.find("]", mlstart);
+        size_t mlclose = descstr.find(']', mlstart);
+        size_t mlpos =
+            descstr.find_first_of(digits, mlstart + mltag.size());
 
-        if (mlpos < mlend && mlend != std::string::npos) {
-            size_t mlsize = mlend - mlpos;
-            descstr.erase(mlpos, mlsize);
-            descstr.insert(mlpos, mlstr);
-
-            // Fixing errors in the files...
-            if (mlstart == 0) {
-                descstr.insert(0, "[");
-                mlend++;
-            }
-
-            size_t linebreak = descstr.find("]\\n", mlstart);
-
-            if (linebreak != mlend) {
-                descstr.insert(mlend + 1, "\\n");
-            }
+        if (mlpos == std::string::npos || mlclose == std::string::npos
+            || mlpos >= mlclose) {
+            descstr.insert(0, "[" + mltag + " : " + mlstr + "]\\n");
         } else {
-            descstr.insert(0, "[" + mltag + ": " + mlstr + "]\\n");
+            size_t mlend = descstr.find_first_not_of(digits, mlpos);
+            descstr.replace(mlpos, mlend - mlpos, mlstr);
         }
     }
 
@@ -102,7 +108,7 @@ void SkillTooltip::set_skill(int32_t id,
     bool next = level < masterlevel;
 
     if (current) {
-        levelstr += "[Current Level: " + std::to_string(level) + "]\\n"
+        levelstr += "[当前等级 : " + std::to_string(level) + "]\\n"
                     + data.get_level_desc(level);
     }
 
@@ -111,26 +117,52 @@ void SkillTooltip::set_skill(int32_t id,
     }
 
     if (next) {
-        levelstr += "[Next Level: " + std::to_string(level + 1) + "]\\n"
+        levelstr += "[下一等级 : " + std::to_string(level + 1) + "]\\n"
                     + data.get_level_desc(level + 1);
     }
 
+    width_ = 292;
+
+    // Only the horizontal edges are taken from this. The vertical ones depend on how tall the text
+    // turns out, which is not known until the text exists - and the text cannot be laid out until
+    // the horizontal edges are known. The frame's width does not change with its height, so the
+    // edges come out the same whatever height is passed.
+    MapleFrame::Box box = frame_.inner_box(Point<int16_t>(FRAME_CENTER_X, 1),
+                                           width_,
+                                           1);
+
     icon_ = data.get_icon(SkillData::Icon::NORMAL);
+
+    text_x_ = box.left + Tooltip::TEXT_MARGIN;
+
+    // The tile is the art magnified twice with two units of padding on each side, so where it ends
+    // depends on the icon rather than on the frame.
+    int16_t icon_width = (icon_.get_dimensions().x() * 2) + 4;
+
+    // The description column is the tile's neighbour on the right and has to start clear of it. The
+    // fixed offset was only ever right while the tile sat left of the text edge; once the tile moved
+    // onto that edge its last units ran over the first glyph of every line in the column.
+    desc_x_ = std::max(box.left + DESC_OFFSET, text_x_ + icon_width + 8);
+
+    int16_t edge = box.right - Tooltip::TEXT_MARGIN;
+    int16_t text_w = edge - text_x_;
+    int16_t desc_w = edge - desc_x_;
+
     name_ = Text(Text::Font::A12B,
                  Text::Alignment::LEFT,
                  Color::Name::WHITE,
                  data.get_name(),
-                 320);
+                 text_w);
     desc_ = Text(Text::Font::A12M,
                  Text::Alignment::LEFT,
                  Color::Name::WHITE,
                  descstr,
-                 210);
+                 desc_w);
     level_desc_ = Text(Text::Font::A12M,
                        Text::Alignment::LEFT,
                        Color::Name::WHITE,
                        levelstr,
-                       290);
+                       text_w);
 
     int16_t desc_height = desc_.height() + 11;
 
@@ -138,18 +170,20 @@ void SkillTooltip::set_skill(int32_t id,
     level_offset_ = std::max<int16_t>(desc_height, 85);
     height_ = icon_offset_ + level_offset_ + level_desc_.height();
 
-    int16_t icon_width = (icon_.get_dimensions().x() * 2) + 4;
-    width_ = 292;
-
-    line_ = ColorLine(width_ + 16, Color::Name::WHITE, 1.0f);
+    line_ = ColorLine(box.right - Tooltip::TEXT_MARGIN - text_x_,
+                      Color::Name::WHITE,
+                      1.0f);
     box_ = ColorBox(icon_width, icon_width, Color::Name::WHITE, 0.65f);
 }
 
-void SkillTooltip::draw(Point<int16_t> pos) const {
+bool SkillTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
     if (skill_id_ == 0) {
-        return;
+        return false;
     }
 
+    // The same clamp the pass that used to draw this worked out, for the same reason: the preview is
+    // placed against the finger that opened it and has to come back inside the interface's screen
+    // when the finger is near an edge.
     int16_t max_width = Constants::Constants::get().get_ui_viewwidth();
     int16_t max_height = Constants::Constants::get().get_ui_viewheight();
     int16_t cur_width = pos.x() + width_ + 45;
@@ -166,19 +200,35 @@ void SkillTooltip::draw(Point<int16_t> pos) const {
         pos.shift_y(adj_y * -1);
     }
 
-    frame_.draw(pos + Point<int16_t>(176, height_ + 11), width_, height_ - 1);
-    name_.draw(pos + Point<int16_t>(33, 3));
-    cover_.draw(pos + Point<int16_t>(16, -1));
+    frame_.build(list,
+                 pos + Point<int16_t>(FRAME_CENTER_X, height_ + 11),
+                 width_,
+                 height_ - 1,
+                 "Frame2");
+    list.text(name_, pos + Point<int16_t>(text_x_, 3));
+    list.picture(cover_, DrawArgument(pos + Point<int16_t>(16, -1)), "Frame2/cover");
 
     pos.shift_y(icon_offset_);
 
-    box_.draw(DrawArgument(pos + Point<int16_t>(26, 21)));
-    icon_.draw(DrawArgument(pos + Point<int16_t>(28, 87), 2.0f, 2.0f));
-    desc_.draw(pos + Point<int16_t>(102, 15));
+    // The tile is the icon's visible left edge, so it is set to the same one the text under it is
+    // laid out against. The art sits two units inside it, because the tile is two units wider than
+    // the art on each side.
+    list.block(pos + Point<int16_t>(text_x_, 21),
+               Point<int16_t>(box_.width(), box_.height()),
+               box_.color(),
+               box_.opacity());
+    list.icon(icon_,
+              DrawArgument(pos + Point<int16_t>(text_x_ + 2, 87), 2.0f, 2.0f));
+    list.text(desc_, pos + Point<int16_t>(desc_x_, 15));
 
     pos.shift_y(level_offset_);
 
-    line_.draw(pos + Point<int16_t>(22, 10));
-    level_desc_.draw(pos + Point<int16_t>(25, 11));
+    list.block(pos + Point<int16_t>(text_x_, 10),
+               Point<int16_t>(line_.width(), 1),
+               line_.color(),
+               line_.opacity());
+    list.text(level_desc_, pos + Point<int16_t>(text_x_, 11));
+
+    return true;
 }
 }  // namespace ms

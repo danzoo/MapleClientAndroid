@@ -70,23 +70,35 @@ public:
     // when a scroll gesture begins and any item preview must vanish.
     virtual void clear_tooltip() {}
 
-    virtual void show_equip(Tooltip::Parent parent, int16_t slot) = 0;
+    // A preview stands at an anchor rather than at the finger: the window that raises one hands
+    // over the centre of the piece that was touched, so that where inside it the finger landed
+    // changes nothing about where the words appear. Passing the cursor itself is what a preview
+    // with no piece of art behind it - a place on the minimap, a line of plain text - still does.
+    virtual void show_equip(Tooltip::Parent parent,
+                            int16_t slot,
+                            Point<int16_t> anchor) = 0;
 
-    virtual void show_item(Tooltip::Parent parent, int32_t itemid) = 0;
+    virtual void show_item(Tooltip::Parent parent,
+                           int32_t itemid,
+                           Point<int16_t> anchor) = 0;
 
     virtual void show_skill(Tooltip::Parent parent,
                             int32_t skill_id,
                             int32_t level,
                             int32_t masterlevel,
-                            int64_t expiration) = 0;
+                            int64_t expiration,
+                            Point<int16_t> anchor) = 0;
 
-    virtual void show_text(Tooltip::Parent parent, std::string text) = 0;
+    virtual void show_text(Tooltip::Parent parent,
+                           std::string text,
+                           Point<int16_t> anchor) = 0;
 
     virtual void show_map(Tooltip::Parent parent,
                           std::string name,
                           std::string description,
                           int32_t mapid,
-                          bool bolded) = 0;
+                          bool bolded,
+                          Point<int16_t> anchor) = 0;
 
     virtual Iterator pre_add(UIElement::Type type,
                              bool toggled,
@@ -114,19 +126,21 @@ class UIStateNull : public UIState {
     void send_close() override {}
     void drag_icon(Icon *) override {}
     void clear_tooltip(Tooltip::Parent) override {}
-    void show_equip(Tooltip::Parent, int16_t) override {}
-    void show_item(Tooltip::Parent, int32_t) override {}
+    void show_equip(Tooltip::Parent, int16_t, Point<int16_t>) override {}
+    void show_item(Tooltip::Parent, int32_t, Point<int16_t>) override {}
     void show_skill(Tooltip::Parent,
                     int32_t,
                     int32_t,
                     int32_t,
-                    int64_t) override {}
-    void show_text(Tooltip::Parent, std::string) override {}
+                    int64_t,
+                    Point<int16_t>) override {}
+    void show_text(Tooltip::Parent, std::string, Point<int16_t>) override {}
     void show_map(Tooltip::Parent,
                   std::string,
                   std::string,
                   int32_t,
-                  bool) override {}
+                  bool,
+                  Point<int16_t>) override {}
     Iterator pre_add(UIElement::Type, bool, bool) override {
         return { nullptr, UIElement::Type::NUM_TYPES };
     }

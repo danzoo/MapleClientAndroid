@@ -235,7 +235,8 @@ Cursor::State UIWorldMap::send_cursor(bool clicked, Point<int16_t> cursorpos) {
                                path_spot.title,
                                path_spot.description,
                                path_spot.map_ids[0],
-                               path_spot.bolded);
+                               path_spot.bolded,
+                               cursorpos);
             break;
         }
     }

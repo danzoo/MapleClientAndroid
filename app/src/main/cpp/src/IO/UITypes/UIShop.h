@@ -196,7 +196,7 @@ private:
 
         void draw(Point<int16_t> position, const Texture &selected) const;
 
-        void show_item(int16_t slot);
+        void show_item(int16_t slot, Point<int16_t> anchor);
 
         void add(const BuyItem &item);
 
@@ -222,7 +222,7 @@ private:
 
         void draw(Point<int16_t> position, const Texture &selected) const;
 
-        void show_item(int16_t slot);
+        void show_item(int16_t slot, Point<int16_t> anchor);
 
         void sell(bool skip_confirmation) const;
 

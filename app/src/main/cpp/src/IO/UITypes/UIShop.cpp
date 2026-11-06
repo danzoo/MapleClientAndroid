@@ -361,10 +361,17 @@ void UIShop::clear_tooltip() {
 }
 
 void UIShop::show_item(int16_t slot, bool buy) {
+    // The middle of the row that took the tap, at the icon that stands at its left. The band a row
+    // occupies comes from slot_by_position: 42 pixels of pitch, 38 of them live, starting 123 down
+    // from the top of the window - so 143 + 42 * slot is the middle of the row it just accepted.
+    const Point<int16_t> centre(position_ +
+                                 Point<int16_t>(buy ? 24 : 298,
+                                                143 + 42 * slot));
+
     if (buy) {
-        buy_state_.show_item(slot);
+        buy_state_.show_item(slot, centre);
     } else {
-        sell_state_.show_item(slot);
+        sell_state_.show_item(slot, centre);
     }
 }
 
@@ -622,7 +629,7 @@ void UIShop::BuyState::draw(Point<int16_t> parentpos,
     }
 }
 
-void UIShop::BuyState::show_item(int16_t slot) {
+void UIShop::BuyState::show_item(int16_t slot, Point<int16_t> anchor) {
     int16_t absslot = slot + offset;
 
     if (absslot < 0 || absslot >= last_slot) {
@@ -630,7 +637,7 @@ void UIShop::BuyState::show_item(int16_t slot) {
     }
 
     int32_t itemid = items[absslot].get_id();
-    UI::get().show_item(Tooltip::Parent::SHOP, itemid);
+    UI::get().show_item(Tooltip::Parent::SHOP, itemid, anchor);
 }
 
 void UIShop::BuyState::add(const BuyItem &item) {
@@ -735,7 +742,7 @@ void UIShop::SellState::draw(Point<int16_t> parentpos,
     }
 }
 
-void UIShop::SellState::show_item(int16_t slot) {
+void UIShop::SellState::show_item(int16_t slot, Point<int16_t> anchor) {
     int16_t absslot = slot + offset;
 
     if (absslot < 0 || absslot >= last_slot) {
@@ -744,10 +751,10 @@ void UIShop::SellState::show_item(int16_t slot) {
 
     if (tab == InventoryType::Id::EQUIP) {
         int16_t realslot = items[absslot].get_slot();
-        UI::get().show_equip(Tooltip::Parent::SHOP, realslot);
+        UI::get().show_equip(Tooltip::Parent::SHOP, realslot, anchor);
     } else {
         int32_t itemid = items[absslot].get_id();
-        UI::get().show_item(Tooltip::Parent::SHOP, itemid);
+        UI::get().show_item(Tooltip::Parent::SHOP, itemid, anchor);
     }
 }
 

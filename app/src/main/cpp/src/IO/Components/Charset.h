@@ -18,13 +18,19 @@
 #include <unordered_map>
 
 #include "../Graphics/Texture.h"
+#include "../NativeTooltip.h"
 
 namespace ms {
 class Charset {
 public:
     enum Alignment { LEFT, CENTER, RIGHT };
 
-    Charset(const img::node &source, Alignment alignment);
+    // A run of the game's own bitmapped lettering. The asset is the path the set lives at inside its
+    // archive, which is also the folder its canvases were exported to - a character table can only
+    // be handed to a native window one name at a time, and the name a character was found under is
+    // not the name it was saved as (the requirement sets call a percent sign "%" and the summary
+    // sets call it "percent", and both are looked up by their first letter).
+    Charset(const img::node &source, Alignment alignment, const std::string &asset = std::string());
 
     Charset();
 
@@ -36,10 +42,23 @@ public:
                  int16_t hspace,
                  const DrawArgument &args) const;
 
+    // The same run, counted out the same way, written into a preview's display list. The value
+    // returned is the pen the run left behind, exactly as the pass above leaves it, because callers
+    // place the next piece against it.
+    int16_t build(NativeTooltip::List &list,
+                  const std::string &text,
+                  int16_t hspace,
+                  const DrawArgument &args) const;
+
     int16_t getw(int8_t character) const;
 
 private:
+    void build_character(NativeTooltip::List &list,
+                         int8_t character,
+                         const DrawArgument &args) const;
+
     std::unordered_map<int8_t, Texture> chars_;
+    std::unordered_map<int8_t, std::string> names_;
     Alignment alignment_;
 };
 }  // namespace ms

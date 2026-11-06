@@ -21,6 +21,44 @@
 #include "GraphicsGL.h"
 
 namespace ms {
+void Text::metrics(Font id, float &px, bool &bold) {
+    switch (id) {
+        case Text::Font::A11B:
+            px = 11.0f;
+            bold = true;
+            break;
+        case Text::Font::A12M:
+            px = 12.0f;
+            bold = false;
+            break;
+        case Text::Font::A12B:
+            px = 12.0f;
+            bold = true;
+            break;
+        case Text::Font::A13M:
+            px = 13.0f;
+            bold = false;
+            break;
+        case Text::Font::A13B:
+            px = 13.0f;
+            bold = true;
+            break;
+        case Text::Font::A15B:
+            px = 15.0f;
+            bold = true;
+            break;
+        case Text::Font::A18M:
+            px = 18.0f;
+            bold = false;
+            break;
+        case Text::Font::A11M:
+        default:
+            px = 11.0f;
+            bold = false;
+            break;
+    }
+}
+
 Text::Text(Font f,
            Alignment a,
            Color::Name c,

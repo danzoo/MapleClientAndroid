@@ -58,9 +58,9 @@ EquipData::EquipData(int32_t id) : item_data_(ItemData::get(id)) {
 
     if (index < NON_WEAPON_TYPES) {
         const std::array<std::string, NON_WEAPON_TYPES> types = {
-            "HAT",     "FACE ACCESSORY", "EYE ACCESSORY", "EARRINGS", "TOP",
-            "OVERALL", "BOTTOM",         "SHOES",         "GLOVES",   "SHIELD",
-            "CAPE",    "RING",           "PENDANT",       "BELT",     "MEDAL"
+            "帽子", "脸部",   "眼部",  "耳环", "上衣",
+            "套装", "下衣",   "鞋子",  "手套", "盾牌",
+            "披风", "戒指",   "项链",  "腰带", "徽章"
         };
 
         constexpr EquipSlot::Id equipslots[NON_WEAPON_TYPES] = {
@@ -78,33 +78,33 @@ EquipData::EquipData(int32_t id) : item_data_(ItemData::get(id)) {
         eq_slot_ = equipslots[index];
     } else if (index >= WEAPON_OFFSET && index < WEAPON_OFFSET + WEAPON_TYPES) {
         const std::array<std::string, WEAPON_TYPES> types = {
-            "ONE-HANDED SWORD",
-            "ONE-HANDED AXE",
-            "ONE-HANDED MACE",
-            "DAGGER",
+            "单手剑",
+            "单手斧",
+            "单手锤",
+            "短剑",
             "",
             "",
             "",
-            "WAND",
-            "STAFF",
+            "魔杖",
+            "权杖",
             "",
-            "TWO-HANDED SWORD",
-            "TWO-HANDED AXE",
-            "TWO-HANDED MACE",
-            "SPEAR",
-            "POLEARM",
-            "BOW",
-            "CROSSBOW",
-            "CLAW",
-            "KNUCKLE",
-            "GUN"
+            "双手剑",
+            "双手斧",
+            "双手锤",
+            "长矛",
+            "棍棒",
+            "弓",
+            "弩",
+            "爪",
+            "拳套",
+            "火枪"
         };
 
         size_t weaponindex = index - WEAPON_OFFSET;
         type_ = types[weaponindex];
         eq_slot_ = EquipSlot::Id::WEAPON;
     } else {
-        type_ = "CASH";
+        type_ = "商城道具";
         eq_slot_ = EquipSlot::Id::NONE;
     }
 }

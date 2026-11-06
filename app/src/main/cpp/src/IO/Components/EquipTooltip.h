@@ -29,11 +29,13 @@ public:
 
     void set_equip(Tooltip::Parent parent, int16_t invpos);
 
-    void draw(Point<int16_t> position) const override;
-
-    void draw_preview(Point<int16_t> position) const;
+    bool build(NativeTooltip::List &list, Point<int16_t> position) const override;
 
 private:
+    // The panel showing the piece the character is already wearing, put beside the panel showing the
+    // piece under the finger so the two can be read against each other. It is written out first, as
+    // it was drawn first.
+    void build_preview(NativeTooltip::List &list, Point<int16_t> position) const;
     int16_t inv_pos_;
     int16_t inv_pos_preview_;
     int16_t height_;
@@ -75,6 +77,10 @@ private:
     Texture base_;
 
     EnumMap<Equip::Potential, Texture> potential_;
+    // The file each of the shared canvases was exported to, kept beside the canvas it names. A
+    // preview handed to the platform has to be told which picture goes in which box, and the archive
+    // it was read out of is on this side of the bridge only.
+    EnumMap<Equip::Potential, std::string> potential_names_;
     Equip::Potential prank_;
     Equip::Potential prank_preview_;
 
@@ -84,6 +90,7 @@ private:
 
     std::vector<MapleStat::Id> requirements_;
     EnumMap<MapleStat::Id, BoolPair<Texture>> req_stat_textures_;
+    EnumMap<MapleStat::Id, BoolPair<std::string>> req_stat_names_;
     EnumMap<MapleStat::Id, bool> can_equip_;
     EnumMap<MapleStat::Id, bool> can_equip_preview_;
     EnumMap<MapleStat::Id, Point<int16_t>> req_stat_positions_;

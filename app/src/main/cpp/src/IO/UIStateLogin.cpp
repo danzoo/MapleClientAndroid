@@ -141,7 +141,11 @@ void UIStateLogin::clear_tooltip() {
     clear_tooltip(tooltip_parent_);
 }
 
-void UIStateLogin::show_text(Tooltip::Parent parent, std::string text) {
+// The login page has no piece of art for a preview to stand on - only buttons and the soft
+// keyboard - so the anchor it is handed is ignored and the words stay under the finger.
+void UIStateLogin::show_text(Tooltip::Parent parent,
+                             std::string text,
+                             Point<int16_t> /*anchor*/) {
     te_tooltip_.set_text(text);
 
     if (!text.empty()) {

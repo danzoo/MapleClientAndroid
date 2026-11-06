@@ -25,7 +25,7 @@ class ItemTooltip : public Tooltip {
 public:
     ItemTooltip();
 
-    void draw(Point<int16_t> position) const override;
+    bool build(NativeTooltip::List &list, Point<int16_t> position) const override;
 
     bool set_item(int32_t itemid);
 

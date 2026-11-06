@@ -340,7 +340,12 @@ void UIEquipInventory::modify(int16_t pos, int8_t mode, int16_t arg) {
 }
 
 void UIEquipInventory::show_equip(EquipSlot::Id slot) {
-    UI::get().show_equip(Tooltip::Parent::EQUIP_INVENTORY, slot);
+    // The middle of the cell that took the tap, which is the rectangle slot_by_position tested
+    // against - so the preview stands on the worn piece instead of following the finger around it.
+    const Point<int16_t> centre =
+        position_ + icon_positions_[slot] + Point<int16_t>(16, 16);
+
+    UI::get().show_equip(Tooltip::Parent::EQUIP_INVENTORY, slot, centre);
 }
 
 void UIEquipInventory::clear_tooltip() {

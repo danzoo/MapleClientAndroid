@@ -24,7 +24,7 @@ class SkillTooltip : public Tooltip {
 public:
     SkillTooltip();
 
-    void draw(Point<int16_t> position) const override;
+    bool build(NativeTooltip::List &list, Point<int16_t> position) const override;
 
     void set_skill(int32_t id,
                    int32_t level,
@@ -35,6 +35,13 @@ private:
     int32_t skill_id_;
     int16_t height_;
     int16_t width_;
+
+    // Where the two columns of text start, measured from the left edge of the preview and worked out
+    // from the frame's content box: a line is placed and wrapped against these, so it cannot run out
+    // over the border art.
+    int16_t text_x_;
+    int16_t desc_x_;
+
     int16_t icon_offset_;
     int16_t level_offset_;
     Texture icon_;

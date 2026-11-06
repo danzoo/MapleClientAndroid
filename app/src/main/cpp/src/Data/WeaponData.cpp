@@ -68,15 +68,15 @@ uint8_t WeaponData::get_attack() const {
 
 std::string WeaponData::getspeedstring() const {
     switch (attack_speed_) {
-        case 1: return "FAST (1)";
-        case 2: return "FAST (2)";
-        case 3: return "FAST (3)";
-        case 4: return "FAST (4)";
-        case 5: return "NORMAL (5)";
-        case 6: return "NORMAL (6)";
-        case 7: return "SLOW (7)";
-        case 8: return "SLOW (8)";
-        case 9: return "SLOW (9)";
+        case 1: return "快 (1)";
+        case 2: return "快 (2)";
+        case 3: return "快 (3)";
+        case 4: return "快 (4)";
+        case 5: return "普通 (5)";
+        case 6: return "普通 (6)";
+        case 7: return "慢 (7)";
+        case 8: return "慢 (8)";
+        case 9: return "慢 (9)";
         default: return "";
     }
 }

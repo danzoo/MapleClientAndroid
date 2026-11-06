@@ -87,6 +87,9 @@ namespace ms {
             channel_count_(channel_count) {
         focused_ = UIElement::Type::NONE;
         tooltip_parent_ = Tooltip::Parent::NONE;
+        tooltip_version_ = 0;
+        native_version_ = 0;
+        native_shown_ = false;
 
         const CharLook &look = Stage::get().get_player().get_look();
         const Inventory &inventory = Stage::get().get_player().get_inventory();
@@ -103,10 +106,12 @@ namespace ms {
         VHEIGHT = Constants::Constants::get().get_ui_viewheight();
 
         NativeChat::activate();
+        NativeTooltip::activate();
     }
 
     UIStateGame::~UIStateGame() {
         NativeChat::deactivate();
+        NativeTooltip::deactivate();
     }
 
     void UIStateGame::draw(float inter, Point<int16_t> cursor) const {
@@ -118,8 +123,41 @@ namespace ms {
             }
         }
 
+        // The item, equipment and skill previews are filled in by android's own views, so they are
+        // written out once per change rather than once per frame: nothing about a preview differs
+        // until the reader touches another icon or moves to another place. A preview that has not
+        // been converted - the plain text and map name ones - is still painted by this pass.
         if (tooltip_) {
-            tooltip_->get().draw(cursor + Point<int16_t>(0, 22));
+            const Tooltip &tooltip = tooltip_->get();
+            // The preview stands where the piece that was touched stands, not under the finger: a
+            // tap that lands a few pixels off centre used to move the whole window of words, and
+            // the frame that carried it also made the piece being left behind arrive once more.
+            Point<int16_t> position = tooltip_anchor_ + Point<int16_t>(0, 22);
+
+            if (tooltip_version_ != native_version_ || position != native_position_) {
+                NativeTooltip::List list;
+
+                native_shown_ =
+                        NativeTooltip::available() && tooltip.build(list, position);
+
+                if (native_shown_) {
+                    NativeTooltip::show(list);
+                }
+                else {
+                    NativeTooltip::show(NativeTooltip::List());
+                }
+
+                native_version_ = tooltip_version_;
+                native_position_ = position;
+            }
+
+            if (!native_shown_) {
+                tooltip.draw(position);
+            }
+        }
+        else if (native_shown_) {
+            NativeTooltip::show(NativeTooltip::List());
+            native_shown_ = false;
         }
 
         if (dragged_icon_) {
@@ -511,6 +549,7 @@ namespace ms {
             ma_tooltip_.reset();
             tooltip_ = {};
             tooltip_parent_ = Tooltip::Parent::NONE;
+            tooltip_version_++;
         }
     }
 
@@ -518,51 +557,71 @@ namespace ms {
         clear_tooltip(tooltip_parent_);
     }
 
-    void UIStateGame::show_equip(Tooltip::Parent parent, int16_t slot) {
+    void UIStateGame::show_equip(Tooltip::Parent parent,
+                                 int16_t slot,
+                                 Point<int16_t> anchor) {
         eq_tooltip_.set_equip(parent, slot);
 
         if (slot) {
             tooltip_ = eq_tooltip_;
             tooltip_parent_ = parent;
+            tooltip_anchor_ = anchor;
         }
+
+        tooltip_version_++;
     }
 
-    void UIStateGame::show_item(Tooltip::Parent parent, int32_t itemid) {
+    void UIStateGame::show_item(Tooltip::Parent parent,
+                                int32_t itemid,
+                                Point<int16_t> anchor) {
         it_tooltip_.set_item(itemid);
 
         if (itemid) {
             tooltip_ = it_tooltip_;
             tooltip_parent_ = parent;
+            tooltip_anchor_ = anchor;
         }
+
+        tooltip_version_++;
     }
 
     void UIStateGame::show_skill(Tooltip::Parent parent,
                                  int32_t skill_id,
                                  int32_t level,
                                  int32_t masterlevel,
-                                 int64_t expiration) {
+                                 int64_t expiration,
+                                 Point<int16_t> anchor) {
         sk_tooltip_.set_skill(skill_id, level, masterlevel, expiration);
 
         if (skill_id) {
             tooltip_ = sk_tooltip_;
             tooltip_parent_ = parent;
+            tooltip_anchor_ = anchor;
         }
+
+        tooltip_version_++;
     }
 
-    void UIStateGame::show_text(Tooltip::Parent parent, std::string text) {
+    void UIStateGame::show_text(Tooltip::Parent parent,
+                                std::string text,
+                                Point<int16_t> anchor) {
         te_tooltip_.set_text(text);
 
         if (!text.empty()) {
             tooltip_ = te_tooltip_;
             tooltip_parent_ = parent;
+            tooltip_anchor_ = anchor;
         }
+
+        tooltip_version_++;
     }
 
     void UIStateGame::show_map(Tooltip::Parent parent,
                                std::string name,
                                std::string description,
                                int32_t mapid,
-                               bool bolded) {
+                               bool bolded,
+                               Point<int16_t> anchor) {
         ma_tooltip_.set_name(parent, name, bolded);
         ma_tooltip_.set_desc(description);
         ma_tooltip_.set_mapid(mapid);
@@ -570,7 +629,10 @@ namespace ms {
         if (!name.empty()) {
             tooltip_ = ma_tooltip_;
             tooltip_parent_ = parent;
+            tooltip_anchor_ = anchor;
         }
+
+        tooltip_version_++;
     }
 
     template<class T, typename... Args>

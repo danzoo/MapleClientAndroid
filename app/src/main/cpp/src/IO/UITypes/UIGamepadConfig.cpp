@@ -165,10 +165,17 @@ namespace ms {
                         && !Window::get().is_hold_press();
 
             if (card) {
+                // The middle of the plate cell that took the tap, so the card stands on the button
+                // it describes instead of following the finger around it.
+                const Point<int16_t> centre =
+                    position_ + slot_position(slot)
+                    + Point<int16_t>(GamepadConfig::SLOT_SIZE / 2,
+                                     GamepadConfig::SLOT_SIZE / 2);
+
                 if (mapping.type == KeyType::Id::ITEM) {
-                    show_item(mapping.action);
+                    show_item(mapping.action, centre);
                 } else {
-                    show_skill(mapping.action);
+                    show_skill(mapping.action, centre);
                 }
             } else if (Icon *icon = slot_icons_[slot].get()) {
                 grabbed_ = slot;
@@ -523,16 +530,17 @@ namespace ms {
     }
 
 /// Tooltip
-    void UIGamepadConfig::show_item(int32_t item_id) {
-        UI::get().show_item(Tooltip::Parent::GAMEPAD_CONFIG, item_id);
+    void UIGamepadConfig::show_item(int32_t item_id, Point<int16_t> anchor) {
+        UI::get().show_item(Tooltip::Parent::GAMEPAD_CONFIG, item_id, anchor);
     }
 
-    void UIGamepadConfig::show_skill(int32_t skill_id) {
+    void UIGamepadConfig::show_skill(int32_t skill_id, Point<int16_t> anchor) {
         UI::get().show_skill(Tooltip::Parent::GAMEPAD_CONFIG,
                              skill_id,
                              skillbook_.get_level(skill_id),
                              skillbook_.get_masterlevel(skill_id),
-                             skillbook_.get_expiration(skill_id));
+                             skillbook_.get_expiration(skill_id),
+                             anchor);
     }
 
     void UIGamepadConfig::clear_tooltip() {

@@ -77,6 +77,7 @@ add_library(OpenMapleClient SHARED
         src/IO/Components/TextButton.cpp
         src/IO/Components/Textfield.cpp
         src/IO/Components/TextTooltip.cpp
+        src/IO/Components/Tooltip.cpp
         src/IO/Components/TwoSpriteButton.cpp
         src/Game.cpp
         src/IO/Cursor.cpp
@@ -86,6 +87,7 @@ add_library(OpenMapleClient SHARED
         src/IO/QuickSlots.cpp
         src/IO/Messages.cpp
         src/IO/NativeChat.cpp
+        src/IO/NativeTooltip.cpp
         src/IO/UI.cpp
         src/IO/UIElement.cpp
         src/IO/UIStateCashShop.cpp

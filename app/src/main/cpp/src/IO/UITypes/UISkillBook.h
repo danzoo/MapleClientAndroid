@@ -112,7 +112,7 @@ private:
 
     void change_offset(uint16_t new_offset);
 
-    void show_skill(int32_t skill_id);
+    void show_skill(int32_t skill_id, Point<int16_t> anchor);
 
     void clear_tooltip();
 

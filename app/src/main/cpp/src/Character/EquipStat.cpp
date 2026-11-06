@@ -25,23 +25,20 @@ int32_t value_of(Id value) {
 }
 
 std::array<const char *, Id::LENGTH> names = {
-    "STR",
-    "DEX",
-    "INT",
-    "LUK",
-    "MaxHP",
-    "MaxMP",
-    "Attack Power",
-    "Magic Attack",
-    "Defense",
-
-    // TODO: Does current GMS use these anymore?
-    "MAGIC DEFENSE",
-    "ACCURACY",
-    "AVOID",
-    "HANDS",
-
-    "Speed",
-    "Jump"
+    "力量",
+    "敏捷",
+    "智力",
+    "幸运",
+    "最大HP",
+    "最大MP",
+    "攻击力",
+    "魔法攻击力",
+    "防御力",
+    "魔法防御力",
+    "命中率",
+    "回避率",
+    "攻击速度",
+    "速度",
+    "跳跃力"
 };
 }  // namespace ms::EquipStat

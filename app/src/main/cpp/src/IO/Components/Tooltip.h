@@ -18,12 +18,17 @@
 #include <cstdint>
 
 #include "../Template/Point.h"
+#include "../NativeTooltip.h"
 
 namespace ms {
 // Interface for tooltips, information windows about something
 // the mouse cursor is pointed at.
 class Tooltip {
 public:
+    // How far text stands off the edge it is kept inside of: enough that a line which does use its
+    // entire wrap still finishes short of the border art.
+    static constexpr int16_t TEXT_MARGIN = 8;
+
     // Possible parent UIs for Tooltips.
     enum Parent {
         NONE,
@@ -41,6 +46,14 @@ public:
 
     virtual ~Tooltip() = default;
 
-    virtual void draw(Point<int16_t> cursorpos) const = 0;
+    // Painting the preview into the game's own pass. A preview that the native window has taken over
+    // has nothing to draw here and leaves it alone.
+    virtual void draw(Point<int16_t> cursorpos) const;
+
+    // The same preview written out for the native window: the pieces it is made of, in the order
+    // they would have been drawn, in the units the interface lays itself out in. A preview that has
+    // not been converted says so by returning false, and is drawn by the pass above as it always
+    // was.
+    virtual bool build(NativeTooltip::List &list, Point<int16_t> cursorpos) const;
 };
 }  // namespace ms

@@ -306,6 +306,10 @@ int16_t UIEvent::col_by_position(int16_t x) {
 }
 
 void UIEvent::show_item(int16_t row, int16_t col) {
-    UI::get().show_item(Tooltip::Parent::EVENT, 2000000 + col - 1);
+    // The reward icons are drawn at the size their own canvas is and the grid that takes the tap is
+    // offset from that, so this one still stands under the finger rather than on the art.
+    UI::get().show_item(Tooltip::Parent::EVENT,
+                        2000000 + col - 1,
+                        UI::get().get_cursor_position());
 }
 }  // namespace ms

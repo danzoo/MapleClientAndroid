@@ -54,23 +54,27 @@ public:
 
     void clear_tooltip() override;
 
-    void show_equip(Tooltip::Parent, int16_t) override {}
+    void show_equip(Tooltip::Parent, int16_t, Point<int16_t>) override {}
 
-    void show_item(Tooltip::Parent, int32_t) override {}
+    void show_item(Tooltip::Parent, int32_t, Point<int16_t>) override {}
 
     void show_skill(Tooltip::Parent,
                     int32_t,
                     int32_t,
                     int32_t,
-                    int64_t) override {}
+                    int64_t,
+                    Point<int16_t>) override {}
 
-    void show_text(Tooltip::Parent parent, std::string text) override;
+    void show_text(Tooltip::Parent parent,
+                   std::string text,
+                   Point<int16_t> anchor) override;
 
     void show_map(Tooltip::Parent,
                   std::string,
                   std::string,
                   int32_t,
-                  bool) override {}
+                  bool,
+                  Point<int16_t>) override {}
 
     Iterator pre_add(UIElement::Type type, bool toggled, bool focused) override;
 

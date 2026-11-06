@@ -63,8 +63,8 @@ private:
 
     void safe_close();
 
-    void show_item(int32_t item_id);
-    void show_skill(int32_t skill_id);
+    void show_item(int32_t item_id, Point<int16_t> anchor);
+    void show_skill(int32_t skill_id, Point<int16_t> anchor);
     void clear_tooltip();
 
     void save_staged_mappings();

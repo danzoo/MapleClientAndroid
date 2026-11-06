@@ -54,6 +54,16 @@ namespace ms {
 
         void draw(const DrawArgument &args) const;
 
+        // The box as the pass above would put it on the screen, for a preview that is handed to the
+        // platform rather than drawn here.
+        int16_t width() const { return width_; }
+
+        int16_t height() const { return height_; }
+
+        Color::Name color() const { return color_; }
+
+        float opacity() const { return opacity_; }
+
     private:
         int16_t width_;
         int16_t height_;
@@ -93,6 +103,14 @@ namespace ms {
         void set_opacity(float opacity);
 
         void draw(const DrawArgument &args) const;
+
+        // The line as the pass above would put it on the screen, for a preview that is handed to the
+        // platform rather than drawn here.
+        int16_t width() const { return width_; }
+
+        Color::Name color() const { return color_; }
+
+        float opacity() const { return opacity_; }
 
     private:
         int16_t width_;

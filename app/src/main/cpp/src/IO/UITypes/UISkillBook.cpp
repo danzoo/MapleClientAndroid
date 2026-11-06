@@ -510,7 +510,10 @@ Cursor::State UISkillBook::send_cursor(bool clicked, Point<int16_t> cursorpos) {
                 // A tap on a skill shows what it does; only a hold picks the icon up for the
                 // quickslot, same split as the inventory.
                 if (!Window::get().is_hold_press()) {
-                    show_skill(skills_[i].get_id());
+                    // The middle of the cell that took the tap, so the preview stands on the skill
+                    // instead of following the finger around it.
+                    show_skill(skills_[i].get_id(),
+                               skill_position + Point<int16_t>(16, 16));
 
                     return Cursor::State::IDLE;
                 }
@@ -689,7 +692,7 @@ void UISkillBook::change_offset(uint16_t new_offset) {
     }
 }
 
-void UISkillBook::show_skill(int32_t id) {
+void UISkillBook::show_skill(int32_t id, Point<int16_t> anchor) {
     int32_t skill_id = id;
     int32_t level = skillbook_.get_level(id);
     int32_t masterlevel = skillbook_.get_masterlevel(id);
@@ -699,7 +702,8 @@ void UISkillBook::show_skill(int32_t id) {
                          skill_id,
                          level,
                          masterlevel,
-                         expiration);
+                         expiration,
+                         anchor);
 }
 
 void UISkillBook::clear_tooltip() {

@@ -167,7 +167,8 @@ Cursor::State UIQuit::send_cursor(bool clicked, Point<int16_t> cursorpos) {
         if (bounds.contains(cursorpos)) {
             UI::get().show_text(Tooltip::Parent::TEXT,
                                 std::to_string(hours_) + "Hour "
-                                    + std::to_string(minutes_) + "Minute");
+                                    + std::to_string(minutes_) + "Minute",
+                                cursorpos);
         } else {
             UI::get().clear_tooltip(Tooltip::Parent::TEXT);
         }
