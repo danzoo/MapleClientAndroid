@@ -60,3 +60,10 @@ app/.cxx/*
 *.DS_Store
 app/src/main/cpp/thirdparty/src/glfm-populate-stamp
 app/src/main/cpp/thirdparty/src/tmp
+
+# img 修改备份目录（改 .img 前的原始副本），只作本地留档，绝不上库
+resources/Backups/
+
+# tools/ 下 python 脚本的字节码缓存
+__pycache__/
+*.pyc
