@@ -9,6 +9,11 @@
 设备落点固定为 /sdcard/Android/data/com.OpenMapleClient/files/Data/<相对路径>，
 和 resources/Data 目录结构一一对应。推送一律走 /data/local/tmp 中转再 cp+chmod 666：
 直接 adb push 覆盖已存在文件会 remote fchown failed 并把目标删掉。同步后回读设备 md5 校验。
+
+开头会先把资源重编码成标准 IV：外部美术编辑器（WzComparerR2 系）导出的 loose img 是零
+keystream（IV=00000000），而客户端 imgwz 解头写死区域 IV 0x4D23C72B，推上去就是进图黑屏。
+发现这种文件就地重编码（原件备份进 resources/Backups/reencode/），并把同一份结果覆盖到
+Assets/v209/img_develop 与 Assets/v209/img 两份基线，保持三份 md5 一致。
 """
 import hashlib
 import os
@@ -27,7 +32,34 @@ HEX = set("0123456789abcdef")
 if not os.path.exists(ADB):
     ADB = shutil.which("adb") or ADB
 
-from imgcheck import bad_paths, report
+from imgcheck import client_readable
+import img_reencode
+
+BASELINES = [r"F:/Code/MapleAndroid/Assets/v209/img_develop",
+             r"F:/Code/MapleAndroid/Assets/v209/img"]
+
+
+def repair_iv(jobs):
+    """推送前的第一步：把 IV=0 的资源就地重编码成标准 IV，并跟齐两份基线。
+
+    返回重编码后仍然解不开的文件 [(绝对路径, 原因)]，这些才真的拒绝推送。"""
+    still_bad = []
+    for rel, lp in jobs:
+        ok, why = client_readable(lp)
+        if ok:
+            continue
+        print("  检测到非标准 IV，先重编码：%s" % rel)
+        print("    %s" % img_reencode.reencode(lp, False))
+        ok, why = client_readable(lp)
+        if not ok:
+            still_bad.append((lp, why))
+            continue
+        for base in BASELINES:
+            dst = os.path.join(base, rel.replace("/", os.sep))
+            if os.path.isfile(dst):
+                shutil.copy2(lp, dst)
+                print("    跟齐基线：%s" % dst)
+    return still_bad
 
 
 def run(args):
@@ -158,10 +190,12 @@ def main():
         kept.append((rel, lp))
     jobs = kept
 
-    # 推之前先验客户端能不能解开，解不开的绝不推（推上去就是黑屏）
-    bad = bad_paths([lp for _, lp in jobs])
+    # 第一步：IV=0 的资源就地重编码成标准 IV（不重编码推上去就是进图黑屏）
+    bad = repair_iv(jobs)
     if bad:
-        report(bad, '推送')
+        print("以下 %d 个文件重编码后客户端 imgwz 仍解不开，已拒绝推送：" % len(bad))
+        for ap, why in bad:
+            print("  %s : %s" % (ap, why))
         sys.exit(1)
 
     if not jobs:
