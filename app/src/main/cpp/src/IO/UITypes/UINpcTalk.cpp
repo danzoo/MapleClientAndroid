@@ -372,6 +372,23 @@ namespace ms {
         NativeNpcTalk::dismiss();
     }
 
+    void UINpcTalk::end_conversation() {
+        if (auto talk = UI::get().get_element<UINpcTalk>()) {
+            UINpcTalk &dialog = talk->get();
+
+            if (dialog.answering_) {
+                // The answer is already on its way and this is the conversation letting go: take the
+                // dialog down now rather than hold it until the wait runs out.
+                dismiss();
+            } else {
+                // The message is still up and the reader has not pressed anything, yet the server has
+                // already disposed the conversation. Remember it, so the press that is coming closes
+                // at once instead of waiting on a reply that will never be sent.
+                dialog.server_done_ = true;
+            }
+        }
+    }
+
     void UINpcTalk::update() {
         UIElement::update();
 
@@ -505,6 +522,13 @@ namespace ms {
             // An answer is sent and this dialog is done with, but the window is not skipped along with
             // the pass - nothing reaches it once the game lets go - so the words have to be taken off by
             // asking.
+            hide_native();
+        } else if (server_done_) {
+            // The server let go of this conversation before the reader pressed anything, so no reply
+            // is coming. Close at once - waiting on the answer's round trip is what left the dialog
+            // hanging for a moment after the last OK. The answer is still sent below; a conversation
+            // the server did keep will carry on and put its next page up.
+            deactivate();
             hide_native();
         } else {
             // The words stay up while the answer is in flight. A page that comes back replaces them

@@ -73,7 +73,10 @@ void ChangeChannelHandler::handle(InPacket &recv) const {
 }
 
 void ChangeStatsHandler::handle(InPacket &recv) const {
-    recv.read_bool();  // 'itemreaction'
+    // The first byte is the server's enableActions flag, not an item reaction. An empty update
+    // (no stat mask) with it set is how the server says a conversation is disposed and actions are
+    // free again; a real stat change carries a non-zero mask.
+    bool enable_actions = recv.read_bool();
     int32_t updatemask = recv.read_int();
 
     bool recalculate = false;
@@ -86,6 +89,10 @@ void ChangeStatsHandler::handle(InPacket &recv) const {
 
     if (recalculate) {
         Stage::get().get_player().recalc_stats(false);
+    }
+
+    if (enable_actions && updatemask == 0) {
+        UINpcTalk::end_conversation();
     }
 
     UI::get().enable();

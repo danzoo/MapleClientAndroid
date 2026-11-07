@@ -1,5 +1,6 @@
 package openMapleClient;
 
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -7,11 +8,13 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.animation.OvershootInterpolator;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -60,6 +63,17 @@ public final class NativeNpcTalk {
     // whether it is one of the bold faces.
     private static final int SIZE_SHIFT = 1;
     private static final int BOLD_BIT = 1;
+
+    // The dialog pops into place rather than cutting in: it grows from a little under its size to
+    // full with a slight overshoot, fading up as it goes. Only the appearance plays it - a letter
+    // added to a sentence already on screen, or a page joining the one before it, leaves it settled.
+    // The window's own frame never moves; the grow and the fade are a transform on the canvas alone.
+    private static final long POP_MS = 200;
+    private static final float POP_START_SCALE = 0.86f;
+    private static final float POP_OVERSHOOT = 1.6f;
+    // Room around the dialog for the overshoot to swell into, so the offscreen layer the fade is
+    // painted through covers everything the grow can reach without buffering the whole surface.
+    private static final float POP_BOUNDS_MARGIN = 0.12f;
 
     private static final Handler UI = new Handler(Looper.getMainLooper());
 
@@ -120,6 +134,7 @@ public final class NativeNpcTalk {
     public static void close() {
         UI.post(() -> {
             if (windows != null && plate != null) {
+                plate.cancelPop();
                 windows.removeView(plate);
             }
 
@@ -249,6 +264,15 @@ public final class NativeNpcTalk {
         private final HashMap<Bitmap, Bitmap> tiles = new HashMap<>();
         private final HashMap<Bitmap, Bitmap> mirrored = new HashMap<>();
 
+        // The appearance animation. 1 is settled - full size, fully opaque, no transform on the
+        // canvas. While it runs the fraction drives a grow about the dialog's own centre and a fade,
+        // and the bounds keep the offscreen layer the fade needs down to the dialog's own size.
+        private float popFraction = 1.0f;
+        private float popPivotX;
+        private float popPivotY;
+        private final RectF popBounds = new RectF();
+        private ValueAnimator popAnim;
+
         Plate(Activity context) {
             super(context);
         }
@@ -277,17 +301,105 @@ public final class NativeNpcTalk {
             // and leaves the moment an answer is sent, which is what it always did. A layout is only
             // asked for when that changes, since the rest of the time it is the words that moved.
             final float alpha = ops.length == 0 ? 0.0f : 1.0f;
+            final boolean appearing = alpha == 1.0f && params.alpha == 0.0f;
 
             if (params.alpha != alpha) {
                 params.alpha = alpha;
                 windows.updateViewLayout(this, params);
             }
 
+            // The pop plays only on the way in. A sentence already on screen gaining a letter, or a
+            // page joining the one before it, keeps the same strength and so never re-triggers it.
+            if (appearing) {
+                startPop();
+            } else if (alpha == 0.0f) {
+                cancelPop();
+            }
+
             invalidate();
+        }
+
+        // Grows the dialog about its own centre from a little under full size, with a slight
+        // overshoot, fading up as it goes. The centre and the layer bounds are read off the frame's
+        // own pictures so the pivot lands on the dialog rather than on the middle of the surface.
+        private void startPop() {
+            cancelPop();
+            measurePopBounds();
+
+            popFraction = 0.0f;
+            popAnim = ValueAnimator.ofFloat(0.0f, 1.0f);
+            popAnim.setDuration(POP_MS);
+            popAnim.setInterpolator(new OvershootInterpolator(POP_OVERSHOOT));
+            popAnim.addUpdateListener(animation -> {
+                popFraction = (float) animation.getAnimatedValue();
+                invalidate();
+            });
+            popAnim.start();
+        }
+
+        private void cancelPop() {
+            if (popAnim != null) {
+                popAnim.cancel();
+                popAnim = null;
+            }
+
+            popFraction = 1.0f;
+        }
+
+        // The union of the frame's pictures and the speaker, in device pixels - the box the dialog
+        // actually covers. Text records carry a pen rather than a rectangle, so they are left out;
+        // the chrome already spans the whole frame. The box is widened by the overshoot's reach so
+        // the fade's layer covers everything the grow can put on screen.
+        private void measurePopBounds() {
+            float left = Float.MAX_VALUE;
+            float top = Float.MAX_VALUE;
+            float right = -Float.MAX_VALUE;
+            float bottom = -Float.MAX_VALUE;
+
+            for (int record = 0; record + OP_WIDTH <= ops.length; record += OP_WIDTH) {
+                final int kind = ops[record];
+
+                if (kind != OP_PICTURE && kind != OP_ICON && kind != OP_ICON_FLIPPED) {
+                    continue;
+                }
+
+                left = Math.min(left, px(ops[record + 4]));
+                top = Math.min(top, px(ops[record + 5]));
+                right = Math.max(right, px(ops[record + 6]));
+                bottom = Math.max(bottom, px(ops[record + 7]));
+            }
+
+            if (left > right || top > bottom) {
+                // No chrome to measure against: fall back to the middle of the surface.
+                left = 0;
+                top = 0;
+                right = getWidth();
+                bottom = getHeight();
+            }
+
+            popPivotX = (left + right) / 2.0f;
+            popPivotY = (top + bottom) / 2.0f;
+
+            final float marginX = (right - left) * POP_BOUNDS_MARGIN;
+            final float marginY = (bottom - top) * POP_BOUNDS_MARGIN;
+            popBounds.set(left - marginX, top - marginY, right + marginX, bottom + marginY);
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
+            // While the appearance plays, the whole dialog is grown about its centre and faded up
+            // through a layer bounded to its own box. Settled (fraction 1) is full size and opaque,
+            // so the common case - a sentence being read - paints straight through with no layer.
+            final boolean popping = popFraction != 1.0f;
+            int layer = -1;
+
+            if (popping) {
+                final float scale = POP_START_SCALE + (1.0f - POP_START_SCALE) * popFraction;
+                final int fade = Math.round(255.0f * Math.min(1.0f, Math.max(0.0f, popFraction)));
+                layer = canvas.saveLayerAlpha(popBounds, fade);
+                canvas.scale(scale, scale, popPivotX, popPivotY);
+            }
+
             // Records are painted in the order the game emitted them, which is the order the GL pass
             // drew them in. That is not incidental: the frame writes some of its own pieces over
             // others, and a dialog that tidied that up would put different art on top.
@@ -356,6 +468,10 @@ public final class NativeNpcTalk {
                     default:
                         break;
                 }
+            }
+
+            if (popping) {
+                canvas.restoreToCount(layer);
             }
         }
 

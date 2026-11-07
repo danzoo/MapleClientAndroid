@@ -104,6 +104,12 @@ public:
     // changed - so a dialog left waiting on an answer does not stand over what replaced it.
     static void dismiss();
 
+    // The character is done talking: the server disposed the conversation and sent the empty stat
+    // update that re-enables actions. A dialog still waiting on its answer is taken down at once,
+    // rather than held up until the wait runs out - that wait was a visible pause after the last OK.
+    // A conversation that continues sends its next page instead, so this never reaches one.
+    static void end_conversation();
+
 protected:
     Button::State button_pressed(uint16_t buttonid) override;
 
@@ -247,6 +253,12 @@ private:
     // reply; if nothing comes the wait runs out and the dialog is taken down.
     bool answering_ = false;
     uint16_t answer_ms_ = 0;
+
+    // The server disposed this conversation while its message was still on the screen - some
+    // characters say one thing and let go in the same breath, so the empty enableActions arrives
+    // before the reader presses anything. Nothing more is coming: the next press closes at once
+    // rather than waiting on a reply the disposed conversation will never send.
+    bool server_done_ = false;
 
     NPCTalkContent content_;
     Text name_;
