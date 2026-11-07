@@ -20,6 +20,7 @@
 #include "../../Gameplay/Stage.h"
 #include "../../IO/UI.h"
 #include "../../IO/UITypes/Login/UICharSelect.h"
+#include "../../IO/UITypes/UINpcTalk.h"
 #include "../../IO/Window.h"
 #include "../Packets/GameplayPackets.h"
 #include "Helpers/CharacterParser.h"
@@ -34,6 +35,9 @@ auto fn_player_update = []<typename... T>(T && ...args) {
 }  // namespace
 
 void SetFieldHandler::transition(int32_t mapid, uint8_t portalid) const {
+    // The map is changing, so a dialog still waiting on an answer must not stand over the new one.
+    UINpcTalk::dismiss();
+
     Window::get().fadeout(Constants::SCREEN_FADE_MS, [mapid, portalid]() {
         GraphicsGL::get().clear();
 

@@ -16,6 +16,7 @@
 #pragma once
 
 #include "../../Graphics/Texture.h"
+#include "../NativeNpcTalk.h"
 #include "../Template/BoolPair.h"
 #include "Button.h"
 
@@ -36,6 +37,14 @@ public:
     TwoSpriteButton();
 
     void draw(Point<int16_t> position) const override;
+
+    // The same piece of art as a record of a native window's display list. Only this button's two
+    // frames are said, and which is being worn: the window is handed names, so the caller has to
+    // name both the plain and the highlighted one.
+    void build(NativeNpcTalk::List &list,
+               Point<int16_t> parentpos,
+               const std::string &normal_asset,
+               const std::string &selected_asset) const;
 
     void update() override {}
 

@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Text.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "../Util/StringHandling.h"
@@ -120,6 +121,12 @@ void Text::change_text(const std::vector<uint32_t> &t) {
     reset_layout();
 }
 
+Text Text::revealed(size_t shown) const {
+    Text copy = *this;
+    copy.layout_ = layout_.prefix(shown);
+    return copy;
+}
+
 void Text::change_color(Color::Name c) {
     if (color_ == c) {
         return;
@@ -198,6 +205,56 @@ Text::Layout::Layout(std::vector<Layout::Line> l,
 
 Text::Layout::Layout() :
     Layout(std::vector<Layout::Line>(), std::vector<int16_t>(), 0, 0, 0, 0) {}
+
+Text::Layout Text::Layout::prefix(size_t shown) const {
+    if (lines_.empty() || shown + 1 >= advances_.size()) {
+        return *this;
+    }
+
+    std::vector<Line> lines;
+    int16_t width = 0;
+    int16_t endx = 0;
+
+    for (const auto &line: lines_) {
+        Line kept;
+        kept.position = line.position;
+
+        for (const auto &word: line.words) {
+            if (word.first >= shown) {
+                break;
+            }
+
+            Word cut = word;
+            cut.last = std::min(cut.last, shown);
+            kept.words.push_back(cut);
+        }
+
+        if (kept.words.empty()) {
+            break;
+        }
+
+        // The right edge of the last code point let through on this line: the advance stored after a
+        // code point is where the next one would begin, and a mark that letters nothing leaves it
+        // where the last drawn glyph ended.
+        const int16_t right = advances_[kept.words.back().last];
+
+        width = std::max(width, right);
+        endx = right;
+
+        lines.push_back(std::move(kept));
+    }
+
+    if (lines.empty()) {
+        return Layout();
+    }
+
+    // One face spaces every line of a text, so the band left under the last line kept is the band the
+    // whole layout left under its own last line.
+    const int16_t below = dimensions_.y() - lines_.back().position.y();
+    const int16_t endy = lines.back().position.y();
+
+    return Layout(std::move(lines), advances_, width, endy + below, endx, endy);
+}
 
 int16_t Text::Layout::width() const {
     return dimensions_.x();

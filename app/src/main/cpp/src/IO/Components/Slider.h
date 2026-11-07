@@ -16,8 +16,10 @@
 #pragma once
 
 #include <functional>
+#include <string>
 
 #include "../../Graphics/Texture.h"
+#include "../NativeNpcTalk.h"
 #include "TwoSpriteButton.h"
 
 namespace ms {
@@ -44,6 +46,11 @@ public:
     Range<int16_t> getvertical() const;
 
     void draw(Point<int16_t> position) const;
+
+    // The same art as a record of a native window's display list. The track is tiled, and which of
+    // the two sets of ends is worn depends on whether there is anything to move - both are decided
+    // here rather than by the window, which is only ever told what to draw and where.
+    void build(NativeNpcTalk::List &list, Point<int16_t> position) const;
 
     Cursor::State send_cursor(Point<int16_t> cursor, bool pressed);
 
@@ -105,5 +112,11 @@ private:
     TwoSpriteButton next_;
     TwoSpriteButton prev_;
     TwoSpriteButton thumb_;
+
+    // Where this slider's art came from, in the form a native window is given a picture by name.
+    // The constructor already works the path out to load from; keeping it is what lets build() name
+    // the same canvases instead of the window having to guess which of the twenty-odd sets this is.
+    std::string asset_;
+    std::string base_name_;
 };
 }  // namespace ms

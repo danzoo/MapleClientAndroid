@@ -18,6 +18,7 @@
 #include <array>
 
 #include "../Graphics/Animation.h"
+#include "../NativeNpcTalk.h"
 #include "Button.h"
 
 namespace ms {
@@ -31,6 +32,15 @@ public:
     MapleButton(const img::node &src);
 
     void draw(Point<int16_t> position) const override;
+
+    // The same piece of art as a record of a native window's display list. The button says which of
+    // its four frames it is wearing, because that is the one decision the window cannot make from
+    // outside; the caller says where the frame came from, because that is the one thing the button
+    // throws away when it loads. Returns false for a button whose plain art is an animation - the
+    // window is handed names, and a frame being walked through has no name that stays true.
+    bool build(NativeNpcTalk::List &list,
+               Point<int16_t> parentpos,
+               const std::string &asset) const;
 
     void update() override;
 

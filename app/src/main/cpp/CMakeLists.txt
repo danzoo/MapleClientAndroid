@@ -87,6 +87,7 @@ add_library(OpenMapleClient SHARED
         src/IO/QuickSlots.cpp
         src/IO/Messages.cpp
         src/IO/NativeChat.cpp
+        src/IO/NativeNpcTalk.cpp
         src/IO/NativeTooltip.cpp
         src/IO/UI.cpp
         src/IO/UIElement.cpp

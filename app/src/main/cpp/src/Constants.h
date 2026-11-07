@@ -389,6 +389,24 @@ constexpr int16_t NATIVE_CHAT_MARGIN_Y = 0;
 // long session can hold.
 constexpr int32_t NATIVE_CHAT_MAX_LINES = 200;
 
+// How long a character of what a non-player character is saying takes to arrive, in milliseconds. The
+// words come one after another rather than all at once, which is what makes a conversation the reader
+// has already heard worth skipping: a tap puts up the rest of the page. It is a rate of its own rather
+// than a count of updates so that re-tuning the timestep does not quietly change how fast a character
+// talks.
+constexpr uint16_t NPC_TALK_MS_PER_CHAR = 14;
+
+// How long the dialog sits with a page fully said before it asks the character for the next one. What
+// it sends is the same answer the button that used to turn the page sent; the wait is so that a page
+// the reader is still looking at is not walked past the moment its last character lands.
+constexpr uint16_t NPC_TALK_PAGE_MS = 600;
+
+// How long the dialog is kept up after an answer is sent, waiting for the next page to come back. A
+// conversation that continues replaces the words without a blank frame; one that is done sends no
+// more, so the wait running out is what takes the dialog down. Blanking on the press instead is what
+// made a continuing dialog flash once between the press and the reply.
+constexpr uint16_t NPC_TALK_ANSWER_MS = 500;
+
 class Constants : public Singleton<Constants> {
 public:
     Constants() : VIEWWIDTH(1280), VIEWHEIGHT(720) {}

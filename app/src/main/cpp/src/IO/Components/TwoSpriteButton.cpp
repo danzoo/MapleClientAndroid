@@ -49,6 +49,21 @@ void TwoSpriteButton::draw(Point<int16_t> parentpos) const {
     }
 }
 
+void TwoSpriteButton::build(NativeNpcTalk::List &list,
+                            Point<int16_t> parentpos,
+                            const std::string &normal_asset,
+                            const std::string &selected_asset) const {
+    if (!active_) {
+        return;
+    }
+
+    const bool selected = is_highlighted();
+
+    list.picture(textures_[selected],
+                 DrawArgument((selected ? spos_ : npos_) + parentpos),
+                 selected ? selected_asset : normal_asset);
+}
+
 Rectangle<int16_t> TwoSpriteButton::bounds(Point<int16_t> parentpos) const {
     bool selected = is_highlighted();
     Point<int16_t> absp;

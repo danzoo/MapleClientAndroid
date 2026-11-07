@@ -57,6 +57,11 @@ public:
 
         Layout();
 
+        // The same lines, pens and wrapping, lettering only the first `shown` code points. Laying the
+        // part said so far out afresh would choose the breaks again from a shorter text, and a word
+        // already on the screen would drop a line the moment the next one overflowed the column.
+        Layout prefix(size_t shown) const;
+
         int16_t width() const;
 
         int16_t height() const;
@@ -111,6 +116,10 @@ public:
     void change_text(const std::string &text);
 
     void change_text(const std::vector<uint32_t> &t);
+
+    // This text with only its first `shown` code points lettered, in the wrapping the whole of it was
+    // laid out in: what a typewriter shows of a line without moving the words already on the screen.
+    Text revealed(size_t shown) const;
 
     void change_color(Color::Name color);
 

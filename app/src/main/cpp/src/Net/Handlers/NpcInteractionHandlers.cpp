@@ -54,6 +54,10 @@ void NpcDialogueHandler::handle(InPacket &recv) const {
 }
 
 void OpenNpcShopHandler::handle(InPacket &recv) const {
+    // A shop opened in place of the conversation, so a dialog still waiting on an answer must not
+    // stand over it.
+    UINpcTalk::dismiss();
+
     int32_t npcid = recv.read_int();
     auto oshop = UI::get().get_element<UIShop>();
 

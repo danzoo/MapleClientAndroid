@@ -45,6 +45,13 @@ public:
     }
 
     int16_t get_option_number();
+
+    // The lettering itself, for a native window that is asked to letter it rather than to draw a
+    // sprite. An answer option is the only kind of button that is all words.
+    const Text &text() const {
+        return text_;
+    }
+
 private:
     Text text_;
     int16_t option_number_;

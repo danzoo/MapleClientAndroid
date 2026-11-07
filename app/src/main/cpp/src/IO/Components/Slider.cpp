@@ -19,7 +19,26 @@
 #include <utility>
 
 namespace ms {
-Slider::Slider(int32_t t,
+    namespace {
+        // The name a slider's art has inside the archive it was loaded from, in the form a native
+        // window is given a picture by. Kept beside the textures so the display list can name the
+        // very canvases this class read, instead of a caller having to guess which set a type is.
+        std::string slider_asset(int32_t type) {
+            if (type == Slider::Type::CHAT_BAR) {
+                return "chat/common/scroll";
+            }
+
+            std::string name = "VScr";
+
+            if (type != Slider::Type::LINE_CYAN) {
+                name += std::to_string(type);
+            }
+
+            return name;
+        }
+    }  // namespace
+
+    Slider::Slider(int32_t t,
                Range<int16_t> ver,
                int16_t xp,
                int16_t ur,
@@ -47,6 +66,9 @@ Slider::Slider(int32_t t,
 
         src = img::wz::ui["Basic.img"][VScr];
     }
+
+    asset_ = slider_asset(type_);
+    base_name_ = base_str;
 
     img::node dsrc = src["disabled"];
 
@@ -145,6 +167,36 @@ void Slider::draw(Point<int16_t> position) const {
         dprev_.draw(position + start_);
         dnext_.draw(position + end_);
     }
+}
+
+void Slider::build(NativeNpcTalk::List &list, Point<int16_t> position) const {
+    const std::string disabled = asset_ + "/disabled/";
+    const std::string enabled = asset_ + "/enabled/";
+
+    // The track is one canvas laid end to end, and it is the disabled one even while the slider
+    // works: that is the groove, not a control. The loop is the pass's own, so the pieces land on
+    // the same rows they always have.
+    const int16_t height = dbase_.height();
+    int16_t maxheight = vertical_.first() + height;
+
+    while (maxheight < vertical_.second()) {
+        list.picture(dbase_,
+                     DrawArgument(position + Point<int16_t>(start_.x(), maxheight)),
+                     disabled + base_name_);
+
+        maxheight += height;
+    }
+
+    if (enabled_ && row_height_ > 0) {
+        prev_.build(list, position, enabled + "prev0", enabled + "prev1");
+        next_.build(list, position, enabled + "next0", enabled + "next1");
+        thumb_.build(list, position + getthumbpos(),
+                     enabled + "thumb0", enabled + "thumb1");
+        return;
+    }
+
+    list.picture(dprev_, DrawArgument(position + start_), disabled + "prev");
+    list.picture(dnext_, DrawArgument(position + end_), disabled + "next");
 }
 
 Point<int16_t> Slider::getthumbpos() const {

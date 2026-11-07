@@ -20,6 +20,7 @@
 #include "../../IO/UI.h"
 #include "../../IO/UITypes/UIBuffList.h"
 #include "../../IO/UITypes/UICashShop.h"
+#include "../../IO/UITypes/UINpcTalk.h"
 #include "../../IO/UITypes/UISkillBook.h"
 #include "../../IO/UITypes/UIStatsInfo.h"
 #include "../../IO/Window.h"
@@ -37,6 +38,9 @@ auto fn_player_login = []<typename... T>(T && ...args) {
 }  // namespace
 
 void transition(int32_t mapid, uint8_t portalid) {
+    // The map is changing, so a dialog still waiting on an answer must not stand over the new one.
+    UINpcTalk::dismiss();
+
     Window::get().fadeout(Constants::SCREEN_FADE_MS, [mapid, portalid]() {
         GraphicsGL::get().clear();
         Stage::get().load(mapid, portalid);

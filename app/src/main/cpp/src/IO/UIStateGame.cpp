@@ -22,6 +22,7 @@
 #include "OptionalCreator.h"
 #include "UI.h"
 #include "NativeChat.h"
+#include "NativeNpcTalk.h"
 #include "UITypes/UIBuffList.h"
 #include "UITypes/UIChannel.h"
 #include "UITypes/UICharInfo.h"
@@ -112,6 +113,7 @@ namespace ms {
     UIStateGame::~UIStateGame() {
         NativeChat::deactivate();
         NativeTooltip::deactivate();
+        NativeNpcTalk::dismiss();
     }
 
     void UIStateGame::draw(float inter, Point<int16_t> cursor) const {

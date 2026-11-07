@@ -49,6 +49,43 @@ void MapleButton::draw(Point<int16_t> parentpos) const {
     }
 }
 
+bool MapleButton::build(NativeNpcTalk::List &list,
+                        Point<int16_t> parentpos,
+                        const std::string &asset) const {
+    if (!active_) {
+        return true;
+    }
+
+    const Texture &frame = textures_[state_];
+
+    if (!frame.is_valid()) {
+        return false;
+    }
+
+    const char *key = "normal";
+
+    switch (state_) {
+        case Button::State::NORMAL:
+            break;
+        case Button::State::DISABLED:
+            key = "disabled";
+            break;
+        case Button::State::SELECTED:
+            key = "mouseOver";
+            break;
+        case Button::State::PRESSED:
+            key = "pressed";
+            break;
+        default:
+            return false;
+    }
+
+    list.picture(frame, DrawArgument(position_ + parentpos),
+                 asset + "/" + key + "/0");
+
+    return true;
+}
+
 void MapleButton::update() {
     if (active_) {
         // Three quarters of real time, the six milliseconds of art an animated button used to be

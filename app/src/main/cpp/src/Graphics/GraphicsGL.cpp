@@ -956,7 +956,16 @@ namespace ms {
                                 skip++;
                                 break;
                             case 'L':
+                                // The number of the answer is part of the mark that opens it, not a
+                                // character: the layout used to letter it, so every answer of a
+                                // character's came up reading 「01. …」 for 「1. …」.
                                 skip++;
+
+                                while (first + 1 + skip < last
+                                       && is_digit(text[first + 1 + skip])) {
+                                    skip++;
+                                }
+
                                 break;
                             case 'l':
                                 skip++;
