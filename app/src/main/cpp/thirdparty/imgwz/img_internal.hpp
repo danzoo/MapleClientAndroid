@@ -152,8 +152,13 @@ struct cipher
 {
     mutable std::vector<std::uint8_t> ascii;  // ks[i] ^ (0xAA + i)
     mutable std::vector<std::uint16_t> utf16; // (ks[2i] | ks[2i+1] << 8) ^ (0xAAAA + i)
+    //! The keystream before those two ramps were folded in.  Only the listwz framing
+    //! over a canvas payload wants it raw: that XORs each block with the stream from
+    //! offset zero, where a string's mask also carries the per-position ramp.
+    mutable std::vector<std::uint8_t> stream;
 
-    //! Extends both tables to cover `length` bytes (UTF-16 needs two per character).
+    //! Extends the keystream and both derived tables to cover `length` bytes (UTF-16
+    //! needs two per character).
     void ensure(std::size_t length) const;
 
     static cipher const& get();

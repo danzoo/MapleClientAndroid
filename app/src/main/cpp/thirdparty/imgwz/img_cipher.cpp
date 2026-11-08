@@ -176,6 +176,7 @@ void cipher::ensure(std::size_t length) const
 
     ascii.resize(units);
     utf16.resize(units / 2);
+    stream.assign(ks.begin(), ks.begin() + units);
     for (std::size_t i = 0; i < units; ++i) {
         ascii[i] = static_cast<std::uint8_t>(ks[i] ^ ((0xAA + i) & 0xFF));
     }

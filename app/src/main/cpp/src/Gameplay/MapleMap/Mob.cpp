@@ -48,6 +48,16 @@ Mob::Mob(int32_t oi,
 
     img::node info = src["info"];
 
+    // A linked mob wears another archive's frames but keeps its own stats, name and sound.
+    img::node art = src;
+    std::string linkid = info["link"];
+    if (!linkid.empty()) {
+        img::node link_src = img::wz::mob[linkid + ".img"];
+        if (link_src) {
+            art = link_src;
+        }
+    }
+
     level_ = info["level"];
     watk_ = info["PADamage"];
     matk_ = info["MADamage"];
@@ -63,26 +73,26 @@ Mob::Mob(int32_t oi,
     is_boss_ = info["boss"].get_bool();
     no_flip_ = info["noFlip"].get_bool();
     not_attack_ = info["notAttack"].get_bool();
-    can_jump_ = src["jump"].size() > 0;
-    can_fly_ = src["fly"].size() > 0;
-    can_hit_ = src["hit1"].size() > 0;
-    can_move_ = src["move"].size() > 0 || can_fly_;
+    can_jump_ = art["jump"].size() > 0;
+    can_fly_ = art["fly"].size() > 0;
+    can_hit_ = art["hit1"].size() > 0;
+    can_move_ = art["move"].size() > 0 || can_fly_;
     // Absent from the archive means the mob is held to the platform it was placed on, which is what
     // every mob in the shipped set wants. A mob that is to be allowed off its own edge is given
     // `crossEdge = 1` under `info` in its own Mob/<id>.img.
     cross_edge_ = info["crossEdge"].get_bool();
 
     if (can_fly_) {
-        animations_[Stance::STAND] = src["fly"];
-        animations_[Stance::MOVE] = src["fly"];
+        animations_[Stance::STAND] = art["fly"];
+        animations_[Stance::MOVE] = art["fly"];
     } else {
-        animations_[Stance::STAND] = src["stand"];
-        animations_[Stance::MOVE] = src["move"];
+        animations_[Stance::STAND] = art["stand"];
+        animations_[Stance::MOVE] = art["move"];
     }
 
-    animations_[Stance::JUMP] = src["jump"];
-    animations_[Stance::HIT] = src["hit1"];
-    animations_[Stance::DIE] = src["die1"];
+    animations_[Stance::JUMP] = art["jump"];
+    animations_[Stance::HIT] = art["hit1"];
+    animations_[Stance::DIE] = art["die1"];
 
     name_ = std::string(img::wz::string["Mob.img"][std::to_string(mid)]["name"]);
 
@@ -95,11 +105,11 @@ Mob::Mob(int32_t oi,
         auto skill_id = info["skill"][i]["skill"].get_integer();
         auto action = info["skill"][i]["action"].get_integer();
         skill_stands_.insert(
-            { skill_id, src["skill" + std::to_string(action)] });
+            { skill_id, art["skill" + std::to_string(action)] });
     }
 
-    for (size_t i = 1; src["attack" + std::to_string(i)].size() > 0; i++) {
-        attack_stands_.insert({ i, src["attack" + std::to_string(i)] });
+    for (size_t i = 1; art["attack" + std::to_string(i)].size() > 0; i++) {
+        attack_stands_.insert({ i, art["attack" + std::to_string(i)] });
     }
 
     // init or risk crash

@@ -31,8 +31,17 @@ MobSpecialAttack::MobSpecialAttack(int32_t mob_id, int32_t move_id) :
         strid = std::to_string(mob_id);
     }
 
-    img::node src =
-        img::wz::mob[strid + ".img"]["attack" + std::to_string(move_id)]["info"];
+    img::node mob = img::wz::mob[strid + ".img"];
+    // The server reads attack info through info/link too, so the frames' owner is the same archive.
+    std::string linkid = mob["info"]["link"];
+    if (!linkid.empty()) {
+        img::node link_src = img::wz::mob[linkid + ".img"];
+        if (link_src) {
+            mob = link_src;
+        }
+    }
+
+    img::node src = mob["attack" + std::to_string(move_id)]["info"];
 
     // sound_ = std::make_unique<SingleSkillSound>(strid);
 

@@ -36,6 +36,49 @@ void expand4444(std::uint8_t const* src, std::uint8_t* dst, std::size_t pixels)
 thread_local std::vector<char> inflate_buf;
 //! The buffer img::bitmap::data() hands out, one per thread.
 thread_local std::vector<char> pixel_buf;
+//! The payload of a canvas stored with its deflate stream listwz-framed comes out here,
+//! one per thread.  Only the framed minority needs it.
+thread_local std::vector<char> delist_buf;
+
+//! The four two-byte openings a deflate stream is allowed to have.  An unframed payload
+//! always starts with one, so its absence is what identifies the framing - nothing in the
+//! file records which canvases carry it.
+bool is_deflate_head(std::uint8_t const* p)
+{
+    auto const head = static_cast<std::uint16_t>(p[0] | (p[1] << 8));
+    return head == 0x9C78 || head == 0xDA78 || head == 0x0178 || head == 0x5E78;
+}
+
+//! Takes the listwz framing off a canvas payload: a run of `[i32 block length][block
+//! XORed with the keystream from offset zero]`, which is how editors that round-tripped a
+//! wz through MapleLib store the deflate stream.  Each block restarts the keystream, the
+//! same way every string in the file does.  Returns the bytes produced, or 0 when the
+//! block lengths do not add up to the span handed in.
+std::size_t delistwz(std::uint8_t const* src, std::size_t src_size, std::vector<char>& dst)
+{
+    auto const& cipher_ref = cipher::get();
+    std::size_t produced = 0;
+    std::size_t off = 0;
+    while (off + 4 <= src_size) {
+        std::int32_t block;
+        std::memcpy(&block, src + off, 4);
+        off += 4;
+        if (block <= 0 || static_cast<std::size_t>(block) > src_size - off) {
+            return 0;
+        }
+        auto const size = static_cast<std::size_t>(block);
+        cipher_ref.ensure(size);
+        if (dst.size() < produced + size) {
+            dst.resize(produced + size);
+        }
+        for (std::size_t i = 0; i < size; ++i) {
+            dst[produced + i] = static_cast<char>(src[off + i] ^ cipher_ref.stream[i]);
+        }
+        produced += size;
+        off += size;
+    }
+    return off == src_size ? produced : 0;
+}
 
 //! Inflates one canvas into `dst`, which has to hold width*height*4 bytes.  Returns the number of
 //! bytes written, or 0 when the payload does not decode.
@@ -65,13 +108,27 @@ std::size_t inflate_canvas(canvas_data const& canvas, std::uint16_t width, std::
         inflate_buf.resize(room);
     }
 
+    // Framing has to come off before zlib sees the bytes; inflating framed bytes is what
+    // made a monster paint as a plain white block, because the atlas caches the failed
+    // decode as an empty offset and the shader reads an empty offset as the solid colour.
+    // Framing whose lengths do not add up stays framed, so a genuinely broken payload
+    // still fails the way it used to rather than turning into a different byte run.
+    std::uint8_t const* in = canvas.payload;
+    std::size_t in_size = canvas.csize;
+    if (in_size >= 2 && !is_deflate_head(in)) {
+        if (auto const unframed = delistwz(in, in_size, delist_buf)) {
+            in = reinterpret_cast<std::uint8_t const*>(delist_buf.data());
+            in_size = unframed;
+        }
+    }
+
     z_stream stream;
     std::memset(&stream, 0, sizeof(stream));
     if (::inflateInit2(&stream, -15) != Z_OK) {
         return 0;
     }
-    stream.next_in = const_cast<Bytef*>(canvas.payload + 2);
-    stream.avail_in = canvas.csize > 2 ? static_cast<uInt>(canvas.csize - 2) : 0;
+    stream.next_in = const_cast<Bytef*>(in + 2);
+    stream.avail_in = in_size > 2 ? static_cast<uInt>(in_size - 2) : 0;
     stream.next_out = reinterpret_cast<Bytef*>(inflate_buf.data());
     stream.avail_out = static_cast<uInt>(room);
     int code = Z_OK;
