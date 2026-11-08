@@ -37,6 +37,99 @@ constexpr size_t OUTBOX_LIMIT = 64;
 // be rescued by a queue, and the alternative - keeping the server's whole output - is the thing that
 // gets the process killed.
 constexpr size_t INBOX_LIMIT = 1024;
+
+bool is_space(unsigned char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+}
+
+std::string trim(const std::string &text) {
+    size_t begin = 0;
+    size_t end = text.size();
+
+    while (begin < end && is_space(static_cast<unsigned char>(text[begin]))) {
+        begin++;
+    }
+
+    while (end > begin && is_space(static_cast<unsigned char>(text[end - 1]))) {
+        end--;
+    }
+
+    return text.substr(begin, end - begin);
+}
+
+bool all_digits(const std::string &text) {
+    if (text.empty()) {
+        return false;
+    }
+
+    for (char c : text) {
+        if (c < '0' || c > '9') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+struct Endpoint {
+    std::string host;
+    std::string port;
+};
+
+// Every address the app can be pointed at goes through here: hostip.txt, the Settings fallback, a
+// bare reconnect, and the SERVER_IP / CHANGE_CHANNEL redirect packets. getaddrinfo needs a bare
+// host (no brackets) and a separate service string, so brackets and an optional ":port" are undone
+// here rather than in each caller.
+//
+// Accepted forms:  "192.168.1.5"          -> host "192.168.1.5",  fallback port
+//                  "192.168.1.5:8484"     -> host "192.168.1.5",  port "8484"
+//                  "maple.example.com"    -> host (AAAA/A resolved by the resolver)
+//                  "2001:db8::1"          -> host "2001:db8::1",  fallback port
+//                  "[2001:db8::1]"        -> host "2001:db8::1",  fallback port
+//                  "[2001:db8::1]:8484"   -> host "2001:db8::1",  port "8484"
+//
+// A port on an IPv6 literal must be bracketed, because a bare literal's last colon is part of the
+// address, not a separator.
+Endpoint parse_endpoint(const std::string &text, const std::string &fallback_port) {
+    const std::string value = trim(text);
+    Endpoint endpoint{"", trim(fallback_port)};
+
+    if (value.empty()) {
+        return endpoint;
+    }
+
+    if (value.front() == '[') {
+        const size_t close = value.find(']');
+
+        if (close != std::string::npos) {
+            endpoint.host = trim(value.substr(1, close - 1));
+
+            if (close + 1 < value.size() && value[close + 1] == ':') {
+                endpoint.port = trim(value.substr(close + 2));
+            }
+
+            return endpoint;
+        }
+    }
+
+    // A bare IPv6 literal always has at least two colons. Exactly one colon therefore means a
+    // host/service pair, so "::1" is never mistaken for a host with port "1".
+    const size_t first = value.find(':');
+
+    if (first != std::string::npos && first == value.rfind(':')) {
+        const std::string head = trim(value.substr(0, first));
+        const std::string tail = trim(value.substr(first + 1));
+
+        if (!head.empty() && all_digits(tail)) {
+            endpoint.host = head;
+            endpoint.port = tail;
+            return endpoint;
+        }
+    }
+
+    endpoint.host = value;
+    return endpoint;
+}
 }  // namespace
 
 Session::Session(std::unique_ptr<Forwarder> packet_forwarder) :
@@ -86,18 +179,20 @@ std::string Session::readHostIP(GLFMDisplay *pApp) {
         }
     }
 
-    // The file is as likely to be written by hand as by the app, and a trailing newline would
-    // otherwise become part of the address.
-    while (!hostIP.empty() && static_cast<unsigned char>(hostIP.back()) <= ' ') {
-        hostIP.pop_back();
-    }
-
-    return hostIP;
+    // The file is as likely to be written by hand as by the app, and a leading space or trailing
+    // newline would otherwise become part of the address. Both ends are trimmed here; IPv6 bracket
+    // and port handling happens in parse_endpoint, which every connection path shares.
+    return trim(hostIP);
 }
 
 Error Session::init(GLFMDisplay *pApp) {
-    const std::string host = readHostIP(pApp);
-    const std::string port = Setting<ServerPort>::get().load();
+    // hostip.txt may carry an optional ":port" (required to be bracketed for an IPv6 literal).
+    // When it does not, the port comes from the Settings file.
+    const Endpoint endpoint = parse_endpoint(readHostIP(pApp), "");
+    const std::string host = endpoint.host;
+    const std::string port = endpoint.port.empty()
+                                ? Setting<ServerPort>::get().load()
+                                : endpoint.port;
 
     default_host_ = host;
     default_port_ = port;
@@ -109,10 +204,15 @@ Error Session::init(GLFMDisplay *pApp) {
 }
 
 void Session::connect(const char *host, const char *port) {
+    // Strip brackets and split an optional ":port" once, here, so the resolver always receives a
+    // bare host and a separate service string in both the IPv4 and IPv6 cases.
+    const Endpoint endpoint = parse_endpoint(host != nullptr ? host : "",
+                                              port != nullptr ? port : "");
+
     {
         std::lock_guard<std::mutex> lock(data_mutex_);
-        host_ = host;
-        port_ = port;
+        host_ = endpoint.host;
+        port_ = endpoint.port;
     }
 
     // Whatever reader state the last connection was left in belongs to that connection, and so do the
@@ -123,7 +223,7 @@ void Session::connect(const char *host, const char *port) {
     // A deliberate new attempt, however it ends from here, is not a connection that was lost.
     had_connection_.store(false);
 
-    if (host[0] == '\0') {
+    if (endpoint.host.empty() || endpoint.port.empty()) {
         // No address to dial, which is an attempt that is over rather than one in progress: a connect
         // that never ends would leave the login screen holding its loading picture for ever, and there
         // is no answer for a picture like that to be waiting for.
@@ -138,8 +238,8 @@ void Session::connect(const char *host, const char *port) {
     // stores after this Connecting is a login screen told to give up on a connection that has not
     // even been tried. Link state therefore only ever changes value on that thread - except for the
     // two cases above, which have no attempt for anything to disagree with.
-    const std::string dial_host = host;
-    const std::string dial_port = port;
+    const std::string dial_host = endpoint.host;
+    const std::string dial_port = endpoint.port;
     socket_.post([this, dial_host, dial_port] {
         link_.store(Link::Connecting);
         socket_.start_connect(dial_host.c_str(), dial_port.c_str(), Constants::CONNECT_TIMEOUT_MS);

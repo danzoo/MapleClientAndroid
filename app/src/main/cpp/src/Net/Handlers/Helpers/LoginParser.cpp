@@ -189,20 +189,35 @@ LookEntry LoginParser::parse_look(InPacket &recv) {
 std::pair<std::string, std::string> LoginParser::parse_login(InPacket &recv) {
     recv.skip_byte();
 
-    // Read the IPv4 address in a string
+    // v83 reserves four bytes for a raw IPv4 address. The server uses 0.0.0.0 as an escape marker
+    // when the channel endpoint is IPv6 (an address that is never a usable redirect target) and
+    // follows it with a length-prefixed host string. Reading the four bytes first keeps the IPv4
+    // wire format exactly as it was, so an older server still works with this client.
+    uint8_t octets[4];
+
+    for (auto &octet : octets) {
+        octet = static_cast<uint8_t>(recv.read_byte());
+    }
+
+    const bool is_ipv6 = (octets[0] | octets[1] | octets[2] | octets[3]) == 0;
+
     std::string addrstr;
 
-    for (size_t i = 0; i < 4; i++) {
-        auto num = static_cast<uint8_t>(recv.read_byte());
-        addrstr.append(std::to_string(num));
+    if (is_ipv6) {
+        addrstr = recv.read_string();
+    } else {
+        for (size_t i = 0; i < 4; i++) {
+            addrstr.append(std::to_string(octets[i]));
 
-        if (i < 3) {
-            addrstr.push_back('.');
+            if (i < 3) {
+                addrstr.push_back('.');
+            }
         }
     }
 
-    // Read the port address in a string
-    std::string portstr = std::to_string(recv.read_short());
+    // The port is an unsigned 16-bit little-endian value on the wire. Reading it as a signed short
+    // used to turn any port at or above 32768 into a negative (and therefore unconnectable) string.
+    std::string portstr = std::to_string(recv.read_ushort());
 
     return { addrstr.c_str(), portstr.c_str() };
 }

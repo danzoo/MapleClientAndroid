@@ -64,6 +64,14 @@ Game::Game() {
 }
 
 Error Game::init(GLFMDisplay *pApp) {
+    // The settings file lives in the app's external files directory, which is only known once the
+    // activity has been handed over. Resolve the path - without loading the .img tree - and read the
+    // settings before Session::init dials, so ServerPort is the value the user actually configured
+    // instead of the compiled-in default. ImgFiles::init below sets the same root and loads the game
+    // files; the later load()/save() pair remains harmless.
+    ImgFiles::set_root(pApp);
+    Configuration::get().load();
+
     if (Error error = PacketProcessor::get().init(pApp)) {
         return error;
     }

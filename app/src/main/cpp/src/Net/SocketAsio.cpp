@@ -118,7 +118,12 @@ void SocketAsio::connect_now(std::string address, std::string port, uint32_t tim
         fail("deadline", asio::error::timed_out);
     });
 
-    resolver_.async_resolve(address, port,
+    // Ask for an unfiltered AF_UNSPEC query. basic_resolver_query defaults to AI_ADDRCONFIG, which
+    // tells getaddrinfo to hide AAAA results when the device has no configured IPv6 address; that can
+    // make an IPv6-only server unreachable by name. Passing zero flags explicitly keeps this
+    // behaviour pinned regardless of which overload/ASIO version resolves the call, so async_connect
+    // below receives every v4 and v6 endpoint and can try them in turn.
+    resolver_.async_resolve(address, port, static_cast<tcp::resolver::flags>(0),
                             [this, seq](const error_code &error,
                                         tcp::resolver::results_type results) {
         if (!current(seq)) {

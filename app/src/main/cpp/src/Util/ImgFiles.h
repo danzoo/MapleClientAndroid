@@ -25,7 +25,13 @@ namespace ms::ImgFiles {
 // that it is a UI tree the rest of the client can use.
 Error init(GLFMDisplay *pApp);
 
+// Records the app's writable directory without loading any game files. Startup needs this path
+// before the first connection is opened (Configuration lives there), but loading the .img tree can
+// wait. init() sets it again and does the actual load.
+void set_root(GLFMDisplay *pApp);
+
 // The directory init was given, which is the only place this app may write a file of its own. Empty
-// until init has run, so anything that needs it reads it when it writes rather than once at startup.
+// until init (or set_root) has run, so anything that needs it reads it when it writes rather than
+// once at startup.
 const std::string &root_path();
 }  // namespace ms::ImgFiles

@@ -259,12 +259,13 @@ private:
     TypeMap<Entry> settings;
 };
 
-// IP Address which the client will connect to
+// Legacy fallback entry. On Android the address actually dialled comes from hostip.txt, which accepts
+// IPv4 literals, IPv6 literals (bare or in brackets), hostnames, and an optional ":port" suffix.
 struct ServerIP : public Configuration::StringEntry {
     ServerIP() : StringEntry("ServerIP", "127.0.0.1") {}
 };
 
-// Port which the client will connect to
+// Port which the client will connect to when hostip.txt does not specify one.
 struct ServerPort : public Configuration::StringEntry {
     ServerPort() : StringEntry("ServerPort", "8484") {}
 };

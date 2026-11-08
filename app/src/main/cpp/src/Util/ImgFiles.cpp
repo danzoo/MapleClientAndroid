@@ -55,6 +55,10 @@ const std::string &root_path() {
     return app_root;
 }
 
+void set_root(GLFMDisplay *pApp) {
+    app_root = game_path(pApp);
+}
+
 Error init(GLFMDisplay *pApp) {
     const std::string root = game_path(pApp);
     app_root = root;
