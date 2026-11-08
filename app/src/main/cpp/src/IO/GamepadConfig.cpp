@@ -132,10 +132,12 @@ namespace ms {
     Keyboard::Mapping GamepadConfig::default_mapping(Slot slot) {
         using Action = KeyAction::Id;
 
+        // What a character that has never opened this window is handed. One thumb for where the
+        // character goes, the other for the four windows it looks at constantly, and the three
+        // buttons the fight itself needs. Everything else starts empty, so that the rest of the
+        // table is only ever what the player put there himself - including the d-pad, which starts
+        // unbound so it can never claim a direction the left stick already owns.
         switch (slot) {
-            // Only the left stick carries a movement direction by default. The d-pad starts empty
-            // so a player who wants it binds it himself, and the two sources can never claim one
-            // direction from each other.
             case Slot::LS_UP:
                 return {KeyType::Id::ACTION, Action::UP};
             case Slot::LS_RIGHT:
@@ -144,39 +146,20 @@ namespace ms {
                 return {KeyType::Id::ACTION, Action::DOWN};
             case Slot::LS_LEFT:
                 return {KeyType::Id::ACTION, Action::LEFT};
-            case Slot::L1:
+            case Slot::RS_LEFT:
                 return {KeyType::Id::MENU, Action::ITEMS};
-            case Slot::L2:
+            case Slot::RS_UP:
                 return {KeyType::Id::MENU, Action::STATS};
-            case Slot::R2:
-                return {KeyType::Id::MENU, Action::QUICK_SLOTS};
-            case Slot::R1:
+            case Slot::RS_RIGHT:
+                return {KeyType::Id::MENU, Action::EQUIPMENT};
+            case Slot::RS_DOWN:
                 return {KeyType::Id::MENU, Action::SKILLS};
-            case Slot::START:
-                return {KeyType::Id::MENU, Action::MENU};
-            case Slot::Y:
-                return {KeyType::Id::ACTION, Action::PICKUP};
-            case Slot::X:
-                return {KeyType::Id::MENU, Action::INTERACT_HARVEST};
-            case Slot::B:
-                return {KeyType::Id::ACTION, Action::ATTACK};
             case Slot::A:
                 return {KeyType::Id::ACTION, Action::JUMP};
-            case Slot::LS_PRESS:
-                return {KeyType::Id::MENU, Action::WORLD_MAP};
-            case Slot::RS_PRESS:
-                return {KeyType::Id::MENU, Action::MINI_MAP};
-            case Slot::DPAD_UP:
-            case Slot::DPAD_RIGHT:
-            case Slot::DPAD_DOWN:
-            case Slot::DPAD_LEFT:
-            case Slot::RS_UP:
-            case Slot::RS_RIGHT:
-            case Slot::RS_DOWN:
-            case Slot::RS_LEFT:
-                // Select used to be the escape of the old main menu. That action is no longer
-                // offered in this window, so the slot starts empty like the sticks' directions.
-            case Slot::SELECT:
+            case Slot::X:
+                return {KeyType::Id::ACTION, Action::ATTACK};
+            case Slot::Y:
+                return {KeyType::Id::ACTION, Action::PICKUP};
             default:
                 return {};
         }

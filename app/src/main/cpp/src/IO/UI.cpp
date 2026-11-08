@@ -26,8 +26,10 @@
 #include "../../Configuration.h"
 #include "Cursor.h"
 #include "GamepadConfig.h"
+#include "KeyType.h"
 #include "NativeChat.h"
 #include "OptionalCreator.h"
+#include "QuickSlots.h"
 #include "UIStateCashShop.h"
 #include "UIStateGame.h"
 #include "UIStateLogin.h"
@@ -426,6 +428,24 @@ namespace ms {
         // knows about, and their live table belongs to GamepadConfig rather than to the keyboard.
         if (no >= GamepadConfig::FIRST_KEY) {
             GamepadConfig::get().assign_slot(no, type, action);
+            return;
+        }
+
+        // The quick-slot bar's 32 cells ride in it too, and a zero among them is a cell this
+        // character has no row for, so the cell's own default is what gets written down. Writing it
+        // here instead of where the bar draws is what lets a binding made in the bar replace the
+        // default outright, and lets the bar and the two editors read one table as usual.
+        if (no >= QuickSlots::VIRTUAL_BASE
+            && no < QuickSlots::VIRTUAL_BASE + QuickSlots::LENGTH && type == 0) {
+            const Keyboard::Mapping fallback = QuickSlots::default_mapping(
+                static_cast<int16_t>(no - QuickSlots::VIRTUAL_BASE));
+
+            if (fallback.type != KeyType::Id::NONE) {
+                keyboard_.assign(no,
+                                 static_cast<uint8_t>(fallback.type),
+                                 fallback.action);
+            }
+
             return;
         }
 

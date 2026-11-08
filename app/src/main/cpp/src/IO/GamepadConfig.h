@@ -81,6 +81,8 @@ namespace ms {
         // Top-left of the slot in controller-art space.
         static Point<int16_t> position(Slot slot);
 
+        // What a slot holds for a character that has never bound it. A slot left at this never
+        // reaches the server as a row, and a row the server does not send back is read as this.
         static Keyboard::Mapping default_mapping(Slot slot);
 
         // The name shown under the slot in the binding window.

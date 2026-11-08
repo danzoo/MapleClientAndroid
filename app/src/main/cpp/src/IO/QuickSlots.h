@@ -45,6 +45,15 @@ namespace ms {
         // The key a slot stands for, one of the ids above VIRTUAL_BASE.
         static int32_t keycode(int16_t slot);
 
+        // What a cell holds for a character that has never bound it. The cell ids only ever reach
+        // the client inside the keymap packet, which is positional, so a cell the character has no
+        // row for arrives as a zero - and a zero is what the packet path reads as this default
+        // (UI::add_keymapping). Asking here rather than wherever a cell is drawn is what lets a
+        // binding made in the bar overwrite the default outright; the price is the one the
+        // controller table already pays, that a cell cleared back to its default is filled again by
+        // the next login, because a deliberate empty and an untouched cell are the same zero.
+        static Keyboard::Mapping default_mapping(int16_t slot);
+
         // The mapping committed to a slot, or a mapping of NONE when the slot is empty.
         static Keyboard::Mapping at(int16_t slot);
 

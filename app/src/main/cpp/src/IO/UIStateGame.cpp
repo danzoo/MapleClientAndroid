@@ -29,8 +29,8 @@
 #include "UITypes/UIChat.h"
 #include "UITypes/UIEquipInventory.h"
 #include "UITypes/UIEvent.h"
+#include "UITypes/UIGamepadConfig.h"
 #include "UITypes/UIItemInventory.h"
-#include "UITypes/UIKeyConfig.h"
 #include "UITypes/UIMiniMap.h"
 #include "UITypes/UIQuestLog.h"
 #include "UITypes/UIQuit.h"
@@ -369,14 +369,19 @@ namespace ms {
                             // left on the game side for this key to open.
                             break;
                         case KeyAction::Id::KEY_BINDINGS: {
-                            auto keyconfig = UI::get().get_element<UIKeyConfig>();
+                            // The one function that opens the controller editor. This device is
+                            // driven by a pad and by touch, so the key it can actually reach is the
+                            // one whose table matches what it presses; the keyboard editor is still
+                            // there behind 菜单 → 设定 → 按键设置.
+                            auto gamepad =
+                                UI::get().get_element<UIGamepadConfig>();
 
-                            if (!keyconfig || !keyconfig->get().is_active()) {
-                                emplace<UIKeyConfig>(
+                            if (!gamepad || !gamepad->get().is_active()) {
+                                emplace<UIGamepadConfig>(
                                         Stage::get().get_player().get_inventory(),
                                         Stage::get().get_player().get_skills());
-                            } else if (keyconfig && keyconfig->get().is_active()) {
-                                keyconfig->get().close();
+                            } else if (gamepad && gamepad->get().is_active()) {
+                                gamepad->get().close();
                             }
 
                             break;

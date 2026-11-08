@@ -16,11 +16,13 @@
 #include "QuickSlots.h"
 
 #include <imgwz/wz.hpp>
+#include <iterator>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 #include "../../Net/Packets/PlayerPackets.h"
+#include "../Constants.h"
 #include "../Data/ItemData.h"
 #include "../Data/SkillData.h"
 #include "KeyConfig.h"
@@ -119,6 +121,47 @@ namespace ms {
 
     int32_t QuickSlots::keycode(int16_t slot) {
         return VIRTUAL_BASE + slot;
+    }
+
+    Keyboard::Mapping QuickSlots::default_mapping(int16_t slot) {
+        using Action = KeyAction::Id;
+
+        // The two rows as they are handed to a fresh character, laid out for the folded bar: only
+        // the ten leftmost columns show without opening the fold, so the seven faces go along the
+        // top from the left and the five windows he opens constantly go along the bottom.
+        static constexpr Action kTopRow[] = {
+            Action::FACE1,
+            Action::FACE2,
+            Action::FACE3,
+            Action::FACE4,
+            Action::FACE5,
+            Action::FACE6,
+            Action::FACE7,
+        };
+        static constexpr Action kBottomRow[] = {
+            Action::ITEMS,
+            Action::STATS,
+            Action::EQUIPMENT,
+            Action::SKILLS,
+            Action::KEY_BINDINGS,
+        };
+
+        constexpr int16_t top_row_length = static_cast<int16_t>(std::size(kTopRow));
+        constexpr int16_t bottom_row_length =
+            static_cast<int16_t>(std::size(kBottomRow));
+
+        const int16_t column = slot % Constants::QUICKSLOT_COLS;
+        const int16_t row = slot / Constants::QUICKSLOT_COLS;
+
+        if (row == 0 && column >= 0 && column < top_row_length) {
+            return function_mapping(kTopRow[column]);
+        }
+
+        if (row == 1 && column >= 0 && column < bottom_row_length) {
+            return function_mapping(kBottomRow[column]);
+        }
+
+        return {};
     }
 
     Keyboard::Mapping QuickSlots::at(int16_t slot) {
