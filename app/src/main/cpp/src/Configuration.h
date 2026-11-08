@@ -103,12 +103,6 @@ public:
     // Get the Hard Drive Volume Serial Number
     std::string get_vol_serial_num();
 
-    // Get the shop's "Right-click to sell item" boolean
-    bool get_rightclicksell();
-
-    // Set the shop's "Right-click to sell item" boolean
-    void set_rightclicksell(bool value);
-
     // Whether to show the weekly maple star in Maple Chat
     bool get_show_weekly();
 
@@ -253,7 +247,6 @@ private:
     const std::string auto_pass = "";
     const std::string auto_pic = "";
     const int32_t auto_cid = 0;
-    bool rightclicksell = false;
     bool show_weekly = true;
     bool start_shown = false;
     std::string MACS;

@@ -99,6 +99,9 @@ namespace ms {
         // Clear whichever tooltip is currently raised, whatever its parent.
         void clear_tooltip();
 
+        // Whether a preview stands right now that a piece of the given window raised. See UIState.h.
+        bool has_tooltip(Tooltip::Parent parent);
+
         // Every one of these takes the point the preview is to stand at: the middle of the piece
         // that was touched, or the finger itself where there is no piece to be the middle of. See
         // UIState.h.
@@ -109,6 +112,13 @@ namespace ms {
         void show_item(Tooltip::Parent parent,
                        int32_t item_id,
                        Point<int16_t> anchor);
+
+        void show_goods(Tooltip::Parent parent,
+                        int32_t item_id,
+                        Point<int16_t> anchor);
+
+        void set_tooltip_action(std::string label,
+                                std::function<void()> on_pressed);
 
         void show_skill(Tooltip::Parent parent,
                         int32_t skill_id,

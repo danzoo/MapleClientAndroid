@@ -250,14 +250,6 @@ std::string Configuration::get_vol_serial_num() {
     return VolumeSerialNumber;
 }
 
-bool Configuration::get_rightclicksell() {
-    return rightclicksell;
-}
-
-void Configuration::set_rightclicksell(bool value) {
-    rightclicksell = value;
-}
-
 bool Configuration::get_show_weekly() {
     return show_weekly;
 }

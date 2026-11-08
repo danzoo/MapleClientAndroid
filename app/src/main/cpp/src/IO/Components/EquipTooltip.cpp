@@ -139,16 +139,67 @@ EquipTooltip::EquipTooltip() {
 
     inv_pos_ = 0;
     inv_pos_preview_ = 0;
+    goods_id_ = 0;
 }
 
 void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
-    if (inv_pos_ == ivp) {
+    // A control belongs to the piece it was put up for, so the first thing any new reading of the
+    // panel does is drop the one the last piece had. The window that wants one hands it over again
+    // once the preview has been pointed at the piece.
+    clear_action();
+
+    if (goods_id_ == 0 && inv_pos_ == ivp) {
         return;
     }
 
+    goods_id_ = 0;
+    goods_.reset();
     inv_pos_ = ivp;
     inv_pos_preview_ = 0;
 
+    set_panel(parent);
+}
+
+void EquipTooltip::set_goods(Tooltip::Parent parent, int32_t item_id) {
+    clear_action();
+
+    if (goods_id_ == item_id) {
+        return;
+    }
+
+    goods_id_ = item_id;
+    goods_.reset();
+    inv_pos_ = 0;
+    inv_pos_preview_ = 0;
+
+    if (item_id != 0) {
+        // A good has never been held by anyone: nothing has been scrolled into it, it has never been
+        // leveled, and it carries exactly the stats its type is written down with. That is what there
+        // is to say about it, and it is the same panel with the same readings as a piece the
+        // character owns - including, beside it, the piece he would be taking the new one off of.
+        const EquipData &equipdata = EquipData::get(item_id);
+        EnumMap<EquipStat::Id, uint16_t> defstats;
+
+        for (EquipStat::Id es : EquipStat::values) {
+            defstats[es] = static_cast<uint16_t>(equipdata.get_defstat(es));
+        }
+
+        goods_.emplace(item_id,
+                       0,
+                       "",
+                       0,
+                       equipdata.get_slots(),
+                       0,
+                       defstats,
+                       0,
+                       0,
+                       0);
+    }
+
+    set_panel(parent);
+}
+
+void EquipTooltip::set_panel(Tooltip::Parent parent) {
     // The panel is as wide as the art that caps it, and every wrap is taken from that, held back
     // from its right edge by the same margin the text is placed off its left. A wrap that runs to
     // the edge itself lays the last line of a long name over the frame.
@@ -176,7 +227,16 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
     }
 
     const Inventory &inventory = player.get_inventory();
-    auto oequip = inventory.get_equip(invtype, inv_pos_);
+
+    // A good is read the same way as a piece in the character's bag: the panel below only ever asks
+    // for "the equip this preview is about", and the copy built from the item's type lines up with
+    // that. Nothing is looked up in the inventory when there is a good to show instead.
+    std::optional<std::reference_wrapper<const Equip>> oequip =
+            goods_id_ != 0
+            ? std::optional<std::reference_wrapper<const Equip>>(
+                      std::cref(*goods_))
+            : inventory.get_equip(invtype, inv_pos_);
+
     const CharStats &stats = player.get_stats();
 
     if (invtype == InventoryType::Id::EQUIP) {
@@ -647,7 +707,7 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
 }
 
 bool EquipTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
-    if (inv_pos_ == 0) {
+    if (inv_pos_ == 0 && goods_id_ == 0) {
         return false;
     }
 
@@ -659,6 +719,12 @@ bool EquipTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
     // panels when there are two.
     int16_t max_width = Constants::Constants::get().get_ui_viewwidth();
     int16_t max_height = Constants::Constants::get().get_ui_viewheight();
+
+    // The control is set into the foot of the panel, so the body art is stretched to carry it. The
+    // lettering walks down from the top, so the room handed to the control is room it never used.
+    const int16_t panel_height =
+        height_ + (has_action() ? ACTION_HEIGHT + ACTION_INSET : 0);
+
     int16_t cur_width = pos.x() + top_.width();
     int16_t cur_height = pos.y() + 36;
 
@@ -667,9 +733,10 @@ bool EquipTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
     }
 
     if (inv_pos_preview_ == 1) {
-        cur_height += (height_ > height_preview_) ? height_ : height_preview_;
+        cur_height += (panel_height > height_preview_) ? panel_height
+                                                       : height_preview_;
     } else {
-        cur_height += height_;
+        cur_height += panel_height;
     }
 
     int16_t adj_x = cur_width - max_width;
@@ -683,13 +750,17 @@ bool EquipTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
         pos.shift_y(adj_y * -1);
     }
 
+    // Every line below moves `pos` about; the control is laid against the corner the panel itself
+    // ended up at, so that corner is kept before the walking starts.
+    const Point<int16_t> topleft = pos;
+
     list.picture(top_, DrawArgument(pos), "Frame/top");
     list.picture(mid_,
                  DrawArgument(pos + Point<int16_t>(0, 13),
-                              Point<int16_t>(0, height_)),
+                              Point<int16_t>(0, panel_height)),
                  "Frame/line");
     list.picture(bot_,
-                 DrawArgument(pos + Point<int16_t>(0, height_ + 13)),
+                 DrawArgument(pos + Point<int16_t>(0, panel_height + 13)),
                  "Frame/bottom");
     list.picture(cover_, DrawArgument(pos), "Frame/cover");
 
@@ -812,6 +883,13 @@ bool EquipTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
         list.picture(line_, DrawArgument(pos), "Frame/dotline");
         list.text(desc_, pos + Point<int16_t>(DESC_X, 3));
     }
+
+    // Into the foot of the panel's body, at its own width, so the control reads as belonging to this
+    // piece and not to whatever the preview beside it is about.
+    build_action(list,
+                 Rectangle<int16_t>(topleft + Point<int16_t>(0, 13),
+                                    topleft + Point<int16_t>(top_.width(),
+                                                             13 + panel_height)));
 
     return true;
 }

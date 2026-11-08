@@ -32,6 +32,26 @@ namespace {
 auto fn_npc_shop_action = []<typename... T>(T && ...args) {
     NpcShopActionPacket(std::forward<T>(args)...).dispatch();
 };
+
+// Taking a piece out of the character's bag and into the shop. A stack is asked for with a box that
+// starts filled at the most that can be sold, so the usual case is a press through the box rather
+// than a typed number; one piece goes straight out. `slot` is the slot in the bag, not the row the
+// piece was read off.
+void sell_goods(int32_t itemid, int16_t slot, int16_t sellable) {
+    if (sellable > 1) {
+        const std::string question = "How many are you willing to sell?";
+
+        auto onenter = [itemid, slot](int32_t qty) {
+            auto shortqty = static_cast<int16_t>(qty);
+
+            fn_npc_shop_action(slot, itemid, shortqty, false);
+        };
+
+        UI::get().emplace<UIEnterNumber>(question, onenter, sellable, sellable);
+    } else if (sellable > 0) {
+        fn_npc_shop_action(slot, itemid, 1, false);
+    }
+}
 }  // namespace
 
 UIShop::UIShop(const CharLook &in_charlook, const Inventory &in_inventory) :
@@ -48,25 +68,10 @@ UIShop::UIShop(const CharLook &in_charlook, const Inventory &in_inventory) :
     sprites_.emplace_back(background);
     sprites_.emplace_back(src["backgrnd2"]);
     sprites_.emplace_back(src["backgrnd3"]);
-    sprites_.emplace_back(src["backgrnd4"]);
 
     buttons_[Buttons::BUY_ITEM] = std::make_unique<MapleButton>(src["BtBuy"]);
     buttons_[Buttons::SELL_ITEM] = std::make_unique<MapleButton>(src["BtSell"]);
     buttons_[Buttons::EXIT] = std::make_unique<MapleButton>(src["BtExit"]);
-
-    Texture cben = src["checkBox"][0];
-    Texture cbdis = src["checkBox"][1];
-
-    Point<int16_t> cb_origin = cben.get_origin();
-    int16_t cb_x = cb_origin.x();
-    int16_t cb_y = cb_origin.y();
-
-    checkbox_[0] = cbdis;
-    checkbox_[1] = cben;
-
-    buttons_[Buttons::CHECKBOX] = std::make_unique<AreaButton>(
-        Point<int16_t>(std::abs(cb_x), std::abs(cb_y)),
-        cben.get_dimensions());
 
     img::node buyen = src["TabBuy"]["enabled"];
     img::node buydis = src["TabBuy"]["disabled"];
@@ -144,8 +149,10 @@ UIShop::UIShop(const CharLook &in_charlook, const Inventory &in_inventory) :
                           });
 
     active_ = false;
+    sold_ = false;
+    previewed_ = false;
     dimension_ = bg_dimensions;
-    drag_area_ = Point<int16_t>(bg_dimensions.x(), 10);
+    drag_area_ = bg_dimensions;
 }
 
 void UIShop::draw(float alpha) const {
@@ -164,8 +171,6 @@ void UIShop::draw(float alpha) const {
 
     buy_slider_.draw(position_);
     sell_slider_.draw(position_);
-
-    checkbox_[right_click_sell_].draw(position_);
 }
 
 void UIShop::update() {
@@ -183,14 +188,14 @@ Button::State UIShop::button_pressed(uint16_t buttonid) {
 
     if (buy.contains(buttonid)) {
         int16_t selected = buttonid - Buttons::BUY0;
-        buy_state_.select(selected);
+        buy_state_.select(selected, previewed_);
         sell_state_.selection = -1;
 
         return Button::State::NORMAL;
     }
     if (sell.contains(buttonid)) {
         int16_t selected = buttonid - Buttons::SELL0;
-        sell_state_.select(selected);
+        sold_ = sell_state_.select(selected, previewed_);
         buy_state_.selection = -1;
 
         return Button::State::NORMAL;
@@ -202,11 +207,6 @@ Button::State UIShop::button_pressed(uint16_t buttonid) {
 
             return Button::State::NORMAL;
         case Buttons::EXIT: exit_shop(); return Button::State::PRESSED;
-        case Buttons::CHECKBOX:
-            right_click_sell_ = !right_click_sell_;
-            Configuration::get().set_rightclicksell(right_click_sell_);
-
-            return Button::State::NORMAL;
         case Buttons::EQUIP:
             changeselltab(InventoryType::Id::EQUIP);
 
@@ -233,6 +233,18 @@ Button::State UIShop::button_pressed(uint16_t buttonid) {
 }
 
 Cursor::State UIShop::send_cursor(bool clicked, Point<int16_t> cursorpos) {
+    // The base class carries its own pass over buttons_, and this window walks buttons_ below, so
+    // it is only asked where nothing it would fire stands: while a carry is already in progress, and
+    // on a press that lands in the blank space the window owns. Asking it everywhere would press
+    // whatever control stands under the finger twice.
+    if (dragged_ || is_in_drag_range(cursorpos)) {
+        Cursor::State dstate = UIDragElement::send_cursor(clicked, cursorpos);
+
+        if (dragged_) {
+            return dstate;
+        }
+    }
+
     Point<int16_t> cursoroffset = cursorpos - position_;
     last_cursor_pos_ = cursoroffset;
 
@@ -259,6 +271,15 @@ Cursor::State UIShop::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     Cursor::State ret = clicked ? Cursor::State::CLICKING : Cursor::State::IDLE;
     bool matched = false;
 
+    // Read fresh on every pass: only the row button below can say that this click sold something,
+    // and a click that never reached a button must not be judged by the one before it. The preview is
+    // asked the same moment, before the button loop puts it down, so that a row counts as already
+    // looked at only when the preview it was marked by still stands -- which is what makes a click
+    // after the preview has gone (a tap on blank space, a scroll, another window coming forward) show
+    // the preview again instead of selling the piece outright.
+    sold_ = false;
+    previewed_ = UI::get().has_tooltip(Tooltip::Parent::SHOP);
+
     for (size_t i = 0; i < Buttons::NUM_BUTTONS; i++) {
         if (!buttons_[i]->is_active()
             || buttons_[i]->get_state() == Button::State::DISABLED
@@ -276,12 +297,10 @@ Cursor::State UIShop::send_cursor(bool clicked, Point<int16_t> cursorpos) {
             continue;
         }
 
-        if (i >= Buttons::BUY_ITEM && i <= Buttons::CASH) {
-            if (i >= Buttons::OVERALL && i <= Buttons::CASH) {
-                Sound(Sound::Name::TAB).play();
-            } else if (i != Buttons::CHECKBOX) {
-                Sound(Sound::Name::BUTTON_CLICK).play();
-            }
+        if (i >= Buttons::OVERALL && i <= Buttons::CASH) {
+            Sound(Sound::Name::TAB).play();
+        } else {
+            Sound(Sound::Name::BUTTON_CLICK).play();
         }
 
         buttons_[i]->set_state(button_pressed(i));
@@ -301,7 +320,15 @@ Cursor::State UIShop::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     bool on_sell = on_row && xoff >= sell_x_ && xoff <= sell_x_ + sell_width_;
 
     if (clicked && (on_buy || on_sell)) {
-        show_item(slot, on_buy);
+        // The second click on a row sells the piece it stands on. That one leaves the preview down:
+        // what it was describing has just been handed over, and putting it back over the row would
+        // hold up a picture of something the character no longer has.
+        if (sold_) {
+            clear_tooltip();
+        }
+        else {
+            show_item(slot, on_buy);
+        }
     } else if (!matched && !on_buy && !on_sell) {
         clear_tooltip();
     }
@@ -326,24 +353,28 @@ void UIShop::send_scroll(double yoffset) {
     }
 }
 
-void UIShop::rightclick(Point<int16_t> cursorpos) {
-    if (right_click_sell_) {
-        Point<int16_t> cursoroffset = cursorpos - position_;
+// The shop is mostly two lists and a scroll strip beside each, so the parts of it that carry the
+// window are the header, the seam between the columns and the foot - which is what is left once the
+// controls that already answer to a press are taken out. The rows and the tabs are buttons, so
+// button_at covers them; the sliders are not, so they have to be asked themselves.
+bool UIShop::is_in_drag_range(Point<int16_t> cursorpos) const {
+    uint16_t buttonid;
 
-        int16_t xoff = cursoroffset.x();
-        int16_t yoff = cursoroffset.y();
-        int16_t slot = slot_by_position(yoff);
-
-        if (slot >= 0 && slot <= 8) {
-            if (xoff >= sell_x_ && xoff <= sell_x_ + sell_width_) {
-                clear_tooltip();
-
-                sell_state_.selection = slot;
-                sell_state_.sell(true);
-                buy_state_.selection = -1;
-            }
-        }
+    if (button_at(cursorpos, buttonid)) {
+        return false;
     }
+
+    Point<int16_t> relative = cursorpos - position_;
+
+    if (buy_slider_.isenabled() && buy_slider_.contains(relative)) {
+        return false;
+    }
+    if (sell_slider_.isenabled() && sell_slider_.contains(relative)) {
+        return false;
+    }
+
+    return Rectangle<int16_t>(position_, position_ + drag_area_).contains(
+        cursorpos);
 }
 
 void UIShop::send_key(int32_t keycode, bool pressed, bool escape) {
@@ -418,7 +449,6 @@ void UIShop::reset(int32_t npcid) {
     changeselltab(InventoryType::Id::EQUIP);
 
     makeactive();
-    right_click_sell_ = Configuration::get().get_rightclicksell();
 }
 
 void UIShop::modify(InventoryType::Id type) {
@@ -637,7 +667,16 @@ void UIShop::BuyState::show_item(int16_t slot, Point<int16_t> anchor) {
     }
 
     int32_t itemid = items[absslot].get_id();
-    UI::get().show_item(Tooltip::Parent::SHOP, itemid, anchor);
+
+    if (InventoryType::by_item_id(itemid) == InventoryType::Id::EQUIP) {
+        // A piece for sale is in nobody's bag, so the plain item preview has only the name and the
+        // picture to show: everything else an equip is described by is read off the piece itself, and
+        // there is no piece to read off. The panel built from the goods' own id says what a piece the
+        // character owns would say, because it takes its numbers from the same record.
+        UI::get().show_goods(Tooltip::Parent::SHOP, itemid, anchor);
+    } else {
+        UI::get().show_item(Tooltip::Parent::SHOP, itemid, anchor);
+    }
 }
 
 void UIShop::BuyState::add(const BuyItem &item) {
@@ -679,14 +718,15 @@ void UIShop::BuyState::buy() const {
     }
 }
 
-void UIShop::BuyState::select(int16_t selected) {
+void UIShop::BuyState::select(int16_t selected, bool previewed) {
     int16_t slot = selected + offset;
 
-    if (slot == selection) {
+    if (previewed && slot == selection) {
         buy();
-    } else {
-        selection = slot;
+        return;
     }
+
+    selection = slot;
 }
 
 void UIShop::SellState::reset() {
@@ -749,13 +789,27 @@ void UIShop::SellState::show_item(int16_t slot, Point<int16_t> anchor) {
         return;
     }
 
+    const SellItem &item = items[absslot];
+
     if (tab == InventoryType::Id::EQUIP) {
-        int16_t realslot = items[absslot].get_slot();
+        int16_t realslot = item.get_slot();
         UI::get().show_equip(Tooltip::Parent::SHOP, realslot, anchor);
     } else {
-        int32_t itemid = items[absslot].get_id();
+        int32_t itemid = item.get_id();
         UI::get().show_item(Tooltip::Parent::SHOP, itemid, anchor);
     }
+
+    // Every preview of a piece in the trade column carries the way to sell it. The reading is taken
+    // from the item the preview was raised for, not from the current selection: a preview stands still
+    // while the list underneath it is scrolled, and the row that has come round under it is a
+    // different piece.
+    int32_t itemid = item.get_id();
+    int16_t sellable = item.get_sellable();
+    int16_t realslot = item.get_slot();
+
+    UI::get().set_tooltip_action("卖出", [itemid, sellable, realslot] {
+        sell_goods(itemid, realslot, sellable);
+    });
 }
 
 void UIShop::SellState::sell(bool skip_confirmation) const {
@@ -768,22 +822,12 @@ void UIShop::SellState::sell(bool skip_confirmation) const {
     int16_t sellable = item.get_sellable();
     int16_t slot = item.get_slot();
 
-    if (sellable > 1) {
-        const std::string question = "How many are you willing to sell?";
+    if (sellable > 1 || skip_confirmation) {
+        sell_goods(itemid, slot, sellable);
+        return;
+    }
 
-        auto onenter = [itemid, slot](int32_t qty) {
-            auto shortqty = static_cast<int16_t>(qty);
-
-            fn_npc_shop_action(slot, itemid, shortqty, false);
-        };
-
-        UI::get().emplace<UIEnterNumber>(question, onenter, sellable, 1);
-    } else if (sellable > 0) {
-        if (skip_confirmation) {
-            fn_npc_shop_action(slot, itemid, 1, false);
-            return;
-        }
-
+    if (sellable > 0) {
         const std::string question = "Are you sure you want to sell it?";
 
         auto ondecide = [itemid, slot](bool yes) {
@@ -796,13 +840,21 @@ void UIShop::SellState::sell(bool skip_confirmation) const {
     }
 }
 
-void UIShop::SellState::select(int16_t selected) {
+bool UIShop::SellState::select(int16_t selected, bool previewed) {
     int16_t slot = selected + offset;
 
-    if (slot == selection) {
-        sell(false);
-    } else {
+    // A row that has not been looked at in this press is only marked: the preview goes up over it and
+    // the piece stays where it is. Selling takes the row to be the marked one and the mark to still be
+    // on show, so that the second click on a preview the player has already dismissed does not spend
+    // the item instead of describing it again.
+    if (!previewed || slot != selection) {
         selection = slot;
+
+        return false;
     }
+
+    sell(false);
+
+    return true;
 }
 }  // namespace ms

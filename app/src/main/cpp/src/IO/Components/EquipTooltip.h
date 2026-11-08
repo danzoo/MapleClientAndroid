@@ -22,6 +22,8 @@
 #include "Charset.h"
 #include "Tooltip.h"
 
+#include <optional>
+
 namespace ms {
 class EquipTooltip : public Tooltip {
 public:
@@ -29,14 +31,23 @@ public:
 
     void set_equip(Tooltip::Parent parent, int16_t invpos);
 
+    // An item for sale has never been held, so there is no slot of the character's to read it from.
+    // The panel is built from the goods' own id instead, and the piece it would replace still comes
+    // from the inventory.
+    void set_goods(Tooltip::Parent parent, int32_t item_id);
+
     bool build(NativeTooltip::List &list, Point<int16_t> position) const override;
 
 private:
+    void set_panel(Tooltip::Parent parent);
+
     // The panel showing the piece the character is already wearing, put beside the panel showing the
     // piece under the finger so the two can be read against each other. It is written out first, as
     // it was drawn first.
     void build_preview(NativeTooltip::List &list, Point<int16_t> position) const;
     int16_t inv_pos_;
+    int32_t goods_id_;
+    std::optional<Equip> goods_;
     int16_t inv_pos_preview_;
     int16_t height_;
     int16_t height_preview_;

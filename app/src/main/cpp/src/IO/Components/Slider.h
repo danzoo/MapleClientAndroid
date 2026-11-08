@@ -45,6 +45,11 @@ public:
     void setvertical(Range<int16_t> vertical);
     Range<int16_t> getvertical() const;
 
+    // Whether a press, given in the coordinates of the window that owns this slider, lands on the
+    // strip it lives on. A slider is not one of a window's buttons, so a window that lets its blank
+    // space carry the whole window has to ask this as well, or the strip would be dragged over.
+    bool contains(Point<int16_t> cursor) const;
+
     void draw(Point<int16_t> position) const;
 
     // The same art as a record of a native window's display list. The track is tiled, and which of

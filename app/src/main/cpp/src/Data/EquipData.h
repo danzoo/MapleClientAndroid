@@ -42,6 +42,10 @@ public:
     // Returns the equip slot.
     EquipSlot::Id get_eqslot() const;
 
+    // Returns how many scrolls the type can still be given. A piece that has never been handed out
+    // carries the type's own allowance, which is all a preview of a good has to say.
+    uint8_t get_slots() const;
+
     // Returns the category name.
     const std::string &get_type() const;
 

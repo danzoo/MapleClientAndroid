@@ -133,6 +133,10 @@ EquipSlot::Id EquipData::get_eqslot() const {
     return eq_slot_;
 }
 
+uint8_t EquipData::get_slots() const {
+    return slots_;
+}
+
 const std::string &EquipData::get_type() const {
     return type_;
 }

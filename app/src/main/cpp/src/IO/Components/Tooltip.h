@@ -16,8 +16,13 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <string>
 
+#include "../Graphics/Text.h"
+#include "../Graphics/Texture.h"
 #include "../Template/Point.h"
+#include "../Template/Rectangle.h"
 #include "../NativeTooltip.h"
 
 namespace ms {
@@ -28,6 +33,15 @@ public:
     // How far text stands off the edge it is kept inside of: enough that a line which does use its
     // entire wrap still finishes short of the border art.
     static constexpr int16_t TEXT_MARGIN = 8;
+
+    // The height of the one control a preview carries, which is also the room it is set into at the
+    // foot of the panel, and how far it stands off the two edges it is kept clear of.
+    static constexpr int16_t ACTION_HEIGHT = 22;
+    static constexpr int16_t ACTION_INSET = 8;
+
+    // How far the control's word is set below the middle of its plate. Centering the ink box leaves
+    // the lettering reading high on the button's face, whose own highlight sits along the top.
+    static constexpr int16_t ACTION_LABEL_DROP = 1;
 
     // Possible parent UIs for Tooltips.
     enum Parent {
@@ -44,7 +58,28 @@ public:
         MINI_MAP
     };
 
+    Tooltip();
+
     virtual ~Tooltip() = default;
+
+    // The one control a preview is allowed to carry. The window the preview is put on lets touches
+    // fall straight through to the game, so a press on the control never arrives as the preview's
+    // own: the box it was written into is remembered as the art goes out, and the press is read
+    // against that. Only the window that raised the preview knows what the press should mean, so
+    // only it can say what the control does.
+    void set_action(std::string label, std::function<void()> on_pressed);
+
+    // Takes the control off again. A preview is written from the front every time it is pointed at a
+    // new piece, so a control never outlives the piece it was put up for.
+    void clear_action();
+
+    // Whether the press lands on the control. A touch down there belongs to the control and to
+    // nothing else: the window behind the preview must not read it as a tap on its own face, which
+    // for a list is how the preview comes back down before the press that would have used it.
+    bool action_at(Point<int16_t> cursorpos) const;
+
+    // Runs the control when the press lands on it, and reports whether it owned the press.
+    bool press_action(Point<int16_t> cursorpos);
 
     // Painting the preview into the game's own pass. A preview that the native window has taken over
     // has nothing to draw here and leaves it alone.
@@ -55,5 +90,30 @@ public:
     // not been converted says so by returning false, and is drawn by the pass above as it always
     // was.
     virtual bool build(NativeTooltip::List &list, Point<int16_t> cursorpos) const;
+
+protected:
+    // Whether this preview carries a control, which a panel has to know before it works out how much
+    // room it needs.
+    bool has_action() const;
+
+    // Writes the control into the foot of a panel whose inside is `interior`, and remembers the box it
+    // landed in. Writing and remembering are one call because the press has to be read against the
+    // very box the reader was shown. The panel is grown by ACTION_HEIGHT + ACTION_INSET before this,
+    // so the control takes room that lettering does not use.
+    void build_action(NativeTooltip::List &list,
+                      Rectangle<int16_t> interior) const;
+
+private:
+    // The plate the control is drawn from. Taken up once, in the constructor, because making a
+    // Texture registers its pixels with the atlas and a preview is written many times a minute.
+    Texture action_plate_;
+
+    std::string action_label_;
+    std::function<void()> on_action_;
+
+    // Decided when the art goes out, which is the only pass that knows where the panel ended up
+    // after the screen held it back.
+    mutable Rectangle<int16_t> action_rect_;
+    mutable Text action_text_;
 };
 }  // namespace ms

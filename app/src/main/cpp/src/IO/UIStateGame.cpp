@@ -428,6 +428,30 @@ namespace ms {
         bool clicked = cursorstate == Cursor::State::CLICKING
                        || cursorstate == Cursor::State::VSCROLL_IDLE;
 
+        // A preview raised for the native window carries at most one control, and it stands wherever
+        // the panel falls - over the window that raised it, over another window, over the map. So the
+        // press has to be read here, before the cursor is handed to whatever lies under it: asked
+        // there, the same tap would be taken for a row of the shop, and the row would put the preview
+        // down again before the control was ever reached.
+        if (tooltip_) {
+            Tooltip &tooltip = tooltip_->get();
+
+            if (clicked) {
+                if (tooltip.press_action(cursorpos)) {
+                    NativeChat::sink();
+
+                    // The control has said what it came to say and the preview it was read from has
+                    // no reason to stay. The one that pressed it does not clear it itself - it would
+                    // be destroying the call it is still inside of.
+                    clear_tooltip(tooltip_parent_);
+                    return Cursor::State::IDLE;
+                }
+            }
+            else if (tooltip.action_at(cursorpos)) {
+                return Cursor::State::CAN_CLICK;
+            }
+        }
+
         if (auto *focusedelement = get(focused_)) {
             if (focusedelement->is_active()) {
                 if (clicked) {
@@ -559,6 +583,10 @@ namespace ms {
         clear_tooltip(tooltip_parent_);
     }
 
+    bool UIStateGame::has_tooltip(Tooltip::Parent parent) const {
+        return parent != Tooltip::Parent::NONE && parent == tooltip_parent_;
+    }
+
     void UIStateGame::show_equip(Tooltip::Parent parent,
                                  int16_t slot,
                                  Point<int16_t> anchor) {
@@ -584,6 +612,33 @@ namespace ms {
             tooltip_anchor_ = anchor;
         }
 
+        tooltip_version_++;
+    }
+
+    void UIStateGame::show_goods(Tooltip::Parent parent,
+                                 int32_t item_id,
+                                 Point<int16_t> anchor) {
+        eq_tooltip_.set_goods(parent, item_id);
+
+        if (item_id) {
+            tooltip_ = eq_tooltip_;
+            tooltip_parent_ = parent;
+            tooltip_anchor_ = anchor;
+        }
+
+        tooltip_version_++;
+    }
+
+    void UIStateGame::set_tooltip_action(std::string label,
+                                         std::function<void()> on_pressed) {
+        if (!tooltip_) {
+            return;
+        }
+
+        // The control is recorded while the preview is written out, so asking for it means the
+        // preview has to be written out again - otherwise it would never reach the screen, and its
+        // place on the screen would never be known well enough to be pressed.
+        tooltip_->get().set_action(std::move(label), std::move(on_pressed));
         tooltip_version_++;
     }
 

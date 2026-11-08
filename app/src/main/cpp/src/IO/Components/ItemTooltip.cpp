@@ -53,6 +53,11 @@ ItemTooltip::ItemTooltip() {
 }
 
 bool ItemTooltip::set_item(int32_t iid) {
+    // Whatever control came with the last piece shown belongs to the window that asked for it, not to
+    // the piece being asked for now - even the same piece, seen from another window. So it is dropped
+    // before anything else, and the window that wants a control hands it over after pointing here.
+    clear_action();
+
     if (item_id_ == iid) {
         return false;
     }
@@ -132,8 +137,11 @@ bool ItemTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
     // finger that opened it and has to come back inside when the finger is near an edge.
     int16_t max_width = Constants::Constants::get().get_ui_viewwidth();
     int16_t max_height = Constants::Constants::get().get_ui_viewheight();
+    // The control a preview carries is set into the foot of the frame, so the frame is grown to make
+    // room for it and that room counts towards what has to be kept on the screen.
+    int16_t action_height = has_action() ? ACTION_HEIGHT + ACTION_INSET : 0;
     int16_t cur_width = pos.x() + fill_width_ + 32;
-    int16_t cur_height = pos.y() + fill_height_ + 40;
+    int16_t cur_height = pos.y() + fill_height_ + 40 + action_height;
 
     int16_t adj_x = cur_width - max_width;
     int16_t adj_y = cur_height - max_height;
@@ -149,11 +157,19 @@ bool ItemTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
         pos.shift_y(adj_y * -1);
     }
 
-    frame_.build(list,
-                 pos + Point<int16_t>(FRAME_CENTER_X, 118 + adj_d + adj_t),
-                 fill_width_,
-                 fill_height_ + adj_t,
-                 "Frame2");
+    // The frame is kept at its top edge and grown downwards, the same way a longer description grows
+    // it, so the room handed to the control is room the lettering never had.
+    Point<int16_t> anchor = pos + Point<int16_t>(FRAME_CENTER_X,
+                                                 118 + adj_d + adj_t
+                                                     + action_height);
+
+    frame_.build(list, anchor, fill_width_,
+                 fill_height_ + adj_t + action_height, "Frame2");
+
+    MapleFrame::Box box = frame_.inner_box(anchor,
+                                           fill_width_,
+                                           fill_height_ + adj_t + action_height);
+
     list.picture(cover_, DrawArgument(pos + Point<int16_t>(4, 4)), "Frame2/cover");
     list.text(name_, pos + Point<int16_t>(NAME_X, 8));
 
@@ -168,6 +184,10 @@ bool ItemTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
     list.icon(item_icon_, DrawArgument(pos + Point<int16_t>(8, 72), 2.0f, 2.0f));
     list.picture(item_cover_, DrawArgument(pos), "ItemIcon/cover");
     list.text(desc_, pos + Point<int16_t>(DESC_X - ICON_X, -6));
+
+    build_action(list,
+                 Rectangle<int16_t>(Point<int16_t>(box.left, box.top),
+                                    Point<int16_t>(box.right, box.bottom)));
 
     return true;
 }

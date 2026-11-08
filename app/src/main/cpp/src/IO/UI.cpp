@@ -440,6 +440,10 @@ namespace ms {
         state_->clear_tooltip();
     }
 
+    bool UI::has_tooltip(Tooltip::Parent parent) {
+        return state_->has_tooltip(parent);
+    }
+
     void UI::show_equip(Tooltip::Parent parent,
                         int16_t slot,
                         Point<int16_t> anchor) {
@@ -450,6 +454,17 @@ namespace ms {
                        int32_t item_id,
                        Point<int16_t> anchor) {
         state_->show_item(parent, item_id, anchor);
+    }
+
+    void UI::show_goods(Tooltip::Parent parent,
+                        int32_t item_id,
+                        Point<int16_t> anchor) {
+        state_->show_goods(parent, item_id, anchor);
+    }
+
+    void UI::set_tooltip_action(std::string label,
+                                std::function<void()> on_pressed) {
+        state_->set_tooltip_action(std::move(label), std::move(on_pressed));
     }
 
     void UI::show_skill(Tooltip::Parent parent,

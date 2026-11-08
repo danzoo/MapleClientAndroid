@@ -207,6 +207,16 @@ Point<int16_t> Slider::getthumbpos() const {
     return Point<int16_t>(x_, y);
 }
 
+// The same strip send_cursor refuses to act outside of, padded the same way a thumb tap is
+// anywhere else in the interface.
+bool Slider::contains(Point<int16_t> cursor) const {
+    constexpr int16_t TOUCH_PAD = 6;
+    Point<int16_t> relative = cursor - start_;
+
+    return relative.x() >= -TOUCH_PAD && relative.x() <= 8 + TOUCH_PAD
+           && relative.y() >= 0 && relative.y() <= vertical_.second();
+}
+
 Cursor::State Slider::send_cursor(Point<int16_t> cursor, bool pressed) {
     constexpr int16_t TOUCH_PAD = 6;
     auto touch_hits = [&](const Rectangle<int16_t> &b) {

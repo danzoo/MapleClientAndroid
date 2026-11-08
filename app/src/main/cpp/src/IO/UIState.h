@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <functional>
 #include <list>
 #include <memory>
 
@@ -70,6 +71,12 @@ public:
     // when a scroll gesture begins and any item preview must vanish.
     virtual void clear_tooltip() {}
 
+    // Whether a preview stands right now that one of the given window's pieces raised. The shop reads
+    // this to tell a second click on a row from a fresh one, because the preview - not the row - is
+    // what says the piece has just been looked at: any gesture that puts the preview down, including
+    // ones this window never sees, takes the row back to needing a look first.
+    virtual bool has_tooltip(Tooltip::Parent parent) const { return false; }
+
     // A preview stands at an anchor rather than at the finger: the window that raises one hands
     // over the centre of the piece that was touched, so that where inside it the finger landed
     // changes nothing about where the words appear. Passing the cursor itself is what a preview
@@ -81,6 +88,18 @@ public:
     virtual void show_item(Tooltip::Parent parent,
                            int32_t itemid,
                            Point<int16_t> anchor) = 0;
+
+    // A preview of something for sale rather than something owned: there is no slot of the
+    // character's to read it from, only its id. Only the game state has previews that can hold one.
+    virtual void show_goods(Tooltip::Parent parent,
+                            int32_t item_id,
+                            Point<int16_t> anchor) {}
+
+    // The one control a raised preview carries, put on after the preview has been asked for. Setting
+    // it does not rebuild anything by itself; the window asks for the preview afresh when it wants
+    // the control to appear.
+    virtual void set_tooltip_action(std::string label,
+                                    std::function<void()> on_pressed) {}
 
     virtual void show_skill(Tooltip::Parent parent,
                             int32_t skill_id,

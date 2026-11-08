@@ -37,8 +37,6 @@ public:
 
     void send_scroll(double yoffset) override;
 
-    void rightclick(Point<int16_t> cursorpos) override;
-
     void send_key(int32_t keycode, bool pressed, bool escape) override;
 
     UIElement::Type get_type() const override;
@@ -76,11 +74,24 @@ private:
 
     void exit_shop();
 
+    // Set by the click that completes a sale, which is the second click on the same row. The preview
+    // is raised from the click that selects the row, so this is what tells the pass to leave it down
+    // rather than put it back over the piece that has just been sold.
+    bool sold_;
+
+    // Whether the preview stood when this press came in, read before anything is done that could put
+    // it down. The row button cannot ask for it itself: pressing a button takes the preview down
+    // first, so by the time the row is reached the answer would always be no.
+    bool previewed_;
+
+    // Everything the window is not already using: the lists belong to their rows, the two scroll
+    // strips to their sliders, and the tabs and buttons to themselves.
+    bool is_in_drag_range(Point<int16_t> cursorpos) const override;
+
     enum Buttons : int16_t {
         BUY_ITEM,
         SELL_ITEM,
         EXIT,
-        CHECKBOX,
         OVERALL,
         EQUIP,
         USE,
@@ -124,10 +135,6 @@ private:
     int16_t buy_width_;
     int16_t sell_x_;
     int16_t sell_width_;
-
-    BoolPair<Texture> checkbox_;
-
-    bool right_click_sell_;
 
     Point<int16_t> last_cursor_pos_;
 
@@ -202,7 +209,8 @@ private:
 
         void buy() const;
 
-        void select(int16_t selected);
+        // As SellState::select: the row is asked for only while its preview still stands.
+        void select(int16_t selected, bool previewed);
     };
 
     BuyState buy_state_;
@@ -226,7 +234,10 @@ private:
 
         void sell(bool skip_confirmation) const;
 
-        void select(int16_t selected);
+        // Whether this click completed the sale rather than only marking the row. That takes the row
+        // to have been looked at already, which is what previewed says: the preview the row was
+        // marked by, still standing.
+        bool select(int16_t selected, bool previewed);
     };
 
     SellState sell_state_;
