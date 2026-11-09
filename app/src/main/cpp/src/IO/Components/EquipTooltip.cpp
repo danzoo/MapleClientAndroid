@@ -146,7 +146,7 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
     // A control belongs to the piece it was put up for, so the first thing any new reading of the
     // panel does is drop the one the last piece had. The window that wants one hands it over again
     // once the preview has been pointed at the piece.
-    clear_action();
+    clear_actions();
 
     if (goods_id_ == 0 && inv_pos_ == ivp) {
         return;
@@ -161,7 +161,7 @@ void EquipTooltip::set_equip(Tooltip::Parent parent, int16_t ivp) {
 }
 
 void EquipTooltip::set_goods(Tooltip::Parent parent, int32_t item_id) {
-    clear_action();
+    clear_actions();
 
     if (goods_id_ == item_id) {
         return;
@@ -720,10 +720,9 @@ bool EquipTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
     int16_t max_width = Constants::Constants::get().get_ui_viewwidth();
     int16_t max_height = Constants::Constants::get().get_ui_viewheight();
 
-    // The control is set into the foot of the panel, so the body art is stretched to carry it. The
-    // lettering walks down from the top, so the room handed to the control is room it never used.
-    const int16_t panel_height =
-        height_ + (has_action() ? ACTION_HEIGHT + ACTION_INSET : 0);
+    // The controls are set into the foot of the panel, so the body art is stretched to carry them.
+    // The lettering walks down from the top, so the room handed to them is room it never used.
+    const int16_t panel_height = height_ + actions_height();
 
     int16_t cur_width = pos.x() + top_.width();
     int16_t cur_height = pos.y() + 36;
@@ -884,12 +883,12 @@ bool EquipTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
         list.text(desc_, pos + Point<int16_t>(DESC_X, 3));
     }
 
-    // Into the foot of the panel's body, at its own width, so the control reads as belonging to this
+    // Into the foot of the panel's body, at its own width, so the controls read as belonging to this
     // piece and not to whatever the preview beside it is about.
-    build_action(list,
-                 Rectangle<int16_t>(topleft + Point<int16_t>(0, 13),
-                                    topleft + Point<int16_t>(top_.width(),
-                                                             13 + panel_height)));
+    build_actions(list,
+                  Rectangle<int16_t>(topleft + Point<int16_t>(0, 13),
+                                     topleft + Point<int16_t>(top_.width(),
+                                                              13 + panel_height)));
 
     return true;
 }

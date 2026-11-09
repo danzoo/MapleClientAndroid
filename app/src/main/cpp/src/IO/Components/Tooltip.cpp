@@ -23,93 +23,120 @@ namespace ms {
             img::wz::ui["Basic.img"]["BtOK4"]["normal"]["0"];
     }
 
-    void Tooltip::set_action(std::string label,
+    void Tooltip::add_action(std::string label,
                              std::function<void()> on_pressed) {
-        action_label_ = std::move(label);
-        on_action_ = std::move(on_pressed);
+        Action action;
+        action.label = std::move(label);
+        action.on_pressed = std::move(on_pressed);
+
         // The box is written when the art goes out, and the art has not gone out yet for this
         // control. Leaving the last one standing would answer a press where nothing can be seen.
-        action_rect_ = Rectangle<int16_t>();
+        actions_.push_back(std::move(action));
     }
 
-    void Tooltip::clear_action() {
-        action_label_.clear();
-        on_action_ = nullptr;
-        action_rect_ = Rectangle<int16_t>();
+    void Tooltip::clear_actions() {
+        actions_.clear();
     }
 
     bool Tooltip::action_at(Point<int16_t> cursorpos) const {
-        return static_cast<bool>(on_action_) && action_rect_.contains(cursorpos);
+        for (const Action &action : actions_) {
+            if (action.on_pressed && action.rect.contains(cursorpos)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     bool Tooltip::press_action(Point<int16_t> cursorpos) {
-        if (!action_at(cursorpos)) {
-            return false;
+        for (Action &action : actions_) {
+            if (!action.on_pressed || !action.rect.contains(cursorpos)) {
+                continue;
+            }
+
+            // A copy, not the list's own: a control may ask for a preview of its own, which writes
+            // this list from the front and would take the call being run out from under it. Copied
+            // rather than moved so the control is still there for the next press.
+            std::function<void()> on_pressed = action.on_pressed;
+            on_pressed();
+
+            return true;
         }
 
-        on_action_();
-
-        return true;
+        return false;
     }
 
-    bool Tooltip::has_action() const {
-        return static_cast<bool>(on_action_);
+    int16_t Tooltip::actions_height() const {
+        const int16_t count = static_cast<int16_t>(actions_.size());
+
+        if (count == 0) {
+            return 0;
+        }
+
+        return count * ACTION_HEIGHT + (count - 1) * ACTION_GAP + ACTION_INSET;
     }
 
-    void Tooltip::build_action(NativeTooltip::List &list,
-                               Rectangle<int16_t> interior) const {
-        if (!on_action_) {
+    void Tooltip::build_actions(NativeTooltip::List &list,
+                                Rectangle<int16_t> interior) const {
+        if (actions_.empty() || !action_plate_.is_valid()) {
             return;
         }
 
-        if (!action_plate_.is_valid()) {
-            return;
-        }
-
-        // The control is the game's own dialog button, at the width the archive has it and grown to
+        // Each control is the game's own dialog button, at the width the archive has it and grown to
         // the height of the room it stands in: the rounded corners and the outline are what make it
         // read as a button, and stretching it to the width of the panel pulls those apart into a
         // slab. The export cuts the plate to this height, so the corner art comes over whole and the
         // body alone is what grows - the word lettered into it is a line tall and would stand over
-        // the canvas's own sixteen rows. It stands in the near corner of the foot room, held off both
-        // edges it shares with the border art by the same margin the lettering is held back by, so
-        // the frame stays visible all the way round it.
+        // the canvas's own sixteen rows.
         const Point<int16_t> size(action_plate_.get_dimensions().x(),
                                   ACTION_HEIGHT);
 
-        Point<int16_t> top_left(interior.right() - ACTION_INSET - size.x(),
-                                interior.bottom() - ACTION_INSET - size.y());
+        // The column stands in the near corner of the foot room, held off both edges it shares with
+        // the border art by the same margin the lettering is held back by, so the frame stays visible
+        // all the way round it. Stacked rather than set in a row: a row would have to be measured
+        // against a width the panel does not know yet when it works out how much room to reserve.
+        // The first control added is the topmost, so a preview carrying one stands exactly where it
+        // stood when one was all there was.
+        int16_t y = interior.bottom() - actions_height();
 
-        action_rect_ = Rectangle<int16_t>(top_left, top_left + size);
+        for (Action &action : actions_) {
+            const Point<int16_t> top_left(interior.right() - ACTION_INSET - size.x(),
+                                          y);
 
-        // The plate's own lettering ("OK") is blanked out of the copy the window reads, so the word
-        // shown is this one.
-        list.picture(action_plate_, DrawArgument(top_left, size),
-                     "BtOK4/normal/0/plate");
+            action.rect = Rectangle<int16_t>(top_left, top_left + size);
 
-        // The lettering is black because the plate is the dialog button's own green, whose light face
-        // is what the word has to stand off.
-        action_text_ = Text(Text::Font::A12B,
-                            Text::Alignment::CENTER,
-                            Color::Name::BLACK,
-                            action_label_,
-                            size.x());
+            // The plate's own lettering ("OK") is blanked out of the copy the window reads, so the
+            // word shown is this one. Every control reads the same plate: the name is the art's path
+            // in the archive, and the window draws one record per control at its own box.
+            list.picture(action_plate_, DrawArgument(top_left, size),
+                         "BtOK4/normal/0/plate");
 
-        // Centered lettering takes the origin as the middle of the line rather than its start, so the
-        // pen is the middle of the plate. The window letters at the baseline, and the ink of these
-        // glyphs stands mostly above it, so the word is placed by its real ink box: the box centered
-        // in the plate, then the baseline recovered from the top of the box - and then set down by
-        // what he asked for, because the box centered is still a word that reads too high on the
-        // button's face.
-        const Text::VerticalInk ink = action_text_.ink_vertical();
+            // The lettering is black because the plate is the dialog button's own green, whose light
+            // face is what the word has to stand off.
+            action.text = Text(Text::Font::A12B,
+                               Text::Alignment::CENTER,
+                               Color::Name::BLACK,
+                               action.label,
+                               size.x());
 
-        list.text(action_text_,
-                  Point<int16_t>(
-                      top_left.x() + size.x() / 2,
-                      top_left.y()
-                          + (size.y() - (ink.bottom - ink.top)) / 2
-                          - ink.top
-                          + ACTION_LABEL_DROP));
+            // Centered lettering takes the origin as the middle of the line rather than its start, so
+            // the pen is the middle of the plate. The window letters at the baseline, and the ink of
+            // these glyphs stands mostly above it, so the word is placed by its real ink box: the box
+            // centered in the plate, then the baseline recovered from the top of the box - and then
+            // set down by what he asked for, because the box centered is still a word that reads too
+            // high on the button's face.
+            const Text::VerticalInk ink = action.text.ink_vertical();
+
+            list.text(action.text,
+                      Point<int16_t>(
+                          top_left.x() + size.x() / 2,
+                          top_left.y()
+                              + (size.y() - (ink.bottom - ink.top)) / 2
+                              - ink.top
+                              + ACTION_LABEL_DROP));
+
+            y += ACTION_HEIGHT + ACTION_GAP;
+        }
     }
 
     // The two ways a preview can put itself on the screen, for the previews that have not taken one

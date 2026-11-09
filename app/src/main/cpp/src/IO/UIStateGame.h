@@ -82,7 +82,7 @@ public:
                     int32_t item_id,
                     Point<int16_t> anchor) override;
 
-    void set_tooltip_action(std::string label,
+    void add_tooltip_action(std::string label,
                             std::function<void()> on_pressed) override;
 
     void show_skill(Tooltip::Parent parent,
@@ -148,6 +148,7 @@ private:
     mutable uint32_t native_version_;
     mutable Point<int16_t> native_position_;
     mutable bool native_shown_;
+    mutable bool native_aside_;
 
     std::optional<std::reference_wrapper<Icon>> dragged_icon_;
     std::chrono::time_point<std::chrono::steady_clock> time_rel_grabbed =

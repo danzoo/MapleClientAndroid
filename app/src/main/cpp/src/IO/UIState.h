@@ -95,10 +95,10 @@ public:
                             int32_t item_id,
                             Point<int16_t> anchor) {}
 
-    // The one control a raised preview carries, put on after the preview has been asked for. Setting
-    // it does not rebuild anything by itself; the window asks for the preview afresh when it wants
-    // the control to appear.
-    virtual void set_tooltip_action(std::string label,
+    // A control added to the raised preview after it has been asked for, on top of any already put
+    // there. Adding one does not rebuild anything by itself; the window asks for the preview afresh
+    // when it wants the controls to appear.
+    virtual void add_tooltip_action(std::string label,
                                     std::function<void()> on_pressed) {}
 
     virtual void show_skill(Tooltip::Parent parent,

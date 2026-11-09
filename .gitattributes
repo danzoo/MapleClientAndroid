@@ -1,3 +1,19 @@
+# 全仓库文本一律 LF（2026-11-09）。本机 core.autocrlf=true 会在检出时把 LF 改回 CRLF，
+# eol=lf 压过它，所以工作区和入库都是 LF，不需要动任何人的 git config。
+# text=auto 让 git 按内容判二进制；下面这些扩展名写死，不靠启发式。
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.so binary
+*.dylib binary
+*.a binary
+*.o binary
+*.jar binary
+*.gz binary
+
 # resources 下的 img 归档全部走 git-lfs（2026-11-03 全量迁移，历史已重写）。
 # 克隆前必须先装 git-lfs：否则 checkout 出来整棵树都是 130 字节的指针文本，
 # 而客户端读不到节点是静默的——贴图不显示、技能没音效，日志里不会有任何报错。

@@ -190,10 +190,15 @@ void UIChannel::send_key(int32_t keycode, bool pressed, bool escape) {
 }
 
 Cursor::State UIChannel::send_cursor(bool clicked, Point<int16_t> cursorpos) {
-    Cursor::State dstate = UIDragElement::send_cursor(clicked, cursorpos);
+    // The base walks buttons_ of its own and so does the loop below, so it is only asked where the
+    // press cannot reach that loop: mid-carry, and on the title strip. Asking it everywhere fires the
+    // control under the finger twice, and two click sounds started together clip.
+    if (dragged_ || in_drag_range(cursorpos)) {
+        Cursor::State dstate = UIDragElement::send_cursor(clicked, cursorpos);
 
-    if (dragged_) {
-        return dstate;
+        if (dragged_) {
+            return dstate;
+        }
     }
 
     Cursor::State ret = clicked ? Cursor::State::CLICKING : Cursor::State::IDLE;
@@ -212,9 +217,9 @@ Cursor::State UIChannel::send_cursor(bool clicked, Point<int16_t> cursorpos) {
             continue;
         }
 
-        if (i < Buttons::CH) {
-            Sound(Sound::Name::BUTTON_CLICK).play();
-        }
+        // Every button this loop fires says so. The channel rows used to leave it to the base's own
+        // pass, which no longer runs for a press outside the title strip.
+        Sound(Sound::Name::BUTTON_CLICK).play();
 
         buttons_[i]->set_state(button_pressed(i));
         ret = Cursor::State::IDLE;

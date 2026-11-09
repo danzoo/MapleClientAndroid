@@ -19,6 +19,7 @@
 
 #include <ctime>
 
+#include "../Audio/Audio.h"
 #include "../Constants.h"
 #include "../Template/EnumMap.h"
 #include "../../Net/Packets/MessagingPackets.h"
@@ -47,6 +48,7 @@ namespace ms {
         jmethodID g_append = nullptr;
         jmethodID g_pending = nullptr;
         jmethodID g_take = nullptr;
+        jmethodID g_take_click = nullptr;
         jmethodID g_set_floating = nullptr;
         jmethodID g_set_faded = nullptr;
         jmethodID g_touched = nullptr;
@@ -165,13 +167,14 @@ namespace ms {
                                               "(IILjava/lang/String;)V");
             g_pending = env->GetStaticMethodID(g_class, "pending", "()I");
             g_take = env->GetStaticMethodID(g_class, "take", "()Ljava/lang/String;");
+            g_take_click = env->GetStaticMethodID(g_class, "takeClick", "()Z");
             g_set_floating = env->GetStaticMethodID(g_class, "setFloating", "(Z)V");
             g_set_faded = env->GetStaticMethodID(g_class, "setFaded", "(Z)V");
             g_touched = env->GetStaticMethodID(g_class, "touched", "(II)Z");
 
             if (env->ExceptionCheck() || !g_show || !g_hide || !g_append
-                || !g_pending || !g_take || !g_set_floating || !g_set_faded
-                || !g_touched) {
+                || !g_pending || !g_take || !g_take_click || !g_set_floating
+                || !g_set_faded || !g_touched) {
                 env->ExceptionClear();
                 env->DeleteGlobalRef(g_class);
                 g_class = nullptr;
@@ -180,6 +183,7 @@ namespace ms {
                 g_append = nullptr;
                 g_pending = nullptr;
                 g_take = nullptr;
+                g_take_click = nullptr;
                 g_set_floating = nullptr;
                 g_set_faded = nullptr;
                 g_touched = nullptr;
@@ -249,6 +253,28 @@ namespace ms {
                 }
 
                 env->DeleteLocalRef(line);
+            }
+        }
+
+        // The window's buttons are android's and so are the threads that answer them, while the
+        // sounds are the game's. A press leaves a mark over there and the click is played from here,
+        // on the thread every other sound is played on.
+        void play_click() {
+            JNIEnv *env = current_env();
+
+            if (!env) {
+                return;
+            }
+
+            jboolean pressed = env->CallStaticBooleanMethod(g_class, g_take_click);
+
+            if (env->ExceptionCheck()) {
+                env->ExceptionClear();
+                return;
+            }
+
+            if (pressed) {
+                Sound(Sound::Name::BUTTON_CLICK).play();
             }
         }
 
@@ -368,6 +394,7 @@ namespace ms {
             }
 
             send_typed();
+            play_click();
         }
     }
 

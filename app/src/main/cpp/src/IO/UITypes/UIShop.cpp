@@ -798,18 +798,6 @@ void UIShop::SellState::show_item(int16_t slot, Point<int16_t> anchor) {
         int32_t itemid = item.get_id();
         UI::get().show_item(Tooltip::Parent::SHOP, itemid, anchor);
     }
-
-    // Every preview of a piece in the trade column carries the way to sell it. The reading is taken
-    // from the item the preview was raised for, not from the current selection: a preview stands still
-    // while the list underneath it is scrolled, and the row that has come round under it is a
-    // different piece.
-    int32_t itemid = item.get_id();
-    int16_t sellable = item.get_sellable();
-    int16_t realslot = item.get_slot();
-
-    UI::get().set_tooltip_action("卖出", [itemid, sellable, realslot] {
-        sell_goods(itemid, realslot, sellable);
-    });
 }
 
 void UIShop::SellState::sell(bool skip_confirmation) const {

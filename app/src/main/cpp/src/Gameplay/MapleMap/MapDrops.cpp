@@ -139,7 +139,8 @@ MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
     for (auto iter = oids.begin(); iter != oids.end(); ++iter) {
         auto drop = drops_.get<const Drop>(*iter);
 
-        if (!drop || !drop->get().is_active() || drop->get().claimed()) {
+        if (!drop || !drop->get().is_active() || drop->get().claimed()
+            || !drop->get().landed()) {
             continue;
         }
 
@@ -191,7 +192,8 @@ MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius
     for (auto iter = oids.begin(); iter != oids.end(); ++iter) {
         auto drop = drops_.get<const Drop>(*iter);
 
-        if (!drop || !drop->get().is_active() || drop->get().claimed()) {
+        if (!drop || !drop->get().is_active() || drop->get().claimed()
+            || !drop->get().landed()) {
             continue;
         }
 

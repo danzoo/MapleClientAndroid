@@ -56,7 +56,7 @@ bool ItemTooltip::set_item(int32_t iid) {
     // Whatever control came with the last piece shown belongs to the window that asked for it, not to
     // the piece being asked for now - even the same piece, seen from another window. So it is dropped
     // before anything else, and the window that wants a control hands it over after pointing here.
-    clear_action();
+    clear_actions();
 
     if (item_id_ == iid) {
         return false;
@@ -137,9 +137,9 @@ bool ItemTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
     // finger that opened it and has to come back inside when the finger is near an edge.
     int16_t max_width = Constants::Constants::get().get_ui_viewwidth();
     int16_t max_height = Constants::Constants::get().get_ui_viewheight();
-    // The control a preview carries is set into the foot of the frame, so the frame is grown to make
-    // room for it and that room counts towards what has to be kept on the screen.
-    int16_t action_height = has_action() ? ACTION_HEIGHT + ACTION_INSET : 0;
+    // The controls a preview carries are set into the foot of the frame, so the frame is grown to
+    // make room for them and that room counts towards what has to be kept on the screen.
+    int16_t action_height = actions_height();
     int16_t cur_width = pos.x() + fill_width_ + 32;
     int16_t cur_height = pos.y() + fill_height_ + 40 + action_height;
 
@@ -185,9 +185,9 @@ bool ItemTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
     list.picture(item_cover_, DrawArgument(pos), "ItemIcon/cover");
     list.text(desc_, pos + Point<int16_t>(DESC_X - ICON_X, -6));
 
-    build_action(list,
-                 Rectangle<int16_t>(Point<int16_t>(box.left, box.top),
-                                    Point<int16_t>(box.right, box.bottom)));
+    build_actions(list,
+                  Rectangle<int16_t>(Point<int16_t>(box.left, box.top),
+                                     Point<int16_t>(box.right, box.bottom)));
 
     return true;
 }

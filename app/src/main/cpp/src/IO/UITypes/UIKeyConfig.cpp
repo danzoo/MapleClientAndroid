@@ -1070,10 +1070,15 @@ namespace ms {
     }
 
     Cursor::State UIKeyConfig::send_cursor(bool clicked, Point<int16_t> cursorpos) {
-        Cursor::State dstate = UIDragElement::send_cursor(clicked, cursorpos);
+        // The base walks buttons_ of its own and so does this function below, so it is only asked
+        // where the press cannot reach that: mid-carry, and on the title strip. Asking it everywhere
+        // fires the control under the finger twice, and two click sounds started together clip.
+        if (dragged_ || in_drag_range(cursorpos)) {
+            Cursor::State dstate = UIDragElement::send_cursor(clicked, cursorpos);
 
-        if (dragged_) {
-            return dstate;
+            if (dragged_) {
+                return dstate;
+            }
         }
 
         if (!clicked) {

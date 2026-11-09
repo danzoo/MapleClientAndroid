@@ -277,6 +277,10 @@ bool Drop::claimed() const {
     return state_ == Drop::State::PICKED_UP;
 }
 
+bool Drop::landed() const {
+    return state_ == Drop::State::FLOATING;
+}
+
 Point<int16_t> Drop::icon_shift(Point<int16_t> origin,
                                 Point<int16_t> dimensions) {
     return Point<int16_t>(dimensions.x() / 2 - origin.x(), 0);

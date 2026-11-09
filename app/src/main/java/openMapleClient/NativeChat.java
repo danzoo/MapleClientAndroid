@@ -187,6 +187,12 @@ public final class NativeChat {
     // on the wire itself - the connection belongs to the render thread - so the two threads meet
     // over this queue instead of over a call in either direction.
     private static final ArrayDeque<String> OUTGOING = new ArrayDeque<>();
+    // Whether a button was pressed since the game last came looking. The sound player belongs to the
+    // render thread, so a tap here only marks itself and the click is heard when the game next visits
+    // the window. One mark, not a tally: presses made while the game was busy elsewhere would all be
+    // played in the same instant, and sounds started together sum into a clipped one.
+    private static final Object CLICK_LOCK = new Object();
+    private static boolean clickPending = false;
 
     private static int selectedTab = TAB_ALL;
     private static int maxEntries = 200;
@@ -405,6 +411,25 @@ public final class NativeChat {
     public static String take() {
         synchronized (OUTGOING) {
             return OUTGOING.poll();
+        }
+    }
+
+    /**
+     * Whether a button has been pressed since this was last asked, taking the mark away with the
+     * answer. Asked by the render thread once per update, which is the thread that owns the sounds.
+     */
+    public static boolean takeClick() {
+        synchronized (CLICK_LOCK) {
+            boolean pressed = clickPending;
+            clickPending = false;
+
+            return pressed;
+        }
+    }
+
+    private static void click() {
+        synchronized (CLICK_LOCK) {
+            clickPending = true;
         }
     }
 
@@ -822,6 +847,7 @@ public final class NativeChat {
             return;
         }
 
+        click();
         queue(chatInput.getText().toString());
         chatInput.setText("");
 
@@ -1371,6 +1397,7 @@ public final class NativeChat {
                     setTouchModal(false);
 
                     if (!dragging && tap != null) {
+                        click();
                         tap.run();
                     }
 
@@ -1382,6 +1409,10 @@ public final class NativeChat {
     }
 
     private static void selectTab(int index) {
+        // Before the early return: a tab pressed while it is already the one being read still took a
+        // press, and a button that answers only sometimes is one the reader cannot trust.
+        click();
+
         if (index == selectedTab) {
             return;
         }

@@ -91,6 +91,7 @@ namespace ms {
         tooltip_version_ = 0;
         native_version_ = 0;
         native_shown_ = false;
+        native_aside_ = false;
 
         const CharLook &look = Stage::get().get_player().get_look();
         const Inventory &inventory = Stage::get().get_player().get_inventory();
@@ -136,11 +137,18 @@ namespace ms {
             // the frame that carried it also made the piece being left behind arrive once more.
             Point<int16_t> position = tooltip_anchor_ + Point<int16_t>(0, 22);
 
-            if (tooltip_version_ != native_version_ || position != native_position_) {
+            // A question the preview's own control raised is painted by the pass above, under the
+            // native window the preview lives in. So the preview steps aside while the question
+            // stands - aside, not down: the control is still there once the answer has been given.
+            const auto &notice = elements_[UIElement::Type::NOTICE];
+            const bool aside = notice && notice->is_active();
+
+            if (aside != native_aside_ || tooltip_version_ != native_version_
+                || position != native_position_) {
                 NativeTooltip::List list;
 
-                native_shown_ =
-                        NativeTooltip::available() && tooltip.build(list, position);
+                native_shown_ = !aside && NativeTooltip::available()
+                                && tooltip.build(list, position);
 
                 if (native_shown_) {
                     NativeTooltip::show(list);
@@ -151,9 +159,10 @@ namespace ms {
 
                 native_version_ = tooltip_version_;
                 native_position_ = position;
+                native_aside_ = aside;
             }
 
-            if (!native_shown_) {
+            if (!native_shown_ && !aside) {
                 tooltip.draw(position);
             }
         }
@@ -433,22 +442,24 @@ namespace ms {
         bool clicked = cursorstate == Cursor::State::CLICKING
                        || cursorstate == Cursor::State::VSCROLL_IDLE;
 
-        // A preview raised for the native window carries at most one control, and it stands wherever
+        // A preview raised for the native window carries a column of controls, and it stands wherever
         // the panel falls - over the window that raised it, over another window, over the map. So the
         // press has to be read here, before the cursor is handed to whatever lies under it: asked
-        // there, the same tap would be taken for a row of the shop, and the row would put the preview
-        // down again before the control was ever reached.
-        if (tooltip_) {
+        // there, the same tap would be taken for the slot of the bag lying under the panel, and the
+        // slot would write the preview again instead of spending the piece.
+        // While the preview is aside for a question of its own raising (see draw), its controls are
+        // not on show, so they must not answer the press meant for that question's buttons.
+        const UIElement *notice = get(UIElement::Type::NOTICE);
+        if (tooltip_ && !(notice && notice->is_active())) {
             Tooltip &tooltip = tooltip_->get();
 
             if (clicked) {
                 if (tooltip.press_action(cursorpos)) {
                     NativeChat::sink();
 
-                    // The control has said what it came to say and the preview it was read from has
-                    // no reason to stay. The one that pressed it does not clear it itself - it would
-                    // be destroying the call it is still inside of.
-                    clear_tooltip(tooltip_parent_);
+                    // The preview stays up. Its control spends one piece of a stack a press, so the
+                    // next press is the next piece; putting the panel down would make the player
+                    // point at the bag again for every one of them.
                     return Cursor::State::IDLE;
                 }
             }
@@ -634,7 +645,7 @@ namespace ms {
         tooltip_version_++;
     }
 
-    void UIStateGame::set_tooltip_action(std::string label,
+    void UIStateGame::add_tooltip_action(std::string label,
                                          std::function<void()> on_pressed) {
         if (!tooltip_) {
             return;
@@ -643,7 +654,7 @@ namespace ms {
         // The control is recorded while the preview is written out, so asking for it means the
         // preview has to be written out again - otherwise it would never reach the screen, and its
         // place on the screen would never be known well enough to be pressed.
-        tooltip_->get().set_action(std::move(label), std::move(on_pressed));
+        tooltip_->get().add_action(std::move(label), std::move(on_pressed));
         tooltip_version_++;
     }
 

@@ -51,6 +51,54 @@ auto fn_scroll_equip = []<typename... T>(T && ...args) {
 auto fn_drop_mesos = []<typename... T>(T && ...args) {
     DropMesosPacket(std::forward<T>(args)...).dispatch();
 };
+
+// Throwing a piece out is asked for in two places: an icon dragged onto the map, and the control on
+// the preview of a piece still in the bag. Only the first asks how many - a press on the preview
+// spends one piece of the stack, so the bag is not emptied by a tap that was meant to read it.
+void request_drop(InventoryType::Id tab,
+                  int16_t slot,
+                  int16_t count,
+                  bool untradable,
+                  bool cashitem,
+                  bool ask_count) {
+    if (cashitem) {
+        UI::get().emplace<UIOk>("You can't drop this item.", [](bool) {});
+
+        return;
+    }
+
+    // Everything the throw needs is taken by value: the preview stands while the bag underneath it
+    // is scrolled, sorted or emptied, and the dialog it raises outlives this call.
+    auto throw_out = [tab, slot, count, ask_count] {
+        if (ask_count && count > 1) {
+            auto onenter = [tab, slot](int32_t qty) {
+                fn_move_item(tab, slot, 0, qty);
+            };
+
+            UI::get().emplace<UIEnterNumber>("How many will you drop?",
+                                             onenter,
+                                             count,
+                                             count);
+        } else {
+            fn_move_item(tab, slot, 0, 1);
+        }
+    };
+
+    if (untradable) {
+        auto onok = [throw_out](bool ok) {
+            if (ok) {
+                throw_out();
+            }
+        };
+
+        UI::get().emplace<UIYesNo>(
+            "This item can't be taken back once thrown away.\\nWill you still drop "
+            "it?",
+            onok);
+    } else {
+        throw_out();
+    }
+}
 }  // namespace
 
 UIItemInventory::UIItemInventory(const Inventory &invent) :
@@ -422,10 +470,15 @@ void UIItemInventory::send_scroll(double yoffset) {
 
 Cursor::State UIItemInventory::send_cursor(bool pressed,
                                            Point<int16_t> cursorpos) {
-    Cursor::State dstate = UIDragElement::send_cursor(pressed, cursorpos);
+    // The base walks buttons_ of its own and so does the tail of this function, so it is only asked
+    // where the press cannot reach that tail: mid-carry, and on the title strip. Asking it everywhere
+    // fires the control under the finger twice, and two click sounds started together clip.
+    if (dragged_ || in_drag_range(cursorpos)) {
+        Cursor::State dstate = UIDragElement::send_cursor(pressed, cursorpos);
 
-    if (dragged_) {
-        return dstate;
+        if (dragged_) {
+            return dstate;
+        }
     }
 
     Point<int16_t> cursor_relative = cursorpos - position_;
@@ -614,12 +667,27 @@ void UIItemInventory::show_item(int16_t slot) {
         + (full_enabled_ ? get_full_slotpos(slot) : get_slotpos(slot))
         + Point<int16_t>(ICON_WIDTH_ / 2, ICON_HEIGHT_ / 2);
 
+    const int32_t item_id = inventory_.get_item_id(tab_, slot);
+
     if (tab_ == InventoryType::Id::EQUIP) {
         UI::get().show_equip(Tooltip::Parent::ITEM_INVENTORY, slot, centre);
     } else {
-        int32_t item_id = inventory_.get_item_id(tab_, slot);
         UI::get().show_item(Tooltip::Parent::ITEM_INVENTORY, item_id, centre);
     }
+
+    // Every preview of a piece in the bag carries the way to throw it out. The reading is taken from
+    // the slot that was touched, not from the bag as it stands when the control is pressed: the
+    // preview stands still while the slots underneath it are scrolled or refilled.
+    const InventoryType::Id tab = tab_;
+    const int16_t count = tab == InventoryType::Id::EQUIP
+                              ? 1
+                              : inventory_.get_item_count(tab, slot);
+    const bool untradable = ItemData::get(item_id).is_untradable();
+    const bool cashitem = ItemData::get(item_id).is_cashitem();
+
+    UI::get().add_tooltip_action("丢掉", [tab, slot, count, untradable, cashitem] {
+        request_drop(tab, slot, count, untradable, cashitem, false);
+    });
 }
 
 void UIItemInventory::clear_tooltip() {
@@ -863,49 +931,7 @@ UIItemInventory::ItemIcon::ItemIcon(const UIItemInventory &parent,
 }
 
 void UIItemInventory::ItemIcon::drop_on_stage() const {
-    const std::string dropmessage = "How many will you drop?";
-    const std::string untradablemessage =
-        "This item can't be taken back once thrown away.\\nWill you still drop "
-        "it?";
-    const std::string cashmessage = "You can't drop this item.";
-
-    if (cash_item_) {
-        UI::get().emplace<UIOk>(cashmessage, [](bool) {});
-    } else {
-        if (untradable_) {
-            auto onok = [&, dropmessage](bool ok) {
-                if (ok) {
-                    if (count_ <= 1) {
-                        fn_move_item(source_tab_, source_, 0, 1);
-                    } else {
-                        auto onenter = [&](int32_t qty) {
-                            fn_move_item(source_tab_, source_, 0, qty);
-                        };
-
-                        UI::get().emplace<UIEnterNumber>(dropmessage,
-                                                         onenter,
-                                                         count_,
-                                                         count_);
-                    }
-                }
-            };
-
-            UI::get().emplace<UIYesNo>(untradablemessage, onok);
-        } else {
-            if (count_ <= 1) {
-                fn_move_item(source_tab_, source_, 0, 1);
-            } else {
-                auto onenter = [&](int32_t qty) {
-                    fn_move_item(source_tab_, source_, 0, qty);
-                };
-
-                UI::get().emplace<UIEnterNumber>(dropmessage,
-                                                 onenter,
-                                                 count_,
-                                                 count_);
-            }
-        }
-    }
+    request_drop(source_tab_, source_, count_, untradable_, cash_item_, true);
 }
 
 void UIItemInventory::ItemIcon::drop_on_equips(EquipSlot::Id eqslot) const {

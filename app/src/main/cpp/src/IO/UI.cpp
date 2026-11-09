@@ -482,9 +482,9 @@ namespace ms {
         state_->show_goods(parent, item_id, anchor);
     }
 
-    void UI::set_tooltip_action(std::string label,
+    void UI::add_tooltip_action(std::string label,
                                 std::function<void()> on_pressed) {
-        state_->set_tooltip_action(std::move(label), std::move(on_pressed));
+        state_->add_tooltip_action(std::move(label), std::move(on_pressed));
     }
 
     void UI::show_skill(Tooltip::Parent parent,

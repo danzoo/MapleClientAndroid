@@ -33,6 +33,11 @@ public:
     // item until the flight has faded.
     bool claimed() const;
 
+    // Whether the item is down on the ground rather than still in the air. A toss out of a mob or out
+    // of the character is a flight to the spot the server measured the drop at, and until it arrives
+    // there is nothing lying at that spot to pick up.
+    bool landed() const;
+
 protected:
     Drop(int32_t oid,
          int32_t owner,

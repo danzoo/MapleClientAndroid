@@ -117,7 +117,7 @@ namespace ms {
                         int32_t item_id,
                         Point<int16_t> anchor);
 
-        void set_tooltip_action(std::string label,
+        void add_tooltip_action(std::string label,
                                 std::function<void()> on_pressed);
 
         void show_skill(Tooltip::Parent parent,
