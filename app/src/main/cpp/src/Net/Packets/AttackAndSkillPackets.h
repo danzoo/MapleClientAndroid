@@ -101,7 +101,7 @@ private:
 // Opcode: TAKE_DAMAGE(48)
 class TakeDamagePacket : public OutPacket {
 public:
-    enum From : int8_t { TOUCH = -1 };
+    enum From : int8_t { TOUCH = -1, TRAP = -2 };
 
     TakeDamagePacket(int8_t from,
                      uint8_t element,

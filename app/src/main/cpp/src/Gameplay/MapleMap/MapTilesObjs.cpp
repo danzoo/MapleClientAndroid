@@ -40,6 +40,15 @@ void TilesObjs::update() {
     }
 }
 
+int16_t TilesObjs::trap_damage_at(const Rectangle<int16_t> &body) const {
+    for (const auto &iter : objs_) {
+        if (int16_t damage = iter.second.trap_damage_at(body)) {
+            return damage;
+        }
+    }
+    return 0;
+}
+
 void TilesObjs::draw(Point<int16_t> viewpos, float alpha) const {
     for (const auto &iter : objs_) {
         iter.second.draw(viewpos, alpha);
@@ -68,5 +77,14 @@ void MapTilesObjs::update() {
     for (auto iter : layers_) {
         iter.second.update();
     }
+}
+
+int16_t MapTilesObjs::trap_damage_at(const Rectangle<int16_t> &body) const {
+    for (auto iter : layers_) {
+        if (int16_t damage = iter.second.trap_damage_at(body)) {
+            return damage;
+        }
+    }
+    return 0;
 }
 }  // namespace ms

@@ -35,6 +35,9 @@ public:
 
     void update();
 
+    // Damage of the first trap whose hitbox overlaps the body, or 0 when none does.
+    int16_t trap_damage_at(const Rectangle<int16_t> &body) const;
+
 private:
     std::multimap<uint8_t, Tile> tiles_;
     std::multimap<uint8_t, Obj> objs_;
@@ -50,6 +53,9 @@ public:
     void draw(Layer::Id layer, Point<int16_t> viewpos, float alpha) const;
 
     void update();
+
+    // Damage of the first trap across all layers whose hitbox overlaps the body, or 0.
+    int16_t trap_damage_at(const Rectangle<int16_t> &body) const;
 
 private:
     EnumMap<Layer::Id, TilesObjs> layers_;

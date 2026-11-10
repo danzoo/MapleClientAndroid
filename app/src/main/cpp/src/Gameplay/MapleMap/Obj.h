@@ -17,6 +17,7 @@
 
 #include "../Graphics/Animation.h"
 #include "../Template/Point.h"
+#include "../Template/Rectangle.h"
 
 namespace ms {
 // Represents an obj (map decoration) on a map.
@@ -33,10 +34,15 @@ public:
     // Return depth of the obj.
     uint8_t getz() const;
 
+    // Damage this obj deals to a body overlapping it, or 0 when it is not a damaging trap.
+    int16_t trap_damage_at(const Rectangle<int16_t> &body) const;
+
 private:
     Animation animation_;
     Point<int16_t> pos_;
     uint8_t z_;
     bool flip_;
+    int16_t trap_damage_ = 0;
+    Rectangle<int16_t> trap_box_;
 };
 }  // namespace ms

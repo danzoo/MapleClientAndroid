@@ -19,11 +19,30 @@
 
 namespace ms {
 Obj::Obj(const img::node &src) {
-    animation_ = Animation(img::wz::map["Obj"][src["oS"] + ".img"][src["l0"]]
-                                      [src["l1"]][src["l2"]]);
+    auto node = img::wz::map["Obj"][src["oS"] + ".img"][src["l0"]][src["l1"]]
+                              [src["l2"]];
+    animation_ = Animation(node);
     pos_ = Point<int16_t>(src["x"], src["y"]);
     flip_ = src["f"].get_bool();
     z_ = src["z"];
+
+    // Only the static traps (thorns/spikes, ice fixtures) carry a frame-0 lt/rb hitbox; the animated
+    // ice/laser sets define none, so leave those inert rather than build a zero-area box at the anchor.
+    if (src["oS"].get_string() == "trap" && node["0"]["lt"] && node["0"]["rb"]) {
+        trap_damage_ = node["damage"];
+        Point<int16_t> lt = node["0"]["lt"];
+        Point<int16_t> rb = node["0"]["rb"];
+        int16_t left = flip_ ? pos_.x() - rb.x() : pos_.x() + lt.x();
+        int16_t right = flip_ ? pos_.x() - lt.x() : pos_.x() + rb.x();
+        trap_box_ = Rectangle<int16_t>(left, right, pos_.y() + lt.y(), pos_.y() + rb.y());
+    }
+}
+
+int16_t Obj::trap_damage_at(const Rectangle<int16_t> &body) const {
+    if (trap_damage_ > 0 && trap_box_.overlaps(body)) {
+        return trap_damage_;
+    }
+    return 0;
 }
 
 void Obj::update() {

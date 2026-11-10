@@ -73,9 +73,19 @@ public:
 private:
     double get_wall(uint16_t fhid, bool left, double fy) const;
 
+    // The first wall column between two x positions at the given height, or NaN when the run meets
+    // none. Unlike get_wall it does not depend on the object's foothold, so it also stops a body in
+    // mid-air from crossing a wall its current foothold is not joined to.
+    double get_swept_wall(double fromx, double tox, double fy) const;
+
     double get_edge(uint16_t fhid, bool left) const;
 
     const Foothold &get_fh(uint16_t fhid) const;
+
+    // The ground a falling body would meet under one column of its swept path, or +inf where the
+    // column has no terrain. Read off the tree rather than the body's own foothold so a stale or
+    // null foothold cannot let the body sink through the platform below it.
+    double ground_below_path(double x, double y) const;
 
     bool sweep_walls(Point<int16_t> from,
                      Point<int16_t> to,

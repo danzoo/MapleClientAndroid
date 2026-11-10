@@ -15,8 +15,10 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "FootholdTree.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <limits>
 
 namespace ms {
 FootholdTree::FootholdTree(const img::node &src) {
@@ -106,6 +108,18 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
         bool collision = left ? crnt_x >= wall && next_x <= wall
                               : crnt_x <= wall && next_x >= wall;
 
+        // get_wall only sees the walls joined to the object's own foothold, which is enough while
+        // walking (the foothold walks along the chain until it sits beside the wall) but not in the
+        // air: there the foothold is whatever floor is under the current x, mid-chain, so an enclosing
+        // wall several links away is invisible and a jump carries the body straight through it. Sweep
+        // the wall index over the columns this piece crosses instead, which finds the first wall in
+        // the path no matter which foothold the body happens to reference.
+        double swept = get_swept_wall(crnt_x, next_x, phobj.crnt_y() + vmove);
+        if (!std::isnan(swept)) {
+            wall = swept;
+            collision = true;
+        }
+
         if (!collision
             && phobj.is_flag_set(PhysicsObject::Flag::TURN_AT_EDGES)) {
             wall = get_edge(phobj.fhid, left);
@@ -116,6 +130,11 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
         if (collision) {
             phobj.limitx(wall);
             phobj.clear_flag(PhysicsObject::Flag::TURN_AT_EDGES);
+        } else if (left ? next_x < walls_.first() : next_x > walls_.second()) {
+            // The crossing test above only fires while the wall is still ahead of the body. One
+            // that started outside it (a spawn, a knockback, a rope release past the edge) would
+            // otherwise keep walking away from the map forever.
+            phobj.limitx(left ? walls_.first() : walls_.second());
         }
     }
 
@@ -129,14 +148,18 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
         double crnt_y = phobj.crnt_y();
         double next_y = crnt_y + vmove;
 
-        auto ground =
-            Range<double>(get_fh(phobj.fhid).ground_below(phobj.crnt_x()),
-                          get_fh(phobj.fhid).ground_below(phobj.crnt_x() + hmove));
+        // Measure the drop against the ground actually below the swept columns, not against
+        // phobj.fhid. After a rope leap the foothold is frozen from the grab (or left at zero by
+        // update_fh's airborne early-out), and a stale or null foothold reports a ground the body is
+        // already past - or NaN - so the crossing test never fires and the body sinks through the
+        // platform it should have landed on. Querying the terrain under the path lands it regardless.
+        double ground = std::min(ground_below_path(phobj.crnt_x(), crnt_y),
+                                 ground_below_path(phobj.crnt_x() + hmove, crnt_y));
 
-        bool collision = crnt_y <= ground.first() && next_y >= ground.second();
+        bool collision = vmove > 0.0 && crnt_y <= ground && next_y >= ground;
 
         if (collision) {
-            phobj.limity(ground.second());
+            phobj.limity(ground);
 
             limit_movement(phobj, hmove, 0.0);
         } else {
@@ -147,6 +170,16 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
             }
         }
     }
+}
+
+double FootholdTree::ground_below_path(double x, double y) const {
+    uint16_t fhid = get_fhid_below(x, y);
+
+    if (fhid == 0) {
+        return std::numeric_limits<double>::infinity();
+    }
+
+    return get_fh(fhid).ground_below(x);
 }
 
 void FootholdTree::update_fh(PhysicsObject &phobj) const {
@@ -278,6 +311,31 @@ double FootholdTree::get_wall(uint16_t curid, bool left, double fy) const {
     }
 
     return walls_.second();
+}
+
+double FootholdTree::get_swept_wall(double fromx, double tox, double fy) const {
+    if (fromx == tox) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    const int direction = tox > fromx ? 1 : -1;
+    const int last = static_cast<int>(tox);
+    auto shorty = static_cast<int16_t>(fy);
+    Range<int16_t> vertical(shorty - 50, shorty - 1);
+
+    for (int x = static_cast<int>(fromx) + direction;
+         direction > 0 ? x <= last : x >= last;
+         x += direction) {
+        auto range = walls_by_x_.equal_range(static_cast<int16_t>(x));
+
+        for (auto iter = range.first; iter != range.second; ++iter) {
+            if (get_fh(iter->second).is_blocking(vertical)) {
+                return static_cast<double>(x);
+            }
+        }
+    }
+
+    return std::numeric_limits<double>::quiet_NaN();
 }
 
 double FootholdTree::get_edge(uint16_t curid, bool left) const {

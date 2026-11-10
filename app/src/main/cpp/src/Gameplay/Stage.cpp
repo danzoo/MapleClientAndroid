@@ -208,6 +208,23 @@ void Stage::update() {
             MobAttackResult result = player_.damage(attack);
             fn_take_damage(result, TakeDamagePacket::From::TOUCH);
         }
+    } else {
+        // Terrain traps (thorns, spikes) carry their damage and hitbox in trap.img. Test the same
+        // swept body the mob touch uses so a fast fall cannot tunnel through a thin row. Mob touch
+        // wins the tick; the 2s i-frames show_damage sets then gate the trap to once per window.
+        const MovingObject &body = player_.get_phobj();
+        Range<int16_t> horizontal(body.get_last_x(), body.get_x());
+        Range<int16_t> vertical(body.get_last_y(), body.get_y());
+        Rectangle<int16_t> player_rect(horizontal.smaller(),
+                                       horizontal.greater(),
+                                       static_cast<int16_t>(vertical.smaller() - 50),
+                                       vertical.greater());
+
+        if (int16_t trap_damage = tiles_objs_.trap_damage_at(player_rect)) {
+            MobAttack attack(trap_damage, player_.get_position(), 0, 0);
+            MobAttackResult result = player_.damage(attack);
+            fn_take_damage(result, TakeDamagePacket::From::TRAP);
+        }
     }
 }
 
