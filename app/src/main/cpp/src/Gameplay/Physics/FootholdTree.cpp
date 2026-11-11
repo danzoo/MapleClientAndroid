@@ -282,35 +282,27 @@ double FootholdTree::get_wall(uint16_t curid, bool left, double fy) const {
     Range<int16_t> vertical(shorty - 50, shorty - 1);
     const Foothold &cur = get_fh(curid);
 
-    if (left) {
-        const Foothold &prev = get_fh(cur.prev());
+    // A tall wall is stored as several collinear segments stacked along the foothold chain, so the
+    // segment level with the body can be many links away - checking only the first two let a body
+    // falling along the wall slip past it at any height above them. Walk the chain through
+    // consecutive walls until one overlaps the body's height; stop at the first floor so the walk
+    // stays bounded. This is what blocks a body pressed exactly against the wall column, which the
+    // column sweep below starts past.
+    for (uint16_t id = left ? cur.prev() : cur.next(); id != 0;) {
+        const Foothold &fh = get_fh(id);
 
-        if (prev.is_blocking(vertical)) {
-            return cur.l();
+        if (!fh.is_wall()) {
+            break;
         }
 
-        const Foothold &prev_prev = get_fh(prev.prev());
-
-        if (prev_prev.is_blocking(vertical)) {
-            return prev.l();
+        if (fh.is_blocking(vertical)) {
+            return fh.l();
         }
 
-        return walls_.first();
+        id = left ? fh.prev() : fh.next();
     }
 
-    const Foothold &next = get_fh(cur.next());
-
-    if (next.is_blocking(vertical)) {
-        return cur.r();
-    }
-
-    const Foothold &next_next = get_fh(next.next());
-
-    if (next_next.is_blocking(vertical)) {
-        return next.r();
-    }
-
-    return walls_.second();
+    return left ? walls_.first() : walls_.second();
 }
 
 double FootholdTree::get_swept_wall(double fromx, double tox, double fy) const {

@@ -107,7 +107,10 @@ bool Foothold::vcontains(int16_t y) const {
 }
 
 bool Foothold::is_blocking(const Range<int16_t> &vertical) const {
-    return is_wall() && m_vertical_.overlaps(vertical);
+    // Compare normalized bounds: a wall segment may store y1 > y2, and Range::overlaps/contains
+    // assume an ascending range, so a body whose height window lies strictly inside a reversed
+    // segment's span would otherwise read as not blocking and slip through the wall.
+    return is_wall() && t() <= vertical.greater() && vertical.smaller() <= b();
 }
 
 int16_t Foothold::hdelta() const {
