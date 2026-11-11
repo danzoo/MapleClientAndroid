@@ -74,6 +74,7 @@ void Stage::load(int32_t mapid, int8_t portalid) {
     }
 
     state_ = State::ACTIVE;
+    combat_.start_preload();
 }
 
 void Stage::load_player(const CharEntry &entry,

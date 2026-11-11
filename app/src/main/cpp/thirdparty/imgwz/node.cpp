@@ -74,7 +74,9 @@ node node::resolve_space() const
         return node(item.file, 0);
     }
     if (m_space == space::prop) {
-        static_cast<img_data const*>(m_data)->ensure();
+        auto const* file = static_cast<img_data const*>(m_data);
+        file->ensure();
+        file->resolve_uol(m_index);
     }
     return *this;
 }

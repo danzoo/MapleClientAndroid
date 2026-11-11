@@ -50,6 +50,21 @@ Combat::Combat(Player &player,
     damage_effects_(
         [&](const DamageEffect &effect) { apply_damage_effect(effect); }) {}
 
+void Combat::start_preload() {
+    if (preloading_) {
+        return;
+    }
+
+    auto ids = player_.get_skills().collect_active_ids();
+
+    if (ids.empty()) {
+        return;
+    }
+
+    preload_queue_.assign(ids.begin(), ids.end());
+    preloading_ = true;
+}
+
 void Combat::draw(double viewx, double viewy, float alpha) const {
     for (const auto &bullet_eff : bullets_) {
         bullet_eff.bullet.draw(viewx, viewy, alpha);
@@ -92,6 +107,23 @@ void Combat::update() {
     });
 
     damage_numbers_.remove_if([](DamageNumber &dn) { return dn.update(); });
+
+    // Process skill preload queue within time budget
+    if (preloading_) {
+        auto deadline = std::chrono::steady_clock::now()
+                        + std::chrono::milliseconds(PRELOAD_BUDGET_MS);
+
+        while (!preload_queue_.empty()
+               && std::chrono::steady_clock::now() < deadline) {
+            int32_t id = preload_queue_.front();
+            preload_queue_.pop_front();
+            get_move(id);
+        }
+
+        if (preload_queue_.empty()) {
+            preloading_ = false;
+        }
+    }
 }
 
 void Combat::use_move(int32_t move_id) {

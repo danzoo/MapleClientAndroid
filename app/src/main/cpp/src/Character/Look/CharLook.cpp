@@ -47,6 +47,10 @@ namespace ms {
         actionstr_ = "";
         actframe_ = 0;
 
+        attack_sound_ = Sound();
+        attack_sound_frame_ = 0;
+        attack_sound_pending_ = false;
+
         set_stance(Stance::Id::STAND1);
         st_frame_.set(0);
         st_elapsed_ = 0;
@@ -516,6 +520,12 @@ namespace ms {
                 float threshold = static_cast<float>(delta) / timestep;
                 st_frame_.next(nextframe, threshold);
 
+                if (attack_sound_pending_
+                    && st_frame_.get() >= attack_sound_frame_) {
+                    attack_sound_pending_ = false;
+                    attack_sound_.play();
+                }
+
                 if (st_frame_ == 0) {
                     aniend = true;
                 }
@@ -657,7 +667,22 @@ namespace ms {
             st_elapsed_ = 0;
         }
 
-        weapon.get_usesound(degenerate).play();
+        // The windup is frame 0, so playing here would put the swing sound ahead of the swing.
+        // Char::set_afterimage arms it on the frame the afterimage starts, which is the same frame
+        // Char::get_attackdelay times the damage to.
+        attack_sound_ = weapon.get_usesound(degenerate);
+        attack_sound_pending_ = false;
+    }
+
+    void CharLook::set_attack_sound_frame(uint8_t frame) {
+        // No afterimage means no windup to wait for: get_attackdelay reports 0 for these too.
+        if (frame == 0) {
+            attack_sound_.play();
+            return;
+        }
+
+        attack_sound_frame_ = frame;
+        attack_sound_pending_ = true;
     }
 
     void CharLook::attack(Stance::Id newstance) {
@@ -686,6 +711,7 @@ namespace ms {
             stance_.set(adjstance);
             st_frame_.set(0);
             st_elapsed_ = 0;
+            attack_sound_pending_ = false;
         }
     }
 

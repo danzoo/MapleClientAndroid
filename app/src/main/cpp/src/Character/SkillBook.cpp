@@ -81,4 +81,17 @@ std::unordered_map<int32_t, int32_t> SkillBook::collect_required(
 
     return SkillData::get(iter->first).get_reqskills();
 }
+
+std::vector<int32_t> SkillBook::collect_active_ids() const {
+    std::vector<int32_t> ids;
+    ids.reserve(skill_entries_.size());
+
+    for (const auto &[id, entry] : skill_entries_) {
+        if (entry.level > 0) {
+            ids.push_back(id);
+        }
+    }
+
+    return ids;
+}
 }  // namespace ms

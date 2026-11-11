@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include "../../Audio/Audio.h"
 #include "../../Net/Login.h"
 #include "../../Template/Interpolated.h"
 #include "../../Util/Randomizer.h"
@@ -54,6 +55,9 @@ public:
     void attack(bool degenerate);
 
     void attack(Stance::Id stance);
+
+    // Arms the weapon sound queued by attack() to fire once the stance reaches this frame.
+    void set_attack_sound_frame(uint8_t frame);
 
     void set_stance(Stance::Id stance);
 
@@ -114,6 +118,10 @@ private:
     const BodyAction *action_;
     std::string actionstr_;
     uint8_t actframe_;
+
+    Sound attack_sound_;
+    uint8_t attack_sound_frame_;
+    bool attack_sound_pending_;
 
     const Body *body_;
     const Hair *hair_;

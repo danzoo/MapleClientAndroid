@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <map>
 #include <unordered_map>
+#include <vector>
 
 namespace ms {
 // Class that stores all information about the skills of an individual character
@@ -43,6 +44,10 @@ public:
 
     // Return id and level of all required skills.
     std::unordered_map<int32_t, int32_t> collect_required(int32_t id) const;
+
+    // Return IDs of all learned active (non-passive) skills with level > 0.
+    // Used for preloading skill effect resources to avoid first-cast stutter.
+    std::vector<int32_t> collect_active_ids() const;
 
 private:
     struct SkillEntry {

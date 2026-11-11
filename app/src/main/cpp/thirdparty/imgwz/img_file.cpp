@@ -613,11 +613,10 @@ std::uint32_t img_data::parse(std::uint32_t p) const
             out.type = static_cast<std::uint16_t>(node::type::audio);
             out.value = static_cast<std::uint64_t>(store_audio(audio));
         } else if (kind == "UOL") {
-            // NoLifeNx has no uol type, so nx2img never emits one; reading the path as
-            // a string keeps an unexpected tree from breaking the whole file.
             p += 1;
             p = read_name(p, text);
-            string(text);
+            out.type = static_cast<std::uint16_t>(node::type::uol);
+            out.value = store_value(text);
         } else {
             broken = true;
             img_report_error(path.c_str(), "unknown extended property");
@@ -658,6 +657,7 @@ void img_data::walk(std::uint32_t parent, std::uint32_t p, std::uint32_t end, st
             break;
         }
         const std::uint32_t index = static_cast<std::uint32_t>(props.size() - 1);
+        props[index].parent = parent;
         // Children of a child are appended only when something asks for them, so one
         // level always ends up contiguous in the arena.
         if (previous != none_index
@@ -700,6 +700,70 @@ void img_data::ensure_children(std::uint32_t index) const
     if (fresh.first + fresh.count > props.size()) {
         fresh.count = static_cast<std::uint32_t>(props.size() - fresh.first);
     }
+}
+
+void img_data::resolve_uol(std::uint32_t index) const
+{
+    if (broken || index >= props.size()
+        || static_cast<node::type>(props[index].type) != node::type::uol) {
+        return;
+    }
+
+    // Links point at other links in places, so follow the chain. The cap is what
+    // keeps a cycle in the data from spinning here.
+    std::uint32_t at = index;
+    for (int hop = 0; hop < 8; ++hop) {
+        const prop_data link = props[at];
+        // find() below parses more of the file, which grows the arena this view
+        // points into, so the path has to be owned here.
+        const std::string path(stored_value(link));
+        std::uint32_t to = link.parent;
+        bool found = to != none_index;
+        std::size_t i = 0;
+        while (found && i < path.size()) {
+            const std::size_t slash = path.find('/', i);
+            const std::size_t stop = slash == std::string::npos ? path.size() : slash;
+            const std::string_view part(path.data() + i, stop - i);
+            i = stop + 1;
+            if (part.empty() || part == ".") {
+                continue;
+            }
+            if (part == "..") {
+                to = props[to].parent;
+            } else {
+                to = find(to, part);
+            }
+            found = to != none_index;
+        }
+        if (!found || to == index) {
+            break;
+        }
+        if (static_cast<node::type>(props[to].type) == node::type::uol) {
+            at = to;
+            continue;
+        }
+        // Materialize the target's children first so the link shares that run of
+        // records instead of parsing the same bytes over again.
+        ensure_children(to);
+        const prop_data target = props[to];
+        prop_data& slot = props[index];
+        slot.items = target.items;
+        slot.items_end = target.items_end;
+        slot.first = target.first;
+        slot.value = target.value;
+        slot.count = target.count;
+        slot.type = target.type;
+        slot.flags = static_cast<std::uint16_t>(target.flags | flag_parsed);
+        return;
+    }
+
+    // A link with no target reads as an absent node, the same as a missing property.
+    prop_data& slot = props[index];
+    slot.type = static_cast<std::uint16_t>(node::type::none);
+    slot.count = 0;
+    slot.first = none_index;
+    slot.items = 0;
+    slot.items_end = 0;
 }
 
 std::uint32_t img_data::find(std::uint32_t index, std::string_view name) const

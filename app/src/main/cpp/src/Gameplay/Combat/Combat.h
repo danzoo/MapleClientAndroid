@@ -15,6 +15,9 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <chrono>
+#include <deque>
+
 #include "../../Character/Player.h"
 #include "../../Template/TimedQueue.h"
 #include "../MapleMap/MapChars.h"
@@ -38,6 +41,10 @@ public:
 
     // Poll attacks, damage effects, etc.
     void update();
+
+    // Begin preloading all active skill resources (effects, sounds, textures).
+    // Work is distributed across frames with a time budget to avoid stutter.
+    void start_preload();
 
     // Make the player use a special move
     void use_move(int32_t move_id);
@@ -127,5 +134,13 @@ private:
 
     std::list<BulletEffect> bullets_;
     std::list<DamageNumber> damage_numbers_;
+
+    // Skill preloading state
+    std::deque<int32_t> preload_queue_;
+    bool preloading_ = false;
+
+    // Time budget per frame for preloading (milliseconds).
+    // Kept low enough to not cause visible frame drops.
+    static constexpr int32_t PRELOAD_BUDGET_MS = 4;
 };
 }  // namespace ms

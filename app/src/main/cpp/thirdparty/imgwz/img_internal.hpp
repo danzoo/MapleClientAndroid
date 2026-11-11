@@ -34,6 +34,8 @@ struct prop_data {
     std::uint16_t name_len = 0;
     std::uint16_t type = 0;    // node::type
     std::uint16_t flags = 0;
+    //! The node holding this one, so a UOL can walk `..` back up the tree.
+    std::uint32_t parent = none_index;
 };
 
 //! Decoded canvas location.  These addresses are handed out as img::bitmap::id(),
@@ -74,6 +76,9 @@ struct img_data {
     void ensure() const;
     //! Materializes the children of one property.
     void ensure_children(std::uint32_t index) const;
+    //! Follows a UOL link and overwrites the link record with its target's data,
+    //! keeping the link's own name. A no-op for every other kind of property.
+    void resolve_uol(std::uint32_t index) const;
     //! The index of the child named `name`, or none_index.
     std::uint32_t find(std::uint32_t index, std::string_view name) const;
     prop_data const* prop(std::uint32_t index) const;

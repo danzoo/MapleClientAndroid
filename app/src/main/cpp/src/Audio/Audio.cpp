@@ -24,6 +24,22 @@
 #include "../Configuration.h"
 
 namespace ms {
+namespace {
+//! The blob is a 51-byte DirectSound GUID, one length byte, that many bytes of
+//! WAVEFORMATEX, then the audio. Only the payload is loadable.
+constexpr std::uint32_t guid_len = 51;
+
+std::uint16_t le16(const std::uint8_t *p) {
+    return static_cast<std::uint16_t>(p[0] | (p[1] << 8));
+}
+
+std::uint32_t le32(const std::uint8_t *p) {
+    return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8)
+           | (static_cast<std::uint32_t>(p[2]) << 16)
+           | (static_cast<std::uint32_t>(p[3]) << 24);
+}
+}  // namespace
+
 Sound::Sound(Name name) : id_(soundids_[name]) {}
 
 Sound::Sound(int32_t itemid) {
@@ -125,41 +141,53 @@ void Sound::play(size_t id, float volume) {
 size_t Sound::add_sound(const img::node &src) {
     img::audio ad = src;
 
-    const auto *data = reinterpret_cast<const void *>(ad.data());
+    const auto *blob = static_cast<const std::uint8_t *>(ad.data());
 
-    if (data) {
-        size_t id = ad.id();
+    if (!blob || ad.length() <= guid_len + 1) {
+        return 0;
+    }
 
-        if (auto sample =
-                BASS_SampleLoad(true,
-                                data,
-                                82,  // not used when mem (1st param) is true
-                                static_cast<DWORD>(ad.length()),
-                                4,
-                                BASS_SAMPLE_OVER_POS);
-            sample != 0) {
-            samples_[id] = sample;
-        } else {
-            const auto *data2 = reinterpret_cast<const char *>(ad.data());
-            auto sample2 =
-                BASS_SampleLoad(true,
-                                reinterpret_cast<const void *>(data2 + 82),
-                                82,  // not used when mem (1st param) is true
-                                static_cast<DWORD>(ad.length()),
-                                4,
-                                BASS_SAMPLE_OVER_POS);
+    const size_t id = ad.id();
+    const std::uint32_t fmt_len = blob[guid_len];
+    const std::uint32_t payload = guid_len + 1 + fmt_len;
 
-            if (sample2 == 0) {
-//                auto ec = BASS_ErrorGetCode();
-            } else {
-                samples_[id] = sample2;
-            }
-        }
-
+    // A WAVEFORMATEX is at least 16 bytes, and the payload has to be non-empty.
+    if (fmt_len < 16 || payload >= ad.length()) {
         return id;
     }
 
-    return 0;
+    const std::uint8_t *fmt = blob + guid_len + 1;
+    const std::uint16_t tag = le16(fmt);
+    const DWORD length = static_cast<DWORD>(ad.length() - payload);
+    HSAMPLE sample = 0;
+
+    if (tag == 0x0001 && le16(fmt + 14) == 16) {
+        // Raw PCM has no container for BASS to sniff, so the sample is built from the
+        // format header instead of loaded. Skill.img stores 353 of these.
+        sample = BASS_SampleCreate(length,
+                                   le32(fmt + 4),
+                                   le16(fmt + 2),
+                                   4,
+                                   BASS_SAMPLE_OVER_POS);
+
+        if (sample && !BASS_SampleSetData(sample, blob + payload)) {
+            BASS_SampleFree(sample);
+            sample = 0;
+        }
+    } else {
+        sample = BASS_SampleLoad(true,
+                                 blob + payload,
+                                 0,
+                                 length,
+                                 4,
+                                 BASS_SAMPLE_OVER_POS);
+    }
+
+    if (sample) {
+        samples_[id] = sample;
+    }
+
+    return id;
 }
 
 void Sound::add_sound(Name name, const img::node &src) {

@@ -308,6 +308,8 @@ void Char::set_afterimage(int32_t skill_id) {
     const std::string &ai_name = weapon.get_afterimage();
 
     after_image_ = Afterimage(skill_id, ai_name, stance_name, weapon_level);
+
+    look_.set_attack_sound_frame(after_image_.get_first_frame());
 }
 
 const Afterimage &Char::get_afterimage() const {

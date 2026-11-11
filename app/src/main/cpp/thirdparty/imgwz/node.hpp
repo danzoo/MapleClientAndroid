@@ -30,6 +30,9 @@ public:
         vector = 4,
         bitmap = 5,
         audio = 6,
+        //! A link to another node. Never observed from outside: the reader follows
+        //! it before handing the node out, so callers see the target's type.
+        uol = 7,
     };
 
     // Constructors.
