@@ -17,6 +17,8 @@
 
 #include <imgwz/wz.hpp>
 
+#include "../MapleMap/Mob.h"
+
 namespace ms {
 SingleSkillSound::SingleSkillSound(const std::string &strid) {
     img::node soundsrc = img::wz::sound["Skill.img"][strid];
@@ -30,6 +32,6 @@ void SingleSkillSound::play_use() {
 }
 
 void SingleSkillSound::play_hit() {
-    hit_sound_.play();
+    Mob::queue_hit_sound(hit_sound_);
 }
 }  // namespace ms

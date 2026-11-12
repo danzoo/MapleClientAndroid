@@ -18,6 +18,7 @@
 #include <imgwz/wz.hpp>
 
 #include "../../Character/ExpTable.h"
+#include "../../Character/Job.h"
 #include "../../Gameplay/Stage.h"
 #include "../../Net/Packets/GameplayPackets.h"
 #include "../Components/MapleButton.h"
@@ -210,6 +211,10 @@ UIStatusBar::UIStatusBar(const CharStats &st, uint8_t channel_count) :
                                Text::Alignment::LEFT,
                                Color::Name::GALLERY,
                                Color::Name::TUNA);
+
+    job_label_ = Text(Text::Font::A11M,
+                      Text::Alignment::RIGHT,
+                      Color::Name::GALLERY);
 
     quickslot_[0] = quickSlot["backgrnd"];
     quickslot_[1] = quickSlot["layer:cover"];
@@ -483,6 +488,16 @@ void UIStatusBar::draw(float alpha) const {
 
     name_label_.draw(position_ + namelabel_pos_);
 
+    // The header's free slot runs from the name to the plate's right inner edge. A job name that
+    // would run into the name is dropped rather than drawn over it.
+    const int16_t job_right = hpmp_pos_.x() + 197;
+    const int16_t job_room =
+        job_right - (namelabel_pos_.x() + name_label_.width() + 4);
+    if (job_label_.width() > 0 && job_label_.width() <= job_room) {
+        job_label_.draw(position_
+                        + Point<int16_t>(job_right, namelabel_pos_.y() + 2));
+    }
+
     buttons_.at(Buttons::BT_FOLD_QS)->draw(position_ + quickslot_adj_);
     buttons_.at(Buttons::BT_EXTEND_QS)
         ->draw(position_ + quickslot_adj_ - quickslot_qs_adj_);
@@ -571,6 +586,7 @@ void UIStatusBar::update() {
     mp_bar_.update(getmppercent());
 
     name_label_.change_text(stats_.get_name());
+    job_label_.change_text(Job(stats_.get_stat(MapleStat::Id::JOB)).get_name());
 
     refresh_quickslots();
 

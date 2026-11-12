@@ -30,6 +30,9 @@ JobData::JobData(int32_t id) {
 
     name_ = std::string(strsrc["bookName"]);
 
+    img::node jobname = strsrc["jobName"];
+    job_name_ = jobname ? std::string(jobname) : std::string();
+
     for (const img::node &sub : src["skill"]) {
         int32_t skill_id = string_conversion::or_zero<int32_t>(sub.name());
 
@@ -47,6 +50,10 @@ const std::vector<std::int32_t> &JobData::get_skills() const {
 
 const std::string &JobData::get_name() const {
     return name_;
+}
+
+const std::string &JobData::get_job_name() const {
+    return job_name_;
 }
 
 const Texture &JobData::get_icon() const {

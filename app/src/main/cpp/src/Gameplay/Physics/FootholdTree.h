@@ -87,6 +87,12 @@ private:
     // null foothold cannot let the body sink through the platform below it.
     double ground_below_path(double x, double y) const;
 
+    // Where a movement segment first meets terrain it started above, or false when it meets none.
+    // Unlike the fall test this also sees ground that rises to meet the body sideways, which is
+    // what a slope does to a body knocked back up it.
+    bool swept_ground(double fromx, double fromy, double tox, double toy,
+                      double &crossx, double &crossy) const;
+
     bool sweep_walls(Point<int16_t> from,
                      Point<int16_t> to,
                      bool include_end,

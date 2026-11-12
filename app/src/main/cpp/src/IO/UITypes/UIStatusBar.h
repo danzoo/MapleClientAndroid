@@ -156,6 +156,7 @@ private:
     std::array<Texture, 5> menu_title_;
     std::array<Texture, 3> menu_background_;
     OutlinedText name_label_;
+    Text job_label_;
     std::vector<Sprite> hpmp_sprites_;
 
     Point<int16_t> exp_pos_;

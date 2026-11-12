@@ -30,6 +30,9 @@ public:
     // Return the name of the skill book.
     const std::string &get_name() const;
 
+    // Return the display name of the job itself.
+    const std::string &get_job_name() const;
+
     // Return the book cover icon.
     const Texture &get_icon() const;
 
@@ -41,5 +44,6 @@ private:
     Texture icon_;
     std::vector<std::int32_t> skills_;
     std::string name_;
+    std::string job_name_;
 };
 }  // namespace ms

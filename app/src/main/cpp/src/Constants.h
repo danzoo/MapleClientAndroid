@@ -122,6 +122,12 @@ constexpr float MOB_FADE_MS = 320.0f;
 constexpr uint16_t MOB_WANDER_MS = 1600;
 constexpr uint16_t MOB_HIT_GRACE_MS = 240;
 
+// An area attack damages every target it reaches in the same update, so each mob's Damage sound
+// would start on that one frame and stack into a single blast. They are queued and played one after
+// another instead, this far apart, and a burst is cut off after this many.
+constexpr uint16_t MOB_HIT_SOUND_GAP_MS = 100;
+constexpr uint8_t MOB_HIT_SOUND_MAX = 4;
+
 // An angry mob is not handed a different movement loop; it only gets a say in the one the wander
 // already runs. This is how often its next stance is chosen to close on the player rather than
 // rolled as usual, and the horizontal distance under which it stops bothering to close - a mob's

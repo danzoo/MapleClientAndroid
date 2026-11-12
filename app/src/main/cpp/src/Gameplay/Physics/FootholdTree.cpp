@@ -104,20 +104,28 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
         double next_x = crnt_x + hmove;
 
         bool left = phobj.hspeed < 0.0f;
-        double wall = get_wall(phobj.fhid, left, phobj.crnt_y() + vmove);
-        bool collision = left ? crnt_x >= wall && next_x <= wall
-                              : crnt_x <= wall && next_x >= wall;
+        bool collision = false;
+        double wall = 0.0;
 
-        // get_wall only sees the walls joined to the object's own foothold, which is enough while
-        // walking (the foothold walks along the chain until it sits beside the wall) but not in the
-        // air: there the foothold is whatever floor is under the current x, mid-chain, so an enclosing
-        // wall several links away is invisible and a jump carries the body straight through it. Sweep
-        // the wall index over the columns this piece crosses instead, which finds the first wall in
-        // the path no matter which foothold the body happens to reference.
-        double swept = get_swept_wall(crnt_x, next_x, phobj.crnt_y() + vmove);
-        if (!std::isnan(swept)) {
-            wall = swept;
-            collision = true;
+        // A platform's side face is a wall foothold, but only the floor it carries is solid: in the
+        // air the body passes the face and is landed on top of it, or let fall beside it, by the
+        // vertical tests below. Blocking it here only stops jumps dead at every platform edge.
+        if (phobj.onground) {
+            wall = get_wall(phobj.fhid, left, phobj.crnt_y() + vmove);
+            collision = left ? crnt_x >= wall && next_x <= wall
+                             : crnt_x <= wall && next_x >= wall;
+
+            // get_wall only sees the walls joined to the object's own foothold, which is enough while
+            // walking (the foothold walks along the chain until it sits beside the wall) but not in
+            // the air: there the foothold is whatever floor is under the current x, mid-chain, so an
+            // enclosing wall several links away is invisible and a jump carries the body straight
+            // through it. Sweep the wall index over the columns this piece crosses instead, which
+            // finds the first wall in the path no matter which foothold the body happens to reference.
+            double swept = get_swept_wall(crnt_x, next_x, phobj.crnt_y() + vmove);
+            if (!std::isnan(swept)) {
+                wall = swept;
+                collision = true;
+            }
         }
 
         if (!collision
@@ -144,6 +152,8 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
         hmove = 0.0;
     }
 
+    bool landed = false;
+
     if (phobj.vmobile()) {
         double crnt_y = phobj.crnt_y();
         double next_y = crnt_y + vmove;
@@ -153,21 +163,48 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
         // update_fh's airborne early-out), and a stale or null foothold reports a ground the body is
         // already past - or NaN - so the crossing test never fires and the body sinks through the
         // platform it should have landed on. Querying the terrain under the path lands it regardless.
-        double ground = std::min(ground_below_path(phobj.crnt_x(), crnt_y),
-                                 ground_below_path(phobj.crnt_x() + hmove, crnt_y));
+        double ground_start = ground_below_path(phobj.crnt_x(), crnt_y);
+        double ground_dest = ground_below_path(phobj.crnt_x() + hmove, crnt_y);
+        double ground = std::min(ground_start, ground_dest);
 
         bool collision = vmove > 0.0 && crnt_y <= ground && next_y >= ground;
 
         if (collision) {
-            phobj.limity(ground);
+            // Land on the surface under where the piece ends, not the highest one it crossed. On a
+            // downhill the two differ by the slope's drop over the piece, and landing on the higher
+            // one leaves the body above the ground at its own x: update_fh then never calls it
+            // grounded again, so a slide runs to the bottom of the slope with neither friction nor
+            // input. A destination further below than the slope accounts for is another floor - an
+            // edge, a platform below - and that one is still met at the crossing point.
+            double drop = std::abs(get_fh(get_fhid_below(phobj.crnt_x(), crnt_y)).slope())
+                * std::abs(hmove);
+            phobj.limity(ground_dest - ground <= drop + 0.5 ? ground_dest : ground);
 
             limit_movement(phobj, hmove, 0.0);
+            landed = true;
         } else {
             if (next_y < borders_.first()) {
                 phobj.limity(borders_.first());
             } else if (next_y > borders_.second()) {
                 phobj.limity(borders_.second());
             }
+        }
+    }
+
+    // Ground that rises to meet a body in the air is met sideways, not fallen onto. The hop a
+    // knockback gives lifts less than the slope it shoves the body up, so the feet end the piece
+    // below the surface; the fall test above only fires while the ground is still under the body,
+    // so from then on nothing lands it again and it drops through the hillside. A body on the
+    // ground is left out because update_fh already carries it along the surface it stands on.
+    if (!landed && !phobj.onground) {
+        double crossx = 0.0;
+        double crossy = 0.0;
+
+        if (swept_ground(phobj.crnt_x(), phobj.crnt_y(),
+                         phobj.crnt_x() + hmove, phobj.crnt_y() + vmove,
+                         crossx, crossy)) {
+            phobj.limitx(crossx);
+            phobj.limity(crossy);
         }
     }
 }
@@ -180,6 +217,81 @@ double FootholdTree::ground_below_path(double x, double y) const {
     }
 
     return get_fh(fhid).ground_below(x);
+}
+
+bool FootholdTree::swept_ground(double fromx, double fromy, double tox, double toy,
+                                double &crossx, double &crossy) const {
+    if (fromx == tox) {
+        return false;
+    }
+
+    const int direction = tox > fromx ? 1 : -1;
+    const double span = tox - fromx;
+
+    // The piece is a straight segment and so is every surface under it, so the gap between the two
+    // changes sign at most once. Sampling the whole columns it passes plus the point it ends at
+    // therefore catches every crossing, including one in the last fraction of a column.
+    auto meet = [&](double x, double y) {
+        const Foothold *hit = nullptr;
+        double best = 0.0;
+
+        auto range = footholds_by_x_.equal_range(static_cast<int16_t>(x));
+
+        for (auto iter = range.first; iter != range.second; ++iter) {
+            const Foothold &fh = footholds_.at(iter->second);
+            const double ground = fh.ground_below(x);
+
+            // Standing on a surface is not meeting it. The touch-down frame leaves the body exactly
+            // at ground level and then re-checks the horizontal travel still left in the piece, so
+            // counting equality here would stop every landing dead and take its walking speed with
+            // it. Only a body that ends the piece under the surface has run into rising ground.
+            if (y <= ground) {
+                continue;
+            }
+
+            // Terrain is one-way. A body that started under this surface is on its way up through
+            // it, and the surface it is leaving from below is not the one it is meeting.
+            const double refx = std::clamp(fromx,
+                                           static_cast<double>(fh.l()),
+                                           static_cast<double>(fh.r()));
+
+            if (fromy > fh.ground_below(refx)) {
+                continue;
+            }
+
+            // Stacked platforms: the one met first is the highest of those the body has reached.
+            if (!hit || ground < best) {
+                hit = &fh;
+                best = ground;
+            }
+        }
+
+        if (!hit) {
+            return false;
+        }
+
+        crossx = x;
+        crossy = best;
+        return true;
+    };
+
+    // Only the columns the segment actually crosses. A piece is often shorter than one column - a
+    // walking body covers a fraction of a pixel per tick - and stepping to the next integer anyway
+    // would sample past the destination, where the interpolation below extrapolates a y the body
+    // never reaches and invents a collision. floor/ceil pick the first integer strictly ahead of the
+    // start and the last one still short of the end, for either direction and either sign of x.
+    const double first = direction > 0 ? std::floor(fromx) + 1.0 : std::ceil(fromx) - 1.0;
+    const double last = direction > 0 ? std::floor(tox) : std::ceil(tox);
+
+    for (double x = first; direction > 0 ? x <= last : x >= last; x += direction) {
+        const double y = fromy + (toy - fromy) * (x - fromx) / span;
+
+        if (meet(x, y)) {
+            return true;
+        }
+    }
+
+    return meet(tox, toy);
 }
 
 void FootholdTree::update_fh(PhysicsObject &phobj) const {
@@ -311,18 +423,20 @@ double FootholdTree::get_swept_wall(double fromx, double tox, double fy) const {
     }
 
     const int direction = tox > fromx ? 1 : -1;
-    const int last = static_cast<int>(tox);
     auto shorty = static_cast<int16_t>(fy);
     Range<int16_t> vertical(shorty - 50, shorty - 1);
 
-    for (int x = static_cast<int>(fromx) + direction;
-         direction > 0 ? x <= last : x >= last;
-         x += direction) {
+    // The columns the segment crosses, and no others: a piece shorter than a column would otherwise
+    // reach past its own destination and stop the body at a wall it has not got to yet.
+    const double first = direction > 0 ? std::floor(fromx) + 1.0 : std::ceil(fromx) - 1.0;
+    const double last = direction > 0 ? std::floor(tox) : std::ceil(tox);
+
+    for (double x = first; direction > 0 ? x <= last : x >= last; x += direction) {
         auto range = walls_by_x_.equal_range(static_cast<int16_t>(x));
 
         for (auto iter = range.first; iter != range.second; ++iter) {
             if (get_fh(iter->second).is_blocking(vertical)) {
-                return static_cast<double>(x);
+                return x;
             }
         }
     }

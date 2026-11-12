@@ -108,6 +108,16 @@ public:
     // Apply damage to the mob.
     void apply_damage(int32_t damage, bool toleft);
 
+    // Hand a blow's sound to the queue every mob shares, so that the targets of one area attack are
+    // heard one after another rather than as a single blast.
+    static void queue_hit_sound(const Sound &sound);
+
+    // Play the next queued blow sound if it is due. Called once per map update.
+    static void update_hit_sounds();
+
+    // Drop whatever is still queued, for when the map the blows landed on is left behind.
+    static void clear_hit_sounds();
+
     // Note that a blow the client has queued locally for this mob is due to land in the specified
     // number of milliseconds.
     void expect_hit(int32_t millis);

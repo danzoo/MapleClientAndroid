@@ -62,6 +62,9 @@ public:
 
     void play(float volume = 1.0f) const;
 
+    // Whether there is anything to play, for callers that queue a sound instead of playing it now.
+    bool valid() const { return id_ > 0; }
+
     static Error init();
     static void close();
     static bool set_sfxvolume(uint8_t volume);

@@ -31,6 +31,8 @@ void MapMobs::draw(Layer::Id layer,
 }
 
 void MapMobs::update(const Physics &physics) {
+    Mob::update_hit_sounds();
+
     for (; !spawns_.empty(); spawns_.pop()) {
         const MobSpawn &spawn = spawns_.front();
 
@@ -65,6 +67,7 @@ void MapMobs::remove(int32_t oid, int8_t animation) {
 }
 
 void MapMobs::clear() {
+    Mob::clear_hit_sounds();
     mobs_.clear();
 }
 
