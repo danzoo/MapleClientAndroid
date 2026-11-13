@@ -502,7 +502,7 @@ float Player::get_walkspeed() const {
     const float speed =
         static_cast<float>(stats_.get_total(EquipStat::Id::SPEED));
 
-    return PhysicsParams::walk_speed() * (speed + Constants::SPEED_STAT_OFFSET) / 100.0f;
+    return PhysicsParams::walk_speed() * speed / 100;
 }
 
 float Player::get_jumpspeed() const {
@@ -521,8 +521,7 @@ float Player::get_climbspeed() const {
     const double speed = stats_.get_total(EquipStat::Id::SPEED);
 
     // Rope and ladder share one px/s per SPEED point, including the same +20 offset as walking.
-    return static_cast<float>((speed + Constants::SPEED_STAT_OFFSET)
-                              * Constants::CLIMB_SPEED_PER_POINT);
+    return static_cast<float>(speed * Constants::CLIMB_SPEED_PER_POINT);
 }
 
 float Player::get_flyforce() const {

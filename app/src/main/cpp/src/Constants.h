@@ -199,7 +199,6 @@ constexpr double MOB_HOP_SPEED = 625.0;
 // The offset changes physical movement only, not the SPEED value displayed in the stat window.
 constexpr float MOB_WALK_SPEED_PER_POINT = 0.9375f;
 constexpr float MOB_FLY_SPEED_PER_POINT = 1.25f;
-constexpr double SPEED_STAT_OFFSET = 20.0;
 constexpr double CLIMB_SPEED_PER_POINT = 1.0;
 constexpr double CHAR_SLOT_SCROLL_SPEED = 125.0;
 
