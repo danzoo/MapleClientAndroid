@@ -493,28 +493,24 @@ bool Player::can_climb() const {
 }
 
 float Player::get_walkforce() const {
-    // walk_accel is already the drive that holds walkSpeed under the ground's damping, so the SPEED
-    // stat decides only what fraction of the baseline walk this character has.
-    const float speed =
-        static_cast<float>(stats_.get_total(EquipStat::Id::SPEED));
-
-    return PhysicsParams::walk_accel() * speed / 100;
+    // Use the same target as walking and rope leaps: at SPEED 100 the archive's 125 is
+    // multiplied by 1.2, giving 150 px/s. Rebuild the drive under the current ground damping.
+    return static_cast<float>(PhysicsParams::ground_drive(get_walkspeed()));
 }
 
 float Player::get_walkspeed() const {
     const float speed =
         static_cast<float>(stats_.get_total(EquipStat::Id::SPEED));
 
-    return PhysicsParams::walk_speed() * speed / 100;
+    return PhysicsParams::walk_speed() * (speed + Constants::SPEED_STAT_OFFSET) / 100.0f;
 }
 
 float Player::get_jumpspeed() const {
     const float jump =
         static_cast<float>(stats_.get_total(EquipStat::Id::JUMP));
 
-    // One and a half to three and a half times the baseline jump, which is the curve this client
-    // was built with, normalised so that a baseline JUMP stat is worth the jump the archive names.
-    return PhysicsParams::jump_speed() * (1.0f + 3.5f * jump / 100) / 4.5f;
+    // Each JUMP point adds 1% of jumpSpeed: 555 px/s at 100, 666 px/s at 120.
+    return PhysicsParams::jump_speed() * jump / 100.0f;
 }
 
 float Player::get_jumpforce() const {
@@ -522,11 +518,11 @@ float Player::get_jumpforce() const {
 }
 
 float Player::get_climbspeed() const {
-    const double speed = stats_.get_total(EquipStat::Id::SPEED) / 100.0;
+    const double speed = stats_.get_total(EquipStat::Id::SPEED);
 
-    // Neither rope nor ladder has a key in the archive, so this is the client's own, restated as a
-    // speed for each point of the character's SPEED stat.
-    return static_cast<float>(speed * Constants::CLIMB_SPEED_PER_POINT);
+    // Rope and ladder share one px/s per SPEED point, including the same +20 offset as walking.
+    return static_cast<float>((speed + Constants::SPEED_STAT_OFFSET)
+                              * Constants::CLIMB_SPEED_PER_POINT);
 }
 
 float Player::get_flyforce() const {

@@ -29,6 +29,8 @@ struct MovingObject {
     Linear<double> y;
     double hspeed = 0.0;
     double vspeed = 0.0;
+    // Records a vertical constraint even when this step's mean vertical travel is zero.
+    bool vertical_limited = false;
 
     void normalize() {
         x.normalize();
@@ -56,6 +58,7 @@ struct MovingObject {
     void limity(double d) {
         y = d;
         vspeed = 0.0;
+        vertical_limited = true;
     }
 
     // Distance in pixels, delay in milliseconds of game time: the quotient is a speed in pixels per
@@ -178,19 +181,17 @@ struct PhysicsObject : public MovingObject {
     void clear_flags() { flags = 0; }
 };
 
-// Map/Physics.img quotes its forces and drags as fixed-point amounts of a tick, and its tick is the
-// one this loop runs, so those figures only have to be lifted out of the fixed point and put through
-// here to become the pixels per second squared and per second that the fields above are stored in.
-// Nothing else is quoted per tick any more: every hand-written speed is in pixels per second and
-// every duration in milliseconds, so this belongs to the archive and to PhysicsParams alone.
+// Decode legacy fixed-point force/drag values against a fixed reference period. This conversion
+// is independent of the simulation timestep: changing update resolution must not change the
+// accelerations and damping loaded from Physics.img.
 namespace tick_units {
     inline double velocity(double pixels_per_tick) {
-        return pixels_per_tick / Constants::TICK_SECONDS;
+        return pixels_per_tick / Constants::PHYSICS_REFERENCE_SECONDS;
     }
 
     inline double accel(double pixels_per_tick_squared) {
         return pixels_per_tick_squared
-            / (Constants::TICK_SECONDS * Constants::TICK_SECONDS);
+            / (Constants::PHYSICS_REFERENCE_SECONDS * Constants::PHYSICS_REFERENCE_SECONDS);
     }
 }  // namespace tick_units
 }  // namespace ms

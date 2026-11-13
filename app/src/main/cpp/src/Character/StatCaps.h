@@ -29,6 +29,6 @@ const std::unordered_map<EquipStat::Id, int32_t> EQSTAT_CAPS = {
     { EquipStat::Id::WDEF, 999 },  { EquipStat::Id::MDEF, 999 },
     { EquipStat::Id::ACC, 999 },   { EquipStat::Id::AVOID, 999 },
     { EquipStat::Id::HANDS, 999 }, { EquipStat::Id::SPEED, 140 },
-    { EquipStat::Id::JUMP, 123 },
+    { EquipStat::Id::JUMP, 120 },
 };
 }  // namespace ms

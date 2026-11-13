@@ -71,12 +71,14 @@ public:
                         Point<int16_t> &cross) const;
 
 private:
-    double get_wall(uint16_t fhid, bool left, double fy) const;
+    // Recheck horizontal travel using the surface selected by this substep's landing.
+    void limit_movement(PhysicsObject &object, double hmove, double vmove,
+                        uint16_t landed_fhid) const;
 
-    // The first wall column between two x positions at the given height, or NaN when the run meets
-    // none. Unlike get_wall it does not depend on the object's foothold, so it also stops a body in
-    // mid-air from crossing a wall its current foothold is not joined to.
-    double get_swept_wall(double fromx, double tox, double fy) const;
+    // Fill airborne omissions along the landing platform's floor chain and its side-wall column.
+    double get_air_wall(uint16_t fhid, bool left, double fy) const;
+
+    double get_wall(uint16_t fhid, bool left, double fy) const;
 
     double get_edge(uint16_t fhid, bool left) const;
 

@@ -99,6 +99,11 @@ void FootholdTree::limit_movement(PhysicsObject &phobj) const {
 }
 
 void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmove) const {
+    limit_movement(phobj, hmove, vmove, 0);
+}
+
+void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmove,
+                                 uint16_t landed_fhid) const {
     if (phobj.hmobile()) {
         double crnt_x = phobj.crnt_x();
         double next_x = crnt_x + hmove;
@@ -107,24 +112,39 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
         bool collision = false;
         double wall = 0.0;
 
-        // A platform's side face is a wall foothold, but only the floor it carries is solid: in the
-        // air the body passes the face and is landed on top of it, or let fall beside it, by the
-        // vertical tests below. Blocking it here only stops jumps dead at every platform edge.
-        if (phobj.onground) {
-            wall = get_wall(phobj.fhid, left, phobj.crnt_y() + vmove);
-            collision = left ? crnt_x >= wall && next_x <= wall
-                             : crnt_x <= wall && next_x >= wall;
+        // Keep walking's query unchanged. Normal airborne motion follows the current landing
+        // platform's chain far enough to reach the side wall and all of its connected segments.
+        if (phobj.onground || phobj.type == PhysicsObject::Type::NORMAL) {
+            const uint16_t wall_fhid = phobj.type == PhysicsObject::Type::NORMAL && landed_fhid
+                ? landed_fhid : phobj.fhid;
+            const bool airborne = phobj.type == PhysicsObject::Type::NORMAL
+                && !landed_fhid && (!phobj.onground || phobj.vspeed < 0.0);
+            if (airborne) {
+                auto hits_at_contact = [&](double candidate) {
+                    const bool crosses = left ? crnt_x >= candidate && next_x <= candidate
+                                              : crnt_x <= candidate && next_x >= candidate;
+                    if (!crosses) {
+                        return false;
+                    }
 
-            // get_wall only sees the walls joined to the object's own foothold, which is enough while
-            // walking (the foothold walks along the chain until it sits beside the wall) but not in
-            // the air: there the foothold is whatever floor is under the current x, mid-chain, so an
-            // enclosing wall several links away is invisible and a jump carries the body straight
-            // through it. Sweep the wall index over the columns this piece crosses instead, which
-            // finds the first wall in the path no matter which foothold the body happens to reference.
-            double swept = get_swept_wall(crnt_x, next_x, phobj.crnt_y() + vmove);
-            if (!std::isnan(swept)) {
-                wall = swept;
-                collision = true;
+                    const double fraction = hmove != 0.0 ? (candidate - crnt_x) / hmove : 0.0;
+                    const double contact_y = phobj.crnt_y() + vmove * fraction;
+                    return get_air_wall(wall_fhid, left, contact_y) == candidate;
+                };
+
+                // The body can cross the wall before reaching this piece's end height.
+                // Look up candidates at both heights, then recheck the wall's height window
+                // at the actual crossing. The start lookup also catches a wall lost by the end query.
+                wall = get_air_wall(wall_fhid, left, phobj.crnt_y() + vmove);
+                collision = hits_at_contact(wall);
+                if (!collision && vmove != 0.0) {
+                    wall = get_air_wall(wall_fhid, left, phobj.crnt_y());
+                    collision = hits_at_contact(wall);
+                }
+            } else {
+                wall = get_wall(wall_fhid, left, phobj.crnt_y() + vmove);
+                collision = left ? crnt_x >= wall && next_x <= wall
+                                 : crnt_x <= wall && next_x >= wall;
             }
         }
 
@@ -178,9 +198,14 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
             // edge, a platform below - and that one is still met at the crossing point.
             double drop = std::abs(get_fh(get_fhid_below(phobj.crnt_x(), crnt_y)).slope())
                 * std::abs(hmove);
-            phobj.limity(ground_dest - ground <= drop + 0.5 ? ground_dest : ground);
+            const bool lands_at_dest = ground_dest - ground <= drop + 0.5;
+            const double landing_x = phobj.crnt_x() + (lands_at_dest ? hmove : 0.0);
+            const uint16_t landing_fhid = get_fhid_below(landing_x, crnt_y);
+            phobj.limity(lands_at_dest ? ground_dest : ground);
 
-            limit_movement(phobj, hmove, 0.0);
+            // On slopes y already refers to landing_x, while x has not advanced yet. Carry the
+            // selected surface into the recursive wall check instead of querying mismatched x/y.
+            limit_movement(phobj, hmove, 0.0, landing_fhid);
             landed = true;
         } else {
             if (next_y < borders_.first()) {
@@ -389,59 +414,102 @@ const Foothold &FootholdTree::get_fh(uint16_t fhid) const {
     return iter->second;
 }
 
+double FootholdTree::get_air_wall(uint16_t curid, bool left, double fy) const {
+    const double boundary = left ? walls_.first() : walls_.second();
+    const double nearby = get_wall(curid, left, fy);
+
+    // Preserve every result of the existing two-neighbour query before filling its omissions.
+    if (nearby != boundary) {
+        return nearby;
+    }
+
+    const Foothold *cur = &get_fh(curid);
+    if (!cur->id() || cur->is_wall()) {
+        return boundary;
+    }
+
+    auto shorty = static_cast<int16_t>(fy);
+    Range<int16_t> vertical(shorty - 50, shorty - 1);
+    bool wall_started = false;
+    int16_t wall_x = 0;
+
+    // Reach the side wall through this landing platform's connected floor chain. Once there,
+    // check the whole same-column wall chain, not only the two pieces closest to the floor.
+    // Endpoint/layer checks exclude unrelated geometry; the budget also bounds malformed cycles.
+    for (size_t remaining = footholds_.size(); remaining > 0; --remaining) {
+        const Foothold &next = get_fh(left ? cur->prev() : cur->next());
+        if (!next.id() || next.layer() != cur->layer()) {
+            break;
+        }
+
+        // Wall endpoint order is independent of prev/next traversal. Accept either shared
+        // endpoint without changing the stored endpoint order or the traversal direction.
+        const bool connected = next.is_wall() || cur->is_wall()
+            ? ((next.x1() == cur->x1() && next.y1() == cur->y1())
+               || (next.x1() == cur->x2() && next.y1() == cur->y2())
+               || (next.x2() == cur->x1() && next.y2() == cur->y1())
+               || (next.x2() == cur->x2() && next.y2() == cur->y2()))
+            : (left ? next.x2() == cur->x1() && next.y2() == cur->y1()
+                    : next.x1() == cur->x2() && next.y1() == cur->y2());
+        if (!connected) {
+            break;
+        }
+
+        if (wall_started) {
+            // Do not search beyond this wall into another platform or another wall column.
+            if (!next.is_wall() || next.x1() != wall_x) {
+                break;
+            }
+        } else if (next.is_wall()) {
+            wall_started = true;
+            wall_x = next.x1();
+        } else if (left ? next.l() >= cur->l() : next.r() <= cur->r()) {
+            break;
+        }
+
+        if (wall_started && next.is_blocking(vertical)) {
+            return wall_x;
+        }
+        cur = &next;
+    }
+
+    return boundary;
+}
+
 double FootholdTree::get_wall(uint16_t curid, bool left, double fy) const {
     auto shorty = static_cast<int16_t>(fy);
     Range<int16_t> vertical(shorty - 50, shorty - 1);
     const Foothold &cur = get_fh(curid);
 
-    // A tall wall is stored as several collinear segments stacked along the foothold chain, so the
-    // segment level with the body can be many links away - checking only the first two let a body
-    // falling along the wall slip past it at any height above them. Walk the chain through
-    // consecutive walls until one overlaps the body's height; stop at the first floor so the walk
-    // stays bounded. This is what blocks a body pressed exactly against the wall column, which the
-    // column sweep below starts past.
-    for (uint16_t id = left ? cur.prev() : cur.next(); id != 0;) {
-        const Foothold &fh = get_fh(id);
+    if (left) {
+        const Foothold &prev = get_fh(cur.prev());
 
-        if (!fh.is_wall()) {
-            break;
+        if (prev.is_blocking(vertical)) {
+            return cur.l();
         }
 
-        if (fh.is_blocking(vertical)) {
-            return fh.l();
+        const Foothold &prev_prev = get_fh(prev.prev());
+
+        if (prev_prev.is_blocking(vertical)) {
+            return prev.l();
         }
 
-        id = left ? fh.prev() : fh.next();
+        return walls_.first();
     }
 
-    return left ? walls_.first() : walls_.second();
-}
+    const Foothold &next = get_fh(cur.next());
 
-double FootholdTree::get_swept_wall(double fromx, double tox, double fy) const {
-    if (fromx == tox) {
-        return std::numeric_limits<double>::quiet_NaN();
+    if (next.is_blocking(vertical)) {
+        return cur.r();
     }
 
-    const int direction = tox > fromx ? 1 : -1;
-    auto shorty = static_cast<int16_t>(fy);
-    Range<int16_t> vertical(shorty - 50, shorty - 1);
+    const Foothold &next_next = get_fh(next.next());
 
-    // The columns the segment crosses, and no others: a piece shorter than a column would otherwise
-    // reach past its own destination and stop the body at a wall it has not got to yet.
-    const double first = direction > 0 ? std::floor(fromx) + 1.0 : std::ceil(fromx) - 1.0;
-    const double last = direction > 0 ? std::floor(tox) : std::ceil(tox);
-
-    for (double x = first; direction > 0 ? x <= last : x >= last; x += direction) {
-        auto range = walls_by_x_.equal_range(static_cast<int16_t>(x));
-
-        for (auto iter = range.first; iter != range.second; ++iter) {
-            if (get_fh(iter->second).is_blocking(vertical)) {
-                return x;
-            }
-        }
+    if (next_next.is_blocking(vertical)) {
+        return next.r();
     }
 
-    return std::numeric_limits<double>::quiet_NaN();
+    return walls_.second();
 }
 
 double FootholdTree::get_edge(uint16_t curid, bool left) const {

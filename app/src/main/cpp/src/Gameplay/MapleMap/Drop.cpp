@@ -139,7 +139,24 @@ Drop::Drop(int32_t id,
 }
 
 int8_t Drop::update(const Physics &physics) {
-    physics.move_object(phobj_);
+    if (phobj_.type == PhysicsObject::Type::FIXATED) {
+        // Scripted drops keep the server's coordinates. update_fh() can clamp an object with
+        // no foothold to the empty foothold's x=0, even when it is FIXATED; a floating drop
+        // never restores x afterwards. Look up only its draw layer, without terrain movement.
+        if (!phobj_.fhid) {
+            const uint16_t fhid =
+                physics.get_fht().get_fhid_below(phobj_.get_x(), phobj_.get_y());
+
+            if (fhid) {
+                phobj_.fhid = fhid;
+                phobj_.fhlayer = physics.get_fht().get_foothold(fhid).layer();
+            }
+        }
+
+        phobj_.normalize();
+    } else {
+        physics.move_object(phobj_);
+    }
 
     if (state_ == Drop::State::DROPPED) {
         fallen_ += Constants::TICK_SECONDS;

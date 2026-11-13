@@ -18,11 +18,10 @@
 namespace ms {
 // Movement tunables, taken from Map/Physics.img at startup.
 //
-// Everything handed out here is in seconds: pixels per second for a speed, pixels per second
-// squared for an acceleration, per second for a damping rate. That is the unit the archive's own
-// *Speed and *Acc keys are already written in, and the keys that are not - the *Force and *Drag
-// fixed-point pairs, which are quoted per tick of the 14 ms integrator the archive was written for -
-// only have to leave the fixed point behind, because Constants::TIMESTEP is that same 14 ms.
+// Values use px/s for speeds, px/s^2 for accelerations and 1/s for damping. *Speed and *Acc
+// already use those units; legacy fixed-point *Force and *Drag use PHYSICS_REFERENCE_SECONDS
+// for conversion, independently of the simulation timestep. walk_speed() is the coefficient
+// used with (SPEED + 20) / 100, not the player's baseline walking speed.
 //
 // A missing archive, or a missing key inside it, leaves that one value at what this client was
 // built with, so a Data tree that predates the file still plays.
@@ -40,19 +39,15 @@ public:
     // The speed a jump leaves the ground with.
     static double jump_speed();
 
-    // The force that drives a walk.
-    static double walk_accel();
-
-    // The speed a walk settles at.
+    // The walking-speed coefficient, before the player's stat multiplier.
     static double walk_speed();
 
     // How fast ground sheds speed, as a fraction of the current speed per second. This is what
     // decides how far anything that has been knocked, jumped off or let go of slides.
     static double ground_damping();
 
-    // The force that, once ground_damping() has taken as much off it as it adds, holds a given
-    // walking speed. Anything that walks under the archive's damping but is not a player - a mob,
-    // a pet - states its drive with this instead of naming an acceleration.
+    // Acceleration required to hold target_speed under the client's ground damping.
+    // Shared by players, mobs and pets.
     static double ground_drive(double target_speed);
 
     // The force that drives flight, and the speed flight settles at.

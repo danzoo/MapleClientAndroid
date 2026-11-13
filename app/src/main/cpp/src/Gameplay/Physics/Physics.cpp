@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Physics.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include "PhysicsParams.h"
@@ -57,10 +58,14 @@ void Physics::move_object(PhysicsObject &phobj) const {
     // Determine which platform the object is currently on
     fh_tree_.update_fh(phobj);
 
-    // Use the appropriate physics for the terrain the object is on
+    // Normal motion uses the mean vertical speed for collision travel, while the next tick
+    // starts with the end speed. Keep the other movement engines unchanged.
+    const bool normal = phobj.type == PhysicsObject::Type::NORMAL;
+    double end_vspeed = 0.0;
+    phobj.vertical_limited = false;
     switch (phobj.type) {
         case PhysicsObject::Type::NORMAL:
-            move_normal(phobj);
+            end_vspeed = move_normal(phobj);
             break;
         case PhysicsObject::Type::FLYING:
             move_flying(phobj);
@@ -77,11 +82,9 @@ void Physics::move_object(PhysicsObject &phobj) const {
     // between two checks' worth of positions on either side of it. Whatever the checks leave of the
     // speeds is then applied a piece at a time.
     //
-    // Nothing slower than MAX_SUBSTEP pixels per tick takes more than one piece, and one piece is
-    // asked about with the same whole-tick displacement the single check used to be made with, so
-    // walking, jumping and every other ordinary movement come out of this exactly as they came out
-    // of the old one-step code. Only an object that would otherwise cross several footholds between
-    // two checks is affected - at the archive's terminal fall speed that is nine pixels a tick.
+    // Normal vertical travel is v0 * dt + 0.5 * gravity * dt^2, including the take-off step.
+    // The piecewise collision path still approximates that arc with short line segments; dividing
+    // it into pieces does not apply gravity or the take-off impulse more than once per tick.
     //
     // normalize() first, then shift(): the update still reads as one segment from where the object
     // started to where it ends up, which is what the drawing interpolates along. Advancing that
@@ -124,14 +127,22 @@ void Physics::move_object(PhysicsObject &phobj) const {
             fh_tree_.update_fh(phobj);
         }
     }
+
+    if (normal && !phobj.vertical_limited) {
+        phobj.vspeed = end_vspeed;
+    }
 }
 
-void Physics::move_normal(PhysicsObject &phobj) const {
+double Physics::move_normal(PhysicsObject &phobj) const {
+    const double dt = Constants::TICK_SECONDS;
+    double start_vspeed = phobj.vspeed;
     phobj.vacc = 0.0;
     phobj.hacc = 0.0;
 
     if (phobj.onground) {
-        phobj.vacc += phobj.vforce;
+        // vforce delivers a one-step take-off impulse, not an acceleration spread through
+        // the flight. Gravity applies immediately after that impulse, including this step.
+        start_vspeed += phobj.vforce * dt;
         phobj.hacc += phobj.hforce;
 
         if (phobj.hacc == 0.0 && std::abs(phobj.hspeed) < Constants::STOP_SPEED) {
@@ -149,21 +160,40 @@ void Physics::move_normal(PhysicsObject &phobj) const {
             phobj.hacc += SLOPEFACTOR * slopef * phobj.hspeed * phobj.hspeed
                 / (GROUNDSLIP * GROUNDSLIP);
         }
-    } else if (phobj.is_flag_not_set(PhysicsObject::Flag::NO_GRAVITY)) {
-        phobj.vacc += PhysicsParams::gravity();
+    }
+
+    const bool airborne = !phobj.onground || start_vspeed < 0.0;
+    if (airborne && phobj.is_flag_not_set(PhysicsObject::Flag::NO_GRAVITY)) {
+        phobj.vacc = PhysicsParams::gravity();
     }
 
     phobj.hforce = 0.0;
     phobj.vforce = 0.0;
-
-    phobj.hspeed += phobj.hacc * Constants::TICK_SECONDS;
-    phobj.vspeed += phobj.vacc * Constants::TICK_SECONDS;
+    phobj.hspeed += phobj.hacc * dt;
 
     const double maxfall = PhysicsParams::max_fall_speed();
-
-    if (!phobj.onground && phobj.vspeed > maxfall) {
-        phobj.vspeed = maxfall;
+    if (airborne) {
+        start_vspeed = std::min(start_vspeed, maxfall);
     }
+
+    double end_vspeed = start_vspeed + phobj.vacc * dt;
+    double travel = (start_vspeed + end_vspeed) * 0.5 * dt;
+
+    if (airborne && end_vspeed > maxfall) {
+        // Integrate the accelerated portion only until terminal speed is reached, then the
+        // rest at the cap. Averaging the capped end speed over the whole step would under-travel.
+        const double accelerating = phobj.vacc > 0.0
+            ? std::clamp((maxfall - start_vspeed) / phobj.vacc, 0.0, dt) : 0.0;
+        travel = start_vspeed * accelerating
+            + 0.5 * phobj.vacc * accelerating * accelerating
+            + maxfall * (dt - accelerating);
+        end_vspeed = maxfall;
+    }
+
+    // Collision code moves at a constant speed within its short pieces. Supplying the mean
+    // speed gives the exact constant-gravity displacement; move_object restores the end speed.
+    phobj.vspeed = travel / dt;
+    return end_vspeed;
 }
 
 void Physics::move_flying(PhysicsObject &phobj) const {

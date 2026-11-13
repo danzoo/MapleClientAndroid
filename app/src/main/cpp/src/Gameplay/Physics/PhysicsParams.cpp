@@ -30,21 +30,14 @@ using ms::Constants::GROUND_FRICTION;
 using ms::tick_units::accel;
 using ms::tick_units::velocity;
 
-// The archive mixes two generations of units. Every *Speed and *Acc key is already in pixels per
-// second (or per second squared), which is the unit Params holds its fields in: gravityAcc 2000 and
-// jumpSpeed 555 put the apex of a jump at 77 pixels, and walkSpeed 125 is exactly walkForce over
-// walkDrag. The *Force and *Drag keys are the other generation - a fixed-point fraction of a pixel,
-// per tick of the 14 ms integrator this archive was written for.
+// *Speed and *Acc values are already in px/s and px/s^2: gravityAcc 2000 and jumpSpeed 555
+// give a 77.00625 px jump. walkSpeed 125 is a coefficient, not the player's baseline speed;
+// the player's (SPEED + 20) / 100 multiplier gives 150 px/s at SPEED 100.
 //
-// The loop runs at that same tick, so nothing has to be rescaled between two cadences: a *Force is
-// already so many pixels per tick squared and a *Drag already the fraction of its speed a tick takes
-// off, and both leave the fixed point and go through tick_units like every other per-tick figure in
-// this client. A drag is dimensionless rather than a speed, but per-tick to per-second is the same
-// division either way.
-//
-// That the second family reproduces the first is the proof that 14 ms is the archive's tick: 1.4 over
-// 0.8 is 1.75 pixels per tick, and 125 pixels per second divided by 1.75 is 71.43, which is exactly
-// 1/0.014.
+// Legacy *Force and *Drag values retain the client's fixed-point conversion calibrated by
+// (walkForce / walkDrag) / walkSpeed = 0.014 s. The same stat multiplier applied to force
+// and target leaves that calibration unchanged. It does not establish the original client's
+// timestep; tick_units uses a separate fixed reference period rather than the simulation step.
 constexpr double FIXED_POINT = 100000.0;
 
 // Where every field starts from: the baseline archive's own keys, run through the same conversions
@@ -57,16 +50,14 @@ constexpr double FIXED_POINT = 100000.0;
 // 468.75 pixels a second squared, which is the three hundredths of a pixel per tick squared it was
 // written at, held against the same damping so that a body settles at the sinking speed it always did.
 //
-// walk_accel is the other that is not the archive's own: 3125 is Constants::GROUND_FRICTION over the
-// tick, times the archive's walkSpeed, which is the drive that settles at 125 under the damping this
-// client actually uses.
+// The walk drive is rebuilt from the speed coefficient and this client's damping, including
+// in the missing-file fallback. The player's stat multiplier is applied separately.
 struct Params {
     double gravity = 2000.0;
     double max_fall_speed = 670.0;
     double jump_speed = 555.0;
-    double walk_accel = 3125.0;
-    double walk_speed = 125.0;
     double ground_damping = velocity(GROUND_FRICTION);
+    double walk_speed = 125.0;
     double fly_accel = accel(120000.0 / FIXED_POINT);
     double fly_speed = 200.0;
     double fly_damping = velocity(10000.0 / FIXED_POINT);
@@ -133,9 +124,6 @@ void PhysicsParams::load() {
         params.walk_speed = raw;
     }
 
-    params.ground_damping = velocity(Constants::GROUND_FRICTION);
-    params.walk_accel = ground_drive(params.walk_speed);
-
     if (numeric(src, "flyForce", raw)) {
         params.fly_accel = accel(raw / FIXED_POINT);
     }
@@ -192,7 +180,7 @@ void PhysicsParams::load() {
                         params.max_fall_speed,
                         params.jump_speed,
                         params.walk_speed,
-                        params.walk_accel,
+                        ground_drive(params.walk_speed),
                         params.ground_damping,
                         params.fly_speed,
                         params.fly_accel,
@@ -214,10 +202,6 @@ double PhysicsParams::max_fall_speed() {
 
 double PhysicsParams::jump_speed() {
     return params.jump_speed;
-}
-
-double PhysicsParams::walk_accel() {
-    return params.walk_accel;
 }
 
 double PhysicsParams::walk_speed() {

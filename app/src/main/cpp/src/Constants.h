@@ -27,35 +27,32 @@ namespace ms::Constants {
 // number changes how fast the game plays.
 constexpr double FRAME_RATE = 60;
 
-// Timestep, e.g. the granularity in which the game advances, in milliseconds of game time. This is
-// the knob for how fast the game plays: every animation and every timer written in milliseconds
-// consumes this much per update.
+// Simulation resolution in milliseconds of game time. The accumulator schedules updates from
+// this duration, and animations/timers consume the same duration per update; at simulation
+// speed 1.0, changing the resolution alone must not change the intended px/s movement speeds.
 //
-// It is set to 14 because that is the tick Map/Physics.img's own integrator advanced at - see the
-// header of PhysicsParams.cpp. Matching the two is what lets the archive's fixed-point force and drag
-// figures be read straight through tick_units instead of being converted between two tick lengths.
+// Keep a 14 ms simulation step. The corrected baseline walk is 125 * (100 + 20) / 100 =
+// 150 px/s, or 2.1 pixels per step; it does not require changing the simulation frequency.
+// Physics.img does not specify a timestep, so the legacy force/drag ratio is a conversion
+// calibration, not proof of the original client's update period.
 constexpr uint16_t TIMESTEP = 14;
+
+// Reference period for decoding legacy fixed-point force/drag values, independent of the
+// simulation step: (walkForce / walkDrag) / walkSpeed = (140000 / 80000) / 125 = 0.014 s.
+// Applying the same (SPEED + 20) / 100 multiplier to drive and target keeps this ratio unchanged.
+constexpr double PHYSICS_REFERENCE_SECONDS = 0.014;
 
 // Fraction of real time the simulation advances at, so 1.0 is real time. Movement, jumps and
 // animations are all driven by the timestep, so scaling it slows them together and keeps every
 // trajectory intact; lowering walk speed or jump force directly would shorten the jumps instead.
 constexpr double SIMULATION_SPEED = 1.0;
 
-// How many real seconds one update of the simulation lasts. A frame spends as many of these as the
-// time since the last frame bought, which is what lets the update rate stand on its own against
-// FRAME_RATE. Speeds are in pixels per second and forces in pixels per second squared, so this is
-// only ever multiplied against them - by the integrators, and by the archive's own fixed-point
-// figures, which are quoted per tick and so come through tick_units.
+// Seconds used by the movement integrators. Legacy fixed-point decoding instead uses
+// PHYSICS_REFERENCE_SECONDS, so changing the simulation step does not change decoded units.
 constexpr double TICK_SECONDS = TIMESTEP * 0.001 / SIMULATION_SPEED;
 
-// Milliseconds of animation a pixel of movement is worth. The walk cycle and everything drawn along
-// with it are advanced by ground covered rather than by the clock, and this is the calibration those
-// numbers were written against - the artwork is drawn to move one pixel for every 8ms of its own
-// timeline - so a walk of 1.75 pixels a tick plays in real time at the current timestep.
-//
-// It is only that family: an animation advanced by a rate instead of by ground covered - standing,
-// idle, an attack, any effect - spends Constants::TIMESTEP per update at rate one, which is what the
-// reference client's timestep multiplier meant before the timestep moved off 8.
+// Movement-driven animation consumes 8 ms per pixel. Clock-driven animations instead consume
+// TIMESTEP per update; neither calibration depends on a fixed walking displacement per tick.
 constexpr float ANIMATION_MS_PER_PIXEL = 8.0f;
 
 // How long loot that a mob dropped stays hidden after its packet arrives, on top of however long
@@ -198,13 +195,13 @@ constexpr double MOB_KNOCKBACK_ACCEL = 3125.0;
 constexpr double MOB_KNOCKBACK_ACCEL_AIR = 1562.5;
 constexpr double MOB_HOP_SPEED = 625.0;
 
-// Pixels a second a stat point is worth, for the figures the archives quote as a raw stat rather
-// than as a speed. A mob's walk and flight stats are (speed + 100) scaled by these, the rope climb
-// one pixel a tick per point of the character's SPEED, and the character-select list scrolls a pixel
-// and a quarter an update.
+// Pixels per second per stat point. Mob movement retains its own (speed + 100) conversion;
+// player walking uses walkSpeed * (SPEED + 20) / 100, and rope/ladder climbing uses SPEED + 20.
+// The offset changes physical movement only, not the SPEED value displayed in the stat window.
 constexpr float MOB_WALK_SPEED_PER_POINT = 0.9375f;
 constexpr float MOB_FLY_SPEED_PER_POINT = 1.25f;
-constexpr double CLIMB_SPEED_PER_POINT = 125.0;
+constexpr double SPEED_STAT_OFFSET = 20.0;
+constexpr double CLIMB_SPEED_PER_POINT = 1.0;
 constexpr double CHAR_SLOT_SCROLL_SPEED = 125.0;
 
 // A pet's own walk and flight drives, and how fast a damage number leaves for the top of the screen

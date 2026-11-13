@@ -49,7 +49,9 @@ public:
     const FootholdTree &get_fht() const;
 
 private:
-    void move_normal(PhysicsObject &) const;
+    // Integrates normal motion. Stores the mean vertical speed for collision travel and returns
+    // the end-of-step speed, restored after movement unless a vertical collision stopped it.
+    double move_normal(PhysicsObject &) const;
 
     void move_flying(PhysicsObject &) const;
 
