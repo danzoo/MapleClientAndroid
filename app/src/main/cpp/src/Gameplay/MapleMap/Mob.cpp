@@ -15,8 +15,6 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Mob.h"
 
-#include <deque>
-
 #include <imgwz/wz.hpp>
 
 #include "../../Constants.h"
@@ -34,11 +32,6 @@ auto fn_move_mob = []<typename... T>(T && ...args) {
 // How long a mob spends coming in and going out. The time is named in Constants and the step is
 // whatever the updates it takes to spend it work out to.
 constexpr float FADE_STEP = Constants::TIMESTEP / Constants::MOB_FADE_MS;
-
-// The blows of one area attack all land in the same update, so their sounds wait here and are let
-// out one at a time instead of starting together.
-std::deque<Sound> hit_sounds;
-int32_t hit_sound_wait = 0;
 }  // namespace
 
 Mob::Mob(int32_t oi,
@@ -241,7 +234,7 @@ int8_t Mob::update(const Physics &physics) {
                 // flinch up with. Making one here keeps a death the client knows nothing about from
                 // looking like the mob simply vanished.
                 set_stance(Stance::HIT);
-                queue_hit_sound(hit_sound_);
+                hit_sound_.play();
                 hit_played_ = true;
             }
         }
@@ -788,29 +781,6 @@ std::pair<int32_t, bool> Mob::next_damage(double mindamage,
     return std::pair<int32_t, bool>(intdamage, iscritical);
 }
 
-void Mob::queue_hit_sound(const Sound &sound) {
-    if (sound.valid() && hit_sounds.size() < Constants::MOB_HIT_SOUND_MAX) {
-        hit_sounds.push_back(sound);
-    }
-}
-
-void Mob::update_hit_sounds() {
-    if (hit_sound_wait > 0) {
-        hit_sound_wait -= Constants::TIMESTEP;
-    }
-
-    if (hit_sound_wait <= 0 && !hit_sounds.empty()) {
-        hit_sounds.front().play();
-        hit_sounds.pop_front();
-        hit_sound_wait = Constants::MOB_HIT_SOUND_GAP_MS;
-    }
-}
-
-void Mob::clear_hit_sounds() {
-    hit_sounds.clear();
-    hit_sound_wait = 0;
-}
-
 void Mob::apply_damage(int32_t damage, bool toleft) {
     if (death_pending_) {
         // This is the blow the server already reported the death of. It gets the flinch, and the
@@ -820,14 +790,14 @@ void Mob::apply_damage(int32_t damage, bool toleft) {
         if (stance_ != Stance::HIT) {
             flip_ = toleft;
             set_stance(Stance::HIT);
-            queue_hit_sound(hit_sound_);
+            hit_sound_.play();
             hit_played_ = true;
         }
 
         return;
     }
 
-    queue_hit_sound(hit_sound_);
+    hit_sound_.play();
     hit_played_ = true;
 
     if (dying_ && stance_ != Stance::DIE) {

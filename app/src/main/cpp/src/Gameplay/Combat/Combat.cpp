@@ -15,6 +15,9 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Combat.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include "../../Character/SkillId.h"
 #include "../../IO/Messages.h"
 #include "../../Net/Packets/AttackAndSkillPackets.h"
@@ -361,34 +364,63 @@ void Combat::extract_effects(const Char &user,
                                user.is_twohanded(),
                                !result.toleft };
 
+    // The nearest target is struck on the animation's own frame, the farther ones wait in proportion
+    // to how much farther they are, so the blows of one area attack land in turn instead of all at
+    // once. damage_lines is unordered, hence the sort.
+    Point<int16_t> from = user.get_position();
+    std::vector<std::pair<int32_t, float>> ranges;
+
+    for (const auto &[oid, vec] : result.damage_lines) {
+        if (mobs_.contains(oid)) {
+            Point<int16_t> delta = mobs_.get_mob_position(oid) - from;
+            ranges.emplace_back(oid, std::hypot(delta.x(), delta.y()));
+        }
+    }
+
+    std::sort(ranges.begin(), ranges.end(),
+              [](const auto &a, const auto &b) { return a.second < b.second; });
+
+    std::vector<std::pair<int32_t, uint16_t>> order;
+
+    if (!ranges.empty()) {
+        float nearest = ranges.front().second;
+        float span = ranges.back().second - nearest;
+
+        for (const auto &[oid, range] : ranges) {
+            uint16_t wait = span > 0.0f
+                ? static_cast<uint16_t>(Constants::MOB_HIT_SPREAD_MS * (range - nearest) / span)
+                : 0;
+            order.emplace_back(oid, wait);
+        }
+    }
+
     if (result.bullet) {
         Bullet bullet { move.get_bullet(user, result.bullet),
                         user.get_position(),
                         result.toleft,
                         terrain_ };
 
-        for (const auto &[oid, vec] : result.damage_lines) {
-            if (mobs_.contains(oid)) {
-                std::vector<DamageNumber> numbers = place_numbers(oid, vec);
-                Point<int16_t> body = mobs_.get_mob_body_position(oid);
+        for (const auto &[oid, wait] : order) {
+            const auto &vec = result.damage_lines.at(oid);
+            std::vector<DamageNumber> numbers = place_numbers(oid, vec);
+            Point<int16_t> body = mobs_.get_mob_body_position(oid);
 
-                size_t i = 0;
+            size_t i = 0;
 
-                for (auto &number : numbers) {
-                    DamageEffect effect {
-                        attack_user,   number, vec[i].first,
-                        result.toleft, oid,    move.get_id()
-                    };
+            for (auto &number : numbers) {
+                DamageEffect effect {
+                    attack_user,   number, vec[i].first,
+                    result.toleft, oid,    move.get_id()
+                };
 
-                    uint16_t hitdelay = user.get_attackdelay(i);
-                    mobs_.expect_hit(oid, hitdelay);
+                uint16_t hitdelay = user.get_attackdelay(i) + wait;
+                mobs_.expect_hit(oid, hitdelay);
 
-                    bullet_effects_.emplace(hitdelay,
-                                            std::move(effect),
-                                            bullet,
-                                            body);
-                    i++;
-                }
+                bullet_effects_.emplace(hitdelay,
+                                        std::move(effect),
+                                        bullet,
+                                        body);
+                i++;
             }
         }
 
@@ -406,26 +438,25 @@ void Combat::extract_effects(const Char &user,
             }
         }
     } else {
-        for (const auto &[oid, vec] : result.damage_lines) {
-            if (mobs_.contains(oid)) {
-                std::vector<DamageNumber> numbers = place_numbers(oid, vec);
+        for (const auto &[oid, wait] : order) {
+            const auto &vec = result.damage_lines.at(oid);
+            std::vector<DamageNumber> numbers = place_numbers(oid, vec);
 
-                size_t i = 0;
+            size_t i = 0;
 
-                for (auto &number : numbers) {
-                    uint16_t hitdelay = user.get_attackdelay(i);
-                    mobs_.expect_hit(oid, hitdelay);
+            for (auto &number : numbers) {
+                uint16_t hitdelay = user.get_attackdelay(i) + wait;
+                mobs_.expect_hit(oid, hitdelay);
 
-                    damage_effects_.emplace(hitdelay,
-                                            attack_user,
-                                            number,
-                                            vec[i].first,
-                                            result.toleft,
-                                            oid,
-                                            move.get_id());
+                damage_effects_.emplace(hitdelay,
+                                        attack_user,
+                                        number,
+                                        vec[i].first,
+                                        result.toleft,
+                                        oid,
+                                        move.get_id());
 
-                    i++;
-                }
+                i++;
             }
         }
     }
