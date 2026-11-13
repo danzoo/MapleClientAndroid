@@ -127,6 +127,10 @@ private:
     const UISkillBook::SkillDisplayMeta *skill_by_position(
         Point<int16_t> cursorpos) const;
 
+    // The blank art carries the window: everything the skill rows, the scroll strip and the buttons
+    // do not already answer for.
+    bool is_in_drag_range(Point<int16_t> cursorpos) const override;
+
     void close();
 
     bool check_required(int32_t id) const;

@@ -229,6 +229,15 @@ bool UIStatsInfo::is_in_range(Point<int16_t> cursorpos) const {
     return bounds.contains(cursorpos);
 }
 
+// The title strip is twenty pixels of art on a screen that shows it at a few times that size, so it
+// is not where a finger goes. The whole window carries instead, detail panel included: what is left
+// once the buttons that answer to a press are taken out is blank art.
+bool UIStatsInfo::is_in_drag_range(Point<int16_t> cursorpos) const {
+    uint16_t buttonid;
+
+    return !button_at(cursorpos, buttonid) && is_in_range(cursorpos);
+}
+
 UIElement::Type UIStatsInfo::get_type() const {
     return TYPE;
 }

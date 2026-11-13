@@ -17,6 +17,7 @@
 
 #include <imgwz/wz.hpp>
 
+#include "../../Audio/Audio.h"
 #include "../../Character/SkillId.h"
 #include "../../Data/JobData.h"
 #include "../../Data/SkillData.h"
@@ -273,15 +274,19 @@ void UISkillBook::draw(float alpha) const {
             pos = skill_position_r;
         }
 
-        if (i < skills_.size()) {
-            if (check_required(skills_[i].get_id())) {
+        // The list is a window onto skills_ at offset_, the same window the scroll strip, the
+        // spend arrows and the double-click hit test all look through.
+        size_t row = offset_ + i;
+
+        if (row < skills_.size()) {
+            if (check_required(skills_[row].get_id())) {
                 skille_.draw(pos);
             } else {
                 skilld_.draw(pos);
-                skills_[i].get_icon()->set_state(StatefulIcon::State::DISABLED);
+                skills_[row].get_icon()->set_state(StatefulIcon::State::DISABLED);
             }
 
-            skills_[i].draw(pos + SKILL_META_OFFSET_);
+            skills_[row].draw(pos + SKILL_META_OFFSET_);
         } else {
             skillb_.draw(pos);
         }
@@ -463,6 +468,46 @@ void UISkillBook::send_scroll(double yoffset) {
     }
 }
 
+// The title strip is twenty pixels of art on a screen that shows it at a few times that size, so it
+// is not where a finger goes. The blank art carries the window as well: the header above the list,
+// the foot under it, the seams beside the scroll strip and the side panels while they are open. What
+// is not blank answers to a press already - the tabs and the corner buttons are buttons, the strip
+// is the slider, and the rows belong to the skill under them.
+bool UISkillBook::is_in_drag_range(Point<int16_t> cursorpos) const {
+    if (!is_in_range(cursorpos)) {
+        return false;
+    }
+
+    uint16_t buttonid;
+
+    if (button_at(cursorpos, buttonid)) {
+        return false;
+    }
+
+    Point<int16_t> relative = cursorpos - position_;
+
+    if (skill_count_ > ROWS_) {
+        // More skills than the list shows, so a swipe in it has to scroll it: the list and the strip
+        // beside it stay out of the drag range.
+        if (slider_.contains(relative)) {
+            return false;
+        }
+
+        constexpr Rectangle<int16_t> list(SKILL_OFFSET_.x() - 1,
+                                          SKILL_OFFSET_.x() - 1 + 2 * ROW_WIDTH_,
+                                          SKILL_OFFSET_.y(),
+                                          SKILL_OFFSET_.y()
+                                              + ROWS_ / 2 * ROW_HEIGHT_);
+
+        return !list.contains(relative);
+    }
+
+    // Nothing to scroll, so a swipe here has nothing else to mean: the cells the list has no skill
+    // for are blank art and carry the window like the rest of it, while a cell that holds a skill
+    // keeps its tap and its hold.
+    return skill_by_position(relative) == nullptr;
+}
+
 Cursor::State UISkillBook::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     // The base walks buttons_ of its own and so does the tail of this function, so it is only asked
     // where the press cannot reach that tail: mid-carry, and on the title strip. Asking it everywhere
@@ -494,18 +539,25 @@ Cursor::State UISkillBook::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     if (!grabbing_) {
         bool on_skill = false;
 
-        for (size_t i = 0; i < skills_.size(); i++) {
+        for (size_t i = 0; i < ROWS_; i++) {
+            size_t row = offset_ + i;
+
+            if (row >= skills_.size()) {
+                break;
+            }
+
             Point<int16_t> skill_position = skill_position_l;
 
             if (i % 2) {
                 skill_position = skill_position_r;
             }
 
-            constexpr Rectangle<int16_t> bounds =
-                Rectangle<int16_t>(0, 32, 0, 32);
-            bool inrange = bounds.contains(cursorpos - skill_position);
+            Point<int16_t> in_cell = cursorpos - skill_position;
 
-            if (inrange) {
+            constexpr Rectangle<int16_t> icon_bounds =
+                Rectangle<int16_t>(0, 32, 0, 32);
+
+            if (icon_bounds.contains(in_cell)) {
                 on_skill = true;
 
                 if (!clicked) {
@@ -517,7 +569,7 @@ Cursor::State UISkillBook::send_cursor(bool clicked, Point<int16_t> cursorpos) {
                 if (!Window::get().is_hold_press()) {
                     // The middle of the cell that took the tap, so the preview stands on the skill
                     // instead of following the finger around it.
-                    show_skill(skills_[i].get_id(),
+                    show_skill(skills_[row].get_id(),
                                skill_position + Point<int16_t>(16, 16));
 
                     return Cursor::State::IDLE;
@@ -526,16 +578,33 @@ Cursor::State UISkillBook::send_cursor(bool clicked, Point<int16_t> cursorpos) {
                 clear_tooltip();
                 grabbing_ = true;
 
-                int32_t skill_id = skills_[i].get_id();
+                int32_t skill_id = skills_[row].get_id();
                 int32_t skill_level = skillbook_.get_level(skill_id);
 
                 if (skill_level > 0 && !SkillData::get(skill_id).is_passive()) {
-                    skills_[i].get_icon()->start_drag(cursorpos
-                                                      - skill_position);
-                    UI::get().drag_icon(skills_[i].get_icon());
+                    skills_[row].get_icon()->start_drag(cursorpos
+                                                        - skill_position);
+                    UI::get().drag_icon(skills_[row].get_icon());
 
                     return Cursor::State::GRABBING;
                 }
+                return Cursor::State::IDLE;
+            }
+
+            // The rest of the row is the spend arrow's job made big: a press anywhere on the cell
+            // that is not the icon opens the spend-SP window, so the twelve-pixel arrow is no longer
+            // the only way in. A skill that cannot take a point keeps doing nothing here.
+            constexpr Rectangle<int16_t> cell_bounds =
+                Rectangle<int16_t>(0, ROW_WIDTH_ - 3, 0, 35);
+
+            if (clicked && cell_bounds.contains(in_cell)
+                && can_raise(skills_[row].get_id())) {
+                on_skill = true;
+
+                clear_tooltip();
+                Sound(Sound::Name::BUTTON_CLICK).play();
+                send_spup(static_cast<uint16_t>(row));
+
                 return Cursor::State::IDLE;
             }
 

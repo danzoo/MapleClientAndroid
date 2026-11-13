@@ -90,6 +90,10 @@ private:
 
     void set_detail(bool enabled);
 
+    // Every part of the window is a handle to move it by, except the buttons that already answer a
+    // press of their own.
+    bool is_in_drag_range(Point<int16_t> cursorpos) const override;
+
     enum Buttons {
         BT_CLOSE,
         BT_HP,
