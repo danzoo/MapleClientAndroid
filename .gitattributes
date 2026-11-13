@@ -1,7 +1,15 @@
 # 全仓库文本一律 LF（2026-11-09）。本机 core.autocrlf=true 会在检出时把 LF 改回 CRLF，
 # eol=lf 压过它，所以工作区和入库都是 LF，不需要动任何人的 git config。
 # text=auto 让 git 按内容判二进制；下面这些扩展名写死，不靠启发式。
+# 例外：Windows 批处理必须 CRLF，见文件末尾的 *.bat / *.cmd 规则。
 * text=auto eol=lf
+
+# cmd.exe 解析 .bat/.cmd 时按 CRLF 计算文件偏移；只用 LF 会让 goto / call :label
+# 定位错行，典型报错「The system cannot find the batch label specified」，
+# 括号块也可能解析失败。gradlew.bat 里有 11 处 goto / 8 个标签，中招必挂。
+# 入库仍归一化成 LF（text），只是检出到工作区时写 CRLF，不影响别的平台。
+*.bat text eol=crlf
+*.cmd text eol=crlf
 
 *.png binary
 *.ico binary
