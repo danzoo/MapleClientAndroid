@@ -679,12 +679,50 @@ public final class NativeChat {
     private static void style(WindowManager.LayoutParams params, boolean worn) {
         boolean reachable = worn && floating && fade >= 1.0f;
 
-        params.alpha = worn ? fade * sink : 0.0f;
+        // The sink rides on the plate and the chrome, not on the whole window: the lettering keeps
+        // most of its strength (see applySink), so a window out of the way still reads.
+        params.alpha = worn ? fade : 0.0f;
 
         if (reachable) {
             params.flags &= ~WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
         } else {
             params.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+        }
+
+        applySink();
+    }
+
+    /**
+     * The plate and the tabs sink out of the way at the old strength, very see-through; the words
+     * sink only a little with them, so a window the reader is working around still reads at a glance
+     * without being the first thing the eye comes to.
+     */
+    private static void applySink() {
+        final float text = sink + (1.0f - sink) * 0.7f;
+        // The plate goes see-through faster than the chrome: cubed, so a sunk plate is almost not
+        // there while the tabs still hold their old strength, and a raised plate is still solid.
+        final int face = Math.round(sink * sink * sink * 255);
+
+        if (plate != null) {
+            if (plate.getBackground() != null) {
+                plate.getBackground().setAlpha(face);
+            }
+
+            for (int i = 0; i < plate.getChildCount(); i++) {
+                View child = plate.getChildAt(i);
+                child.setAlpha(child == scroller ? text : sink);
+            }
+        }
+
+        if (bar != null) {
+            if (bar.getBackground() != null) {
+                bar.getBackground().setAlpha(face);
+            }
+
+            for (int i = 0; i < bar.getChildCount(); i++) {
+                View child = bar.getChildAt(i);
+                child.setAlpha(child == barLine ? text : sink);
+            }
         }
     }
 

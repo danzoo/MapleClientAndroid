@@ -42,8 +42,10 @@ void Camera::update(Point<int16_t> position) {
 
     // The further the target is ahead - a teleport, or a fall outrunning the follow - the faster the
     // camera closes, so a long jump of the character is caught up in a handful of ticks instead of
-    // drifting after him. Walking keeps the old gentle gain because its delta stays small.
-    const double hgain = 12.0 + std::min(std::abs(hdelta), 600.0) * 0.25;
+    // drifting after him. The boost only starts past a hop's worth of delta: a jump in place must
+    // not bob the camera, and walking keeps the old gentle gain because its delta stays small.
+    const double hgain =
+        12.0 + std::max(0.0, std::min(std::abs(hdelta), 600.0) - 120.0) * 0.25;
 
     if (std::abs(hdelta) >= 5.0) {
         next_x += hdelta * (hgain / VWIDTH);
@@ -52,7 +54,8 @@ void Camera::update(Point<int16_t> position) {
     double next_y = y_.get();
     double vdelta = VHEIGHT / 2 - position.y() + Y_OFFSET - next_y;
 
-    const double vgain = 12.0 + std::min(std::abs(vdelta), 600.0) * 0.25;
+    const double vgain =
+        12.0 + std::max(0.0, std::min(std::abs(vdelta), 600.0) - 120.0) * 0.25;
 
     if (std::abs(vdelta) >= 5.0) {
         next_y += vdelta * (vgain / VHEIGHT);

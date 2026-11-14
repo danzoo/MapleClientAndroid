@@ -137,8 +137,12 @@ void Combat::use_move(int32_t move_id) {
     const SpecialMove *move = &get_move(move_id);
 
     // An attack the character has not the MP for swings instead, so an attack key never dead-presses.
+    // The red line still says why the skill did not go off.
     if (move->is_attack()
         && player_.can_use(*move) == SpecialMove::ForbidReason::FBR_MPCOST) {
+        ForbidSkillMessage(SpecialMove::ForbidReason::FBR_MPCOST,
+                           player_.get_stats().get_weapontype())
+            .drop();
         move = &get_move(0);
     }
 
