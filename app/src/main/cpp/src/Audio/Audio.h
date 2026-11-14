@@ -29,6 +29,7 @@ public:
     enum Name {
         /// UI
         BUTTON_CLICK,
+        TOOLTIP,  // UI.img/BtMouseOver, the hover pop, now played when a preview pops up on a tap
         CHAR_SELECT,
         DLG_NOTICE,
         MENU_DOWN,

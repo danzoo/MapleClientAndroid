@@ -57,6 +57,10 @@ private:
     EquipSlot::Id slot_by_position(Point<int16_t> position) const;
     void change_tab(uint16_t tabid);
 
+    // Every part of the window is a handle to move it by, except the buttons and the slots that have
+    // something worn in them.
+    bool is_in_drag_range(Point<int16_t> cursorpos) const override;
+
     class EquipIcon : public Icon::Type {
     public:
         EquipIcon(int16_t source);

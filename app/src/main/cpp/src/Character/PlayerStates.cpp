@@ -117,8 +117,17 @@ void PlayerWalkState::send_action(Player &player,
             case KeyAction::Id::LEFT: player.set_direction(false); break;
             case KeyAction::Id::RIGHT: player.set_direction(true); break;
             case KeyAction::Id::JUMP:
-                play_jumpsound();
-                player.get_phobj().vforce = -player.get_jumpforce();
+                // Down plus jump drops through a one-way platform. A press that means no drop means
+                // nothing at all, so a platform that cannot be dropped never gets the jump sound.
+                if (player.is_key_down(KeyAction::Id::DOWN)
+                    && player.get_phobj().enablejd) {
+                    play_jumpsound();
+                    player.get_phobj().y = player.get_phobj().groundbelow;
+                    player.set_state(Char::State::FALL);
+                } else if (!player.is_key_down(KeyAction::Id::DOWN)) {
+                    play_jumpsound();
+                    player.get_phobj().vforce = -player.get_jumpforce();
+                }
                 break;
             case KeyAction::Id::DOWN:
                 player.set_state(Char::State::PRONE);

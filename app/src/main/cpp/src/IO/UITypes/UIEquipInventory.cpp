@@ -311,6 +311,26 @@ bool UIEquipInventory::is_in_range(Point<int16_t> cursorpos) const {
     return bounds.contains(cursorpos) || totem_bounds.contains(cursorpos);
 }
 
+// The title strip is twenty pixels of art on a screen that shows it at a few times that size, so it
+// is not where a finger goes. The whole window carries instead, totem panel included, and so do the
+// empty slots: what is left once the buttons and the worn pieces are taken out is blank art. A slot
+// with something in it keeps its tap and its hold.
+bool UIEquipInventory::is_in_drag_range(Point<int16_t> cursorpos) const {
+    if (!is_in_range(cursorpos)) {
+        return false;
+    }
+
+    uint16_t buttonid;
+
+    if (button_at(cursorpos, buttonid)) {
+        return false;
+    }
+
+    EquipSlot::Id slot = slot_by_position(cursorpos);
+
+    return slot == EquipSlot::Id::NONE || !icons_[slot];
+}
+
 bool UIEquipInventory::send_icon(const Icon &icon, Point<int16_t> cursorpos) {
     if (EquipSlot::Id slot = slot_by_position(cursorpos)) {
         icon.drop_on_equips(slot);

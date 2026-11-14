@@ -378,9 +378,18 @@ Button::State UISkillBook::button_pressed(uint16_t id) {
             int32_t sp_before = std::stoi(sp_before_text_);
             int32_t sp_touse = sp_master_level_ - sp_before - used;
 
+            // Never stage more points than the character holds, or the remaining count goes negative.
+            if (sp_touse > cur_sp - used) {
+                sp_touse = cur_sp - used;
+            }
+
+            if (sp_touse <= 0) {
+                return Button::State::DISABLED;
+            }
+
             used += sp_touse;
 
-            sp_after_text_ = std::to_string(sp_master_level_);
+            sp_after_text_ = std::to_string(sp_before + used);
             sp_used_.change_text(std::to_string(used));
             sp_remaining_.change_text(std::to_string(cur_sp - used));
 
@@ -391,6 +400,11 @@ Button::State UISkillBook::button_pressed(uint16_t id) {
         } break;
         case Buttons::BT_SPUP: {
             int32_t used = std::stoi(sp_used_.get_text());
+
+            if (used >= cur_sp) {
+                return Button::State::DISABLED;
+            }
+
             int32_t sp_after = std::stoi(sp_after_text_);
             used++;
             sp_after++;
@@ -401,7 +415,7 @@ Button::State UISkillBook::button_pressed(uint16_t id) {
 
             buttons_[Buttons::BT_SPDOWN]->set_state(Button::State::NORMAL);
 
-            if (sp_after == sp_master_level_) {
+            if (used == cur_sp || sp_after == sp_master_level_) {
                 buttons_[Buttons::BT_SPMAX]->set_state(Button::State::DISABLED);
 
                 return Button::State::DISABLED;
@@ -848,6 +862,12 @@ void UISkillBook::send_spup(uint16_t row) {
         buttons_[Buttons::BT_SPDOWN]->set_state(Button::State::DISABLED);
         buttons_[Buttons::BT_SPMAX]->set_state(Button::State::NORMAL);
         buttons_[Buttons::BT_SPUP]->set_state(Button::State::NORMAL);
+    }
+
+    // The first staged point may already be all the character has.
+    if (used >= cur_sp) {
+        buttons_[Buttons::BT_SPMAX]->set_state(Button::State::DISABLED);
+        buttons_[Buttons::BT_SPUP]->set_state(Button::State::DISABLED);
     }
 
     if (!sp_enabled_) {

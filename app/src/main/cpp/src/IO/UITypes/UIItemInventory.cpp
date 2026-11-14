@@ -753,11 +753,24 @@ bool UIItemInventory::can_wear_equip(int16_t slot) const {
 
     int16_t reqJOB = equipdata.get_reqstat(MapleStat::Id::JOB);
 
-    if (!stats.get_job().is_sub_job(reqJOB)) {
-        UI::get().emplace<UIOk>(
-            "Your current job\\ncannot equip the selected item.",
-            [](bool) {});
-        return false;
+    // reqJob is a bit mask over the five branches - 1 warrior, 2 magician, 4 bowman, 8 thief,
+    // 16 pirate - and 0 means every job. Aran counts as a warrior, same as the reference client.
+    if (reqJOB != 0) {
+        uint16_t branch = stats.get_stat(MapleStat::Id::JOB) / 100;
+        int16_t bit = 0;
+
+        if (branch == 1 || branch >= 20) {
+            bit = 1;
+        } else if (branch >= 2 && branch <= 5) {
+            bit = static_cast<int16_t>(1 << (branch - 1));
+        }
+
+        if ((reqJOB & bit) == 0) {
+            UI::get().emplace<UIOk>(
+                "Your current job\\ncannot equip the selected item.",
+                [](bool) {});
+            return false;
+        }
     }
 
     int16_t reqLevel = equipdata.get_reqstat(MapleStat::Id::LEVEL);

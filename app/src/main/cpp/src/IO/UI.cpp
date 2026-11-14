@@ -467,18 +467,21 @@ namespace ms {
     void UI::show_equip(Tooltip::Parent parent,
                         int16_t slot,
                         Point<int16_t> anchor) {
+        Sound(Sound::Name::TOOLTIP).play();
         state_->show_equip(parent, slot, anchor);
     }
 
     void UI::show_item(Tooltip::Parent parent,
                        int32_t item_id,
                        Point<int16_t> anchor) {
+        Sound(Sound::Name::TOOLTIP).play();
         state_->show_item(parent, item_id, anchor);
     }
 
     void UI::show_goods(Tooltip::Parent parent,
                         int32_t item_id,
                         Point<int16_t> anchor) {
+        Sound(Sound::Name::TOOLTIP).play();
         state_->show_goods(parent, item_id, anchor);
     }
 
@@ -493,6 +496,7 @@ namespace ms {
                         int32_t masterlevel,
                         int64_t expiration,
                         Point<int16_t> anchor) {
+        Sound(Sound::Name::TOOLTIP).play();
         state_->show_skill(parent, skill_id, level, masterlevel, expiration,
                            anchor);
     }

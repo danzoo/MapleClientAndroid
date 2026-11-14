@@ -19,6 +19,7 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <vector>
 
 namespace ms {
 FootholdTree::FootholdTree(const img::node &src) {
@@ -212,6 +213,12 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
                 phobj.limity(borders_.first());
             } else if (next_y > borders_.second()) {
                 phobj.limity(borders_.second());
+
+                // Below the lowest terrain there is nothing left to collide with: every wall span
+                // ends far above, so a body that keeps its speed here slides under the whole map and
+                // comes out past the hill it fell beside - which from the inside looks like walking
+                // through it. Stop it in the pit instead.
+                phobj.hspeed = 0.0;
             }
         }
     }
@@ -308,7 +315,41 @@ bool FootholdTree::swept_ground(double fromx, double fromy, double tox, double t
     const double first = direction > 0 ? std::floor(fromx) + 1.0 : std::ceil(fromx) - 1.0;
     const double last = direction > 0 ? std::floor(tox) : std::ceil(tox);
 
+    std::vector<double> samples;
+
     for (double x = first; direction > 0 ? x <= last : x >= last; x += direction) {
+        samples.push_back(x);
+    }
+
+    samples.push_back(tox);
+
+    // A ledge narrower than the piece is stepped over between two column samples: the surface only
+    // exists inside its own span, so neither the columns beside it nor the piece's end see it, and a
+    // body falling fast enough slips through. Also test where the path enters and leaves every span
+    // it touches.
+    const double lo = std::min(fromx, tox);
+    const double hi = std::max(fromx, tox);
+    const size_t column_count = samples.size();
+
+    for (size_t i = 0; i < column_count; i++) {
+        auto range = footholds_by_x_.equal_range(static_cast<int16_t>(samples[i]));
+
+        for (auto iter = range.first; iter != range.second; ++iter) {
+            const Foothold &fh = footholds_.at(iter->second);
+
+            for (double e : {static_cast<double>(fh.l()), static_cast<double>(fh.r())}) {
+                if (e >= lo && e <= hi) {
+                    samples.push_back(e);
+                }
+            }
+        }
+    }
+
+    std::sort(samples.begin(), samples.end(), [direction](double a, double b) {
+        return direction > 0 ? a < b : a > b;
+    });
+
+    for (double x : samples) {
         const double y = fromy + (toy - fromy) * (x - fromx) / span;
 
         if (meet(x, y)) {
@@ -316,7 +357,7 @@ bool FootholdTree::swept_ground(double fromx, double fromy, double tox, double t
         }
     }
 
-    return meet(tox, toy);
+    return false;
 }
 
 void FootholdTree::update_fh(PhysicsObject &phobj) const {
