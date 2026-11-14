@@ -62,7 +62,7 @@ void request_drop(InventoryType::Id tab,
                   bool cashitem,
                   bool ask_count) {
     if (cashitem) {
-        UI::get().emplace<UIOk>("You can't drop this item.", [](bool) {});
+        UI::get().emplace<UIOk>("该物品无法丢弃。", [](bool) {});
 
         return;
     }
@@ -75,7 +75,7 @@ void request_drop(InventoryType::Id tab,
                 fn_move_item(tab, slot, 0, qty);
             };
 
-            UI::get().emplace<UIEnterNumber>("How many will you drop?",
+            UI::get().emplace<UIEnterNumber>("要丢弃多少个？",
                                              onenter,
                                              count,
                                              count);
@@ -92,8 +92,7 @@ void request_drop(InventoryType::Id tab,
         };
 
         UI::get().emplace<UIYesNo>(
-            "This item can't be taken back once thrown away.\\nWill you still drop "
-            "it?",
+            "该物品丢弃后无法找回。\\n仍要丢弃吗？",
             onok);
     } else {
         throw_out();
@@ -685,6 +684,22 @@ void UIItemInventory::show_item(int16_t slot) {
     const bool untradable = ItemData::get(item_id).is_untradable();
     const bool cashitem = ItemData::get(item_id).is_cashitem();
 
+    if (tab == InventoryType::Id::EQUIP) {
+        // Wearing straight from the preview, the same path a double-tap on the slot takes. It stands
+        // left of the drop control, a thumb's width apart, so the two are not one mistaken press.
+        UI::get().add_tooltip_action("装备", [this, slot] {
+            clear_tooltip();
+
+            if (can_wear_equip(slot)) {
+                fn_equip_item(slot,
+                              inventory_.find_equipslot(
+                                  inventory_.get_item_id(InventoryType::Id::EQUIP,
+                                                         slot)));
+                Sound(Sound::Name::DRAG_END).play();
+            }
+        });
+    }
+
     UI::get().add_tooltip_action("丢掉", [tab, slot, count, untradable, cashitem] {
         request_drop(tab, slot, count, untradable, cashitem, false);
     });
@@ -714,8 +729,7 @@ bool UIItemInventory::can_wear_equip(int16_t slot) const {
     const bool alerted = look.get_alerted();
 
     if (alerted) {
-        UI::get().emplace<UIOk>("You cannot complete this action right "
-                                "now.\\nEvade the attack and try again.",
+        UI::get().emplace<UIOk>("当前无法完成该操作。\\n请先躲避攻击后再试。",
                                 [](bool) {});
         return false;
     }
@@ -767,7 +781,7 @@ bool UIItemInventory::can_wear_equip(int16_t slot) const {
 
         if ((reqJOB & bit) == 0) {
             UI::get().emplace<UIOk>(
-                "Your current job\\ncannot equip the selected item.",
+                "当前职业\\n无法装备该物品。",
                 [](bool) {});
             return false;
         }
@@ -798,8 +812,7 @@ bool UIItemInventory::can_wear_equip(int16_t slot) const {
 
     if (i > 0) {
         UI::get().emplace<UIOk>(
-            "Your stats are too low to equip this item\\nor you do not meet "
-            "the job requirement.",
+            "能力值不足，或不符合\\n职业要求，无法装备。",
             [](bool) {});
         return false;
     }

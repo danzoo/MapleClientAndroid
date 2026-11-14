@@ -170,6 +170,8 @@ public:
     // Whether a rope or ladder can be grabbed right now.
     bool can_climb() const;
 
+    bool is_prone() const;
+
     void set_channel_id(uint8_t ch);
 
     // Obtain a reference to the player's stats.

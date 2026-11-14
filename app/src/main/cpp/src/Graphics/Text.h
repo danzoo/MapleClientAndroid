@@ -131,6 +131,11 @@ public:
 
     int16_t width() const;
 
+    // The ink box of the first laid-out line, relative to the draw position: what a NAMETAG plate
+    // wraps. A neighbour that must keep a fixed gap from that plate measures from here, because a
+    // glyph's side bearings are not part of the advance width() reports.
+    Range<int16_t> ink_bounds() const;
+
     int16_t height() const;
 
     uint16_t advance(size_t pos) const;

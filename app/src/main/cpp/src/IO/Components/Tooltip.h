@@ -40,6 +40,8 @@ public:
     static constexpr int16_t ACTION_HEIGHT = 22;
     static constexpr int16_t ACTION_INSET = 8;
     static constexpr int16_t ACTION_GAP = 4;
+    // Controls sit in a row, so the gap between them is thumb room rather than line spacing.
+    static constexpr int16_t ACTION_ROW_GAP = 8;
 
     // How far the control's word is set below the middle of its plate. Centering the ink box leaves
     // the lettering reading high on the button's face, whose own highlight sits along the top.

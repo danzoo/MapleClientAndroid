@@ -79,6 +79,14 @@ UINotice::UINotice(const std::string &message,
 UINotice::UINotice(std::string message, NoticeType t) :
     UINotice(std::move(message), t, Text::Alignment::CENTER) {}
 
+bool UINotice::is_in_drag_range(Point<int16_t> cursorpos) const {
+    uint16_t buttonid;
+
+    return !button_at(cursorpos, buttonid) && !in_control_range(cursorpos)
+           && Rectangle<int16_t>(position_, position_ + dimension_)
+                  .contains(cursorpos);
+}
+
 void UINotice::draw(bool textfield) const {
     Point<int16_t> start = position_;
 
@@ -239,6 +247,16 @@ void UIEnterNumber::update() {
 
 Cursor::State UIEnterNumber::send_cursor(bool clicked,
                                          Point<int16_t> cursorpos) {
+    // The blank plate carries the window like every other dialog; the field and the buttons keep
+    // their own presses.
+    if (dragged_ || is_in_drag_range(cursorpos)) {
+        Cursor::State dstate = UIDragElement::send_cursor(clicked, cursorpos);
+
+        if (dragged_) {
+            return dstate;
+        }
+    }
+
     if (numfield.get_state() == Textfield::State::NORMAL) {
         Cursor::State nstate = numfield.send_cursor(cursorpos, clicked);
 
@@ -272,6 +290,13 @@ Button::State UIEnterNumber::button_pressed(uint16_t buttonid) {
     return Button::State::NORMAL;
 }
 
+bool UIEnterNumber::in_control_range(Point<int16_t> cursorpos) const {
+    Rectangle<int16_t> field = numfield.get_bounds();
+    field.shift(position_);
+
+    return field.contains(cursorpos);
+}
+
 void UIEnterNumber::handlestring(const std::string &numstr) {
     int num = -1;
     bool has_only_digits =
@@ -284,7 +309,7 @@ void UIEnterNumber::handlestring(const std::string &numstr) {
 
     if (!has_only_digits) {
         numfield.set_state(Textfield::State::DISABLED);
-        UI::get().emplace<UIOk>("Only numbers are allowed.", okhandler);
+        UI::get().emplace<UIOk>("只能输入数字。", okhandler);
         return;
     }
     num = std::stoi(numstr);
@@ -292,15 +317,15 @@ void UIEnterNumber::handlestring(const std::string &numstr) {
     if (num < 1) {
         numfield.set_state(Textfield::State::DISABLED);
         UI::get().emplace<UIOk>(
-            "You may only enter a number equal to or higher than 1.",
+            "只能输入大于或等于 1 的数字。",
             okhandler);
         return;
     }
     if (num > max) {
         numfield.set_state(Textfield::State::DISABLED);
         UI::get().emplace<UIOk>(
-            "You may only enter a number equal to or lower than "
-                + std::to_string(max) + ".",
+            "只能输入小于或等于 "
+                + std::to_string(max) + " 的数字。",
             okhandler);
         return;
     }

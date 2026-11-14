@@ -425,8 +425,10 @@ void FootholdTree::update_fh(PhysicsObject &phobj) const {
         uint16_t belowid = get_fhid_below(x, nextfh.ground_below(x) + 1.0);
 
         if (belowid > 0) {
-            double nextground = get_fh(belowid).ground_below(x);
-            phobj.enablejd = (nextground - ground) < 600.0;
+            // How far the next platform down lies says nothing about whether the drop is allowed:
+            // a leap off a high ledge is still a leap, and the fall itself lands or re-enters the
+            // map. Only a column with nothing below it - the map's own floor - refuses the drop.
+            phobj.enablejd = true;
             phobj.groundbelow = ground + 1.0;
         } else {
             phobj.enablejd = false;

@@ -37,6 +37,9 @@ namespace ms {
         constexpr Point<int16_t> kTrayOrigin(26, 307);
         constexpr int16_t kTrayColumns = 17;
         constexpr int16_t kTrayPitch = 36;
+        // The faces own the first row by themselves; everything else starts at the second row's
+        // first cell and packs left to right from there.
+        constexpr size_t kTrayFaces = 7;
 
     }  // namespace
 
@@ -251,7 +254,7 @@ namespace ms {
                 break;
             case Buttons::DEFAULT: {
                 const std::string message =
-                        "Would you like to revert to default settings?";
+                        "要恢复默认设置吗？";
 
                 auto onok = [&](bool ok) {
                     if (!ok) {
@@ -271,7 +274,7 @@ namespace ms {
             }
             case Buttons::DELETE: {
                 const std::string message =
-                        "Would you like to clear all key bindings?";
+                        "要清空所有按键绑定吗？";
 
                 auto onok = [&](bool ok) {
                     if (!ok) {
@@ -310,7 +313,7 @@ namespace ms {
             return;
         }
 
-        const std::string message = "Do you want to save your changes?";
+        const std::string message = "要保存修改吗？";
 
         auto onok = [&](bool ok) {
             if (ok) {
@@ -463,9 +466,13 @@ namespace ms {
     }
 
     Point<int16_t> UIGamepadConfig::tray_position(size_t index) const {
+        const size_t cell = index < kTrayFaces
+                                ? index
+                                : kTrayColumns + (index - kTrayFaces);
+
         return kTrayOrigin
-               + Point<int16_t>(kTrayPitch * static_cast<int16_t>(index % kTrayColumns),
-                                kTrayPitch * static_cast<int16_t>(index / kTrayColumns));
+               + Point<int16_t>(kTrayPitch * static_cast<int16_t>(cell % kTrayColumns),
+                                kTrayPitch * static_cast<int16_t>(cell / kTrayColumns));
     }
 
     GamepadConfig::Slot UIGamepadConfig::slot_by_position(

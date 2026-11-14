@@ -160,6 +160,8 @@ namespace ms {
                 return {KeyType::Id::ACTION, Action::ATTACK};
             case Slot::Y:
                 return {KeyType::Id::ACTION, Action::PICKUP};
+            case Slot::SELECT:
+                return {KeyType::Id::MENU, Action::MAIN_MENU};
             default:
                 return {};
         }

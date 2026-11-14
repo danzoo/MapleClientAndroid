@@ -338,11 +338,11 @@ Button::State UIStatsInfo::button_pressed(uint16_t id) {
                 case EquipStat::Id::LUK: autoluk = nowap; break;
             }
 
-            std::string message = "Your AP will be distributed as follows:\\r"
-                                  "\\nSTR : +"
-                                  + std::to_string(autostr) + "\\nDEX : +"
-                                  + std::to_string(autodex) + "\\nINT : +"
-                                  + std::to_string(autoint) + "\\nLUK : +"
+            std::string message = "AP 将按如下分配：\\r"
+                                  "\\n力量 : +"
+                                  + std::to_string(autostr) + "\\n敏捷 : +"
+                                  + std::to_string(autodex) + "\\n智力 : +"
+                                  + std::to_string(autoint) + "\\n运气 : +"
                                   + std::to_string(autoluk) + "\\r\\n";
 
             std::function<void(bool)> yesnohandler =
@@ -382,7 +382,7 @@ Button::State UIStatsInfo::button_pressed(uint16_t id) {
         case Buttons::BT_HYPER_STAT_CLOSE: {
             if (player.get_level() < 140) {
                 UI::get().emplace<UIOk>(
-                    "You can use the Hyper Stat at Lv. 140 and above.",
+                    "超级属性需 140 级及以上才能使用。",
                     [](bool) {});
             }
         } break;

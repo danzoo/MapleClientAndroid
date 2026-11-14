@@ -15,6 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Camera.h"
 
+#include <algorithm>
+
 #include "../Constants.h"
 
 namespace ms {
@@ -38,15 +40,22 @@ void Camera::update(Point<int16_t> position) {
     double next_x = x_.get();
     double hdelta = VWIDTH / 2 - position.x() - next_x;
 
+    // The further the target is ahead - a teleport, or a fall outrunning the follow - the faster the
+    // camera closes, so a long jump of the character is caught up in a handful of ticks instead of
+    // drifting after him. Walking keeps the old gentle gain because its delta stays small.
+    const double hgain = 12.0 + std::min(std::abs(hdelta), 600.0) * 0.25;
+
     if (std::abs(hdelta) >= 5.0) {
-        next_x += hdelta * (12.0 / VWIDTH);
+        next_x += hdelta * (hgain / VWIDTH);
     }
 
     double next_y = y_.get();
     double vdelta = VHEIGHT / 2 - position.y() + Y_OFFSET - next_y;
 
+    const double vgain = 12.0 + std::min(std::abs(vdelta), 600.0) * 0.25;
+
     if (std::abs(vdelta) >= 5.0) {
-        next_y += vdelta * (12.0 / VHEIGHT);
+        next_y += vdelta * (vgain / VHEIGHT);
     }
 
     // A map whose viewport range is smaller than the view can never fill it. Upstream parks it

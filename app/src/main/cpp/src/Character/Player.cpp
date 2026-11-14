@@ -351,10 +351,17 @@ MobAttackResult Player::damage(const MobAttack &attack) {
     bool fromleft = attack.origin.x() > phobj_.get_x();
 
     bool missed = damage <= 0;
-    bool immovable = ladder_ || state_ == Char::State::DIED;
+    bool immovable = state_ == Char::State::DIED;
     bool knockback = !missed && !immovable;
 
     if (knockback && randomizer_.above(stats_.get_stance())) {
+        if (ladder_) {
+            // A blow on a rope knocks the character off it instead of hurting him in place. The
+            // grab cooldown keeps a held up from catching the same rope again on the next frame.
+            set_state(Char::State::FALL);
+            set_ladder({});
+            set_climb_cooldown();
+        }
         // The hop is the two figures in Constants - how high, how far back - and its speeds are worked
         // out from them against the gravity this map is using: the lift is whatever speed comes back
         // down to that height, the airtime is twice that speed over gravity, and the sideways speed is
@@ -490,6 +497,10 @@ void Player::set_climb_cooldown() {
 
 bool Player::can_climb() const {
     return !climb_cooldown_;
+}
+
+bool Player::is_prone() const {
+    return state_ == Char::State::PRONE;
 }
 
 float Player::get_walkforce() const {

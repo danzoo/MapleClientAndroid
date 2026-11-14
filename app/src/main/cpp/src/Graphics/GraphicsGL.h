@@ -93,6 +93,16 @@ namespace ms {
                                                const Text::Layout &layout,
                                                Text::Font id);
 
+        // Horizontal extent of the real glyph ink of one laid-out line, in the coordinates the line
+        // is drawn in. A NAMETAG plate wraps exactly this plus its padding, so a neighbour that has
+        // to keep a fixed gap from the plate measures from here - a glyph's side bearings are not
+        // part of its advance, which is what makes advance-width gaps come out uneven.
+        Range<int16_t> ink_horizontal(const std::vector<uint32_t> &text,
+                                      const Text::Layout &layout,
+                                      const Text::Layout::Line &line,
+                                      Text::Font id,
+                                      int16_t x);
+
         // Draw a rectangle filled with the specified color.
         void draw_rectangle(int16_t x,
                             int16_t y,

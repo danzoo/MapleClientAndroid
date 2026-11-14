@@ -696,7 +696,7 @@ void UIShop::BuyState::buy() const {
     int32_t itemid = item.get_id();
 
     if (buyable > 1) {
-        const std::string question = "How many are you willing to buy?";
+        const std::string question = "要购买多少个？";
 
         auto onenter = [slot, itemid](int32_t qty) {
             auto shortqty = static_cast<int16_t>(qty);
@@ -706,7 +706,7 @@ void UIShop::BuyState::buy() const {
 
         UI::get().emplace<UIEnterNumber>(question, onenter, buyable, 1);
     } else if (buyable > 0) {
-        const std::string question = "Are you sure you want to buy it?";
+        const std::string question = "确定要购买吗？";
 
         auto ondecide = [slot, itemid](bool yes) {
             if (yes) {
@@ -816,7 +816,7 @@ void UIShop::SellState::sell(bool skip_confirmation) const {
     }
 
     if (sellable > 0) {
-        const std::string question = "Are you sure you want to sell it?";
+        const std::string question = "确定要出售吗？";
 
         auto ondecide = [itemid, slot](bool yes) {
             if (yes) {

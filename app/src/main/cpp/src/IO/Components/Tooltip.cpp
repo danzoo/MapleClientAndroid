@@ -73,7 +73,8 @@ namespace ms {
             return 0;
         }
 
-        return count * ACTION_HEIGHT + (count - 1) * ACTION_GAP + ACTION_INSET;
+        // The controls stand in one row, so the foot room is a single control's height.
+        return ACTION_HEIGHT + ACTION_INSET;
     }
 
     void Tooltip::build_actions(NativeTooltip::List &list,
@@ -91,17 +92,18 @@ namespace ms {
         const Point<int16_t> size(action_plate_.get_dimensions().x(),
                                   ACTION_HEIGHT);
 
-        // The column stands in the near corner of the foot room, held off both edges it shares with
-        // the border art by the same margin the lettering is held back by, so the frame stays visible
-        // all the way round it. Stacked rather than set in a row: a row would have to be measured
-        // against a width the panel does not know yet when it works out how much room to reserve.
-        // The first control added is the topmost, so a preview carrying one stands exactly where it
-        // stood when one was all there was.
-        int16_t y = interior.bottom() - actions_height();
+        // The row stands in the near corner of the foot room, held off both edges it shares with the
+        // border art by the same margin the lettering is held back by, so the frame stays visible all
+        // the way round it. The controls sit side by side with thumb room between them, right-aligned
+        // so the last one added stands exactly where a lone control stood.
+        const int16_t count = static_cast<int16_t>(actions_.size());
+        const int16_t row_width =
+            count * size.x() + (count - 1) * ACTION_ROW_GAP;
+        int16_t x = interior.right() - ACTION_INSET - row_width;
+        const int16_t y = interior.bottom() - actions_height();
 
         for (Action &action : actions_) {
-            const Point<int16_t> top_left(interior.right() - ACTION_INSET - size.x(),
-                                          y);
+            const Point<int16_t> top_left(x, y);
 
             action.rect = Rectangle<int16_t>(top_left, top_left + size);
 
@@ -135,7 +137,7 @@ namespace ms {
                               - ink.top
                               + ACTION_LABEL_DROP));
 
-            y += ACTION_HEIGHT + ACTION_GAP;
+            x += size.x() + ACTION_ROW_GAP;
         }
     }
 

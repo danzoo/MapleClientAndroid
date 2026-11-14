@@ -80,8 +80,8 @@ public:
     // 0 - no control, 1 - control, 2 - aggro
     void set_control(int8_t mode);
 
-    // Note whether the server still has this mob on the player's tail. One that is not chasing
-    // keeps to the platform it is standing on, one that is chasing follows the player off it.
+    // Note whether the server still has this mob on the player's tail. Chasing only leans the
+    // direction picked at the next wander roll; it does not change which platform the mob can leave.
     void set_aggro(bool aggro);
 
     // Send movement to the mob.
@@ -221,14 +221,12 @@ private:
     bool can_move_;
     bool can_jump_;
     bool can_fly_;
-    // Read off the mob's own archive, not off what is happening to it: whether the end of the
-    // foothold it is standing on is something it walks over.
-    bool cross_edge_;
     bool can_hit_;
     bool is_boss_;
 
     EffectLayer effects_;
     Text name_label_;
+    Text level_label_;
     MobHpBar hp_bar_;
     Randomizer randomizer_;
 

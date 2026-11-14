@@ -172,6 +172,20 @@ int16_t Text::width() const {
     return layout_.width();
 }
 
+Range<int16_t> Text::ink_bounds() const {
+    auto line = layout_.begin();
+
+    if (line == layout_.end()) {
+        return Range<int16_t>(0, layout_.width());
+    }
+
+    return GraphicsGL::get().ink_horizontal(text_as_values_,
+                                            layout_,
+                                            *line,
+                                            font_,
+                                            0);
+}
+
 int16_t Text::height() const {
     return layout_.height();
 }

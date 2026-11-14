@@ -134,12 +134,25 @@ void Combat::use_move(int32_t move_id) {
         return;
     }
 
-    const SpecialMove &move = get_move(move_id);
-    SpecialMove::ForbidReason reason = player_.can_use(move);
+    const SpecialMove *move = &get_move(move_id);
+
+    // An attack the character has not the MP for swings instead, so an attack key never dead-presses.
+    if (move->is_attack()
+        && player_.can_use(*move) == SpecialMove::ForbidReason::FBR_MPCOST) {
+        move = &get_move(0);
+    }
+
+    // Prone carries no skill swing either; the same key still means an attack, so it degenerates to
+    // the basic one instead of being refused.
+    if (move->is_attack() && move->is_skill() && player_.is_prone()) {
+        move = &get_move(0);
+    }
+
+    SpecialMove::ForbidReason reason = player_.can_use(*move);
     Weapon::Type weapontype = player_.get_stats().get_weapontype();
 
     if (reason == SpecialMove::ForbidReason::FBR_NONE) {
-        apply_move(move);
+        apply_move(*move);
     } else {
         ForbidSkillMessage(reason, weapontype).drop();
     }

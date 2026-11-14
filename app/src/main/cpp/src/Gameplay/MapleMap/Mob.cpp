@@ -77,10 +77,6 @@ Mob::Mob(int32_t oi,
     can_fly_ = art["fly"].size() > 0;
     can_hit_ = art["hit1"].size() > 0;
     can_move_ = art["move"].size() > 0 || can_fly_;
-    // Absent from the archive means the mob is held to the platform it was placed on, which is what
-    // every mob in the shipped set wants. A mob that is to be allowed off its own edge is given
-    // `crossEdge = 1` under `info` in its own Mob/<id>.img.
-    cross_edge_ = info["crossEdge"].get_bool();
 
     if (can_fly_) {
         animations_[Stance::STAND] = art["fly"];
@@ -133,11 +129,10 @@ Mob::Mob(int32_t oi,
     set_control(mode);
     phobj_.fhid = fh;
 
-    if (!cross_edge_) {
-        // The one thing that holds a walking mob to the foothold under it. Left unarmed it walks over
-        // the end and is handed to whatever is below.
-        phobj_.set_flag(PhysicsObject::Flag::TURN_AT_EDGES);
-    }
+    // The one thing that holds a walking mob to the foothold under it. Left unarmed it walks over
+    // the end and is handed to whatever is below. A mob with a jump animation can still leave by
+    // hopping: once it is airborne there is no foothold under it to clamp it to.
+    phobj_.set_flag(PhysicsObject::Flag::TURN_AT_EDGES);
 
     hp_percent_ = 0;
     dying_ = false;
@@ -156,6 +151,12 @@ Mob::Mob(int32_t oi,
                        Color::Name::WHITE,
                        Text::Background::NAMETAG,
                        name_);
+
+    level_label_ = Text(Text::Font::A11M,
+                        Text::Alignment::CENTER,
+                        Color::Name::WHITE,
+                        Text::Background::NAMETAG,
+                        "Lv." + std::to_string(level_));
 
     if (newspawn) {
         fade_in_ = true;
@@ -273,7 +274,7 @@ int8_t Mob::update(const Physics &physics) {
     }
 
     if (!dying_) {
-        if (!can_fly_ && !cross_edge_
+        if (!can_fly_
             && phobj_.is_flag_not_set(PhysicsObject::Flag::TURN_AT_EDGES)) {
             // The flag is found down either because the physics layer stopped this mob at the end of
             // its foothold, or because the wander clamp below predicted it walking past one. Either
@@ -354,9 +355,11 @@ int8_t Mob::update(const Physics &physics) {
 
         // A mob that is held to its platform stays on it. Off the end of one the foothold lookup
         // hands the mob to whatever is below, so without this a slow walk to the edge becomes a drop
-        // it cannot climb back out of. Whether a mob is held is its archive's decision, not
-        // something the player's position gets to change; walls stop it either way.
-        if (!cross_edge_ && !can_fly_ && !can_jump_ && phobj_.onground && phobj_.fhid) {
+        // it cannot climb back out of. Only a mob that can neither jump nor fly is held: a jumper
+        // can leave its platform with a hop and hop back, a flyer is never on a foothold to begin
+        // with. Which of the two it is comes from the mob's own animations, not from the player's
+        // position; walls stop either kind regardless.
+        if (!can_fly_ && !can_jump_ && phobj_.onground && phobj_.fhid) {
             const Physics::Platform platform = physics.get_platform(phobj_.fhid);
             const double edgeleft =
                 platform.left + Constants::PLATFORM_EDGE_MARGIN;
@@ -551,6 +554,19 @@ void Mob::draw(double viewx, double viewy, float alpha) const {
         if (show_hp_) {
             name_label_.draw(absp);
 
+            // The level badge keeps a fixed two pixel gap from the name tag's plate. The plates wrap
+            // each text's ink plus two pixels of padding and a one pixel ear per side, and the ink
+            // is not the advance box width() reports, so the gap is measured between inks - an
+            // advance-width offset leaves a different gap for every name's first glyph.
+            constexpr int16_t PLATE_EDGE = 3;
+            constexpr int16_t GAP = 2;
+            const Range<int16_t> name_ink = name_label_.ink_bounds();
+            const Range<int16_t> level_ink = level_label_.ink_bounds();
+            const int16_t shift =
+                PLATE_EDGE + GAP + PLATE_EDGE + level_ink.second() - name_ink.first();
+
+            level_label_.draw(absp - Point<int16_t>(shift, 0));
+
             // The bar stays up while the death is still waiting for the blow that caused it.
             if ((!dying_ || death_pending_) && hp_percent_ > 0) {
                 hp_bar_.draw(headpos, hp_percent_);
@@ -637,8 +653,10 @@ void Mob::show_hp(int8_t percent, uint16_t playerlevel) {
 
         if (delta > 9) {
             name_label_.change_color(Color::Name::YELLOW);
+            level_label_.change_color(Color::Name::YELLOW);
         } else if (delta < -9) {
             name_label_.change_color(Color::Name::RED);
+            level_label_.change_color(Color::Name::RED);
         }
     }
 

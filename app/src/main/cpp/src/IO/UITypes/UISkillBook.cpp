@@ -695,34 +695,11 @@ void UISkillBook::change_job(uint16_t id) {
 }
 
 void UISkillBook::change_sp() {
-    Job::Level joblevel = joblevel_by_tab(tab_);
-    uint16_t level = stats_.get_stat(MapleStat::Id::LEVEL);
-
-    if (joblevel == Job::Level::BEGINNER) {
-        int16_t remaining_beginner_sp = 0;
-
-        if (level >= 7) {
-            remaining_beginner_sp = 6;
-        } else {
-            remaining_beginner_sp = level - 1;
-        }
-
-        for (size_t i = 0; i < skills_.size(); i++) {
-            int32_t skillid = skills_[i].get_id();
-
-            if (skillid == SkillId::Id::THREE_SNAILS
-                || skillid == SkillId::Id::HEAL
-                || skillid == SkillId::Id::FEATHER) {
-                remaining_beginner_sp -= skills_[i].get_level();
-            }
-        }
-
-        beginner_sp_ = remaining_beginner_sp;
-        sp_label_.change_text(std::to_string(beginner_sp_));
-    } else {
-        sp_ = stats_.get_stat(MapleStat::Id::SP);
-        sp_label_.change_text(std::to_string(sp_));
-    }
+    // The pool is the server's, beginner book included: it reconciles what each level earned, so the
+    // window shows what is left instead of re-deriving it from the level with a cap of its own.
+    sp_ = stats_.get_stat(MapleStat::Id::SP);
+    beginner_sp_ = sp_;
+    sp_label_.change_text(std::to_string(sp_));
 
     change_offset(offset_);
     set_skillpoint(false);

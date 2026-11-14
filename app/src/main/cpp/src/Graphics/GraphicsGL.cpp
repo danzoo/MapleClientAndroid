@@ -1425,6 +1425,46 @@ namespace ms {
         return ink;
     }
 
+    Range<int16_t> GraphicsGL::ink_horizontal(const std::vector<uint32_t> &text,
+                                              const Text::Layout &layout,
+                                              const Text::Layout::Line &line,
+                                              Text::Font id,
+                                              int16_t x) {
+        int16_t ink_left = 0;
+        int16_t ink_right = 0;
+        bool found = false;
+
+        for (const Text::Layout::Word &word: line.words) {
+            for (size_t pos = word.first; pos < word.last; ++pos) {
+                const Glyph &ch = get_glyph(text[pos], id);
+
+                if (ch.bw <= 0 || ch.bh <= 0) {
+                    continue;
+                }
+
+                const int16_t glyph_left =
+                    x + line.position.x() + layout.advance(pos) + ch.bl;
+                const int16_t glyph_right = glyph_left + ch.bw;
+
+                if (found) {
+                    ink_left = std::min(ink_left, glyph_left);
+                    ink_right = std::max(ink_right, glyph_right);
+                } else {
+                    ink_left = glyph_left;
+                    ink_right = glyph_right;
+                    found = true;
+                }
+            }
+        }
+
+        if (!found) {
+            ink_left = x + line.position.x();
+            ink_right = ink_left + layout.width();
+        }
+
+        return Range<int16_t>(ink_left, ink_right);
+    }
+
     void GraphicsGL::draw_text(const DrawArgument &args,
                                const Range<int16_t> &vertical,
                                const std::vector<uint32_t> &text,
@@ -1503,40 +1543,10 @@ namespace ms {
                 }
 
                 for (const Text::Layout::Line &line: layout) {
-                    int16_t ink_left = 0;
-                    int16_t ink_right = 0;
-                    bool found = false;
+                    const Range<int16_t> ink = ink_horizontal(text, layout, line, id, x);
 
-                    for (const Text::Layout::Word &word: line.words) {
-                        for (size_t pos = word.first; pos < word.last; ++pos) {
-                            const Glyph &ch = get_glyph(text[pos], id);
-
-                            if (ch.bw <= 0 || ch.bh <= 0) {
-                                continue;
-                            }
-
-                            const int16_t glyph_left = x + line.position.x()
-                                                       + layout.advance(pos) + ch.bl;
-                            const int16_t glyph_right = glyph_left + ch.bw;
-
-                            if (found) {
-                                ink_left = std::min(ink_left, glyph_left);
-                                ink_right = std::max(ink_right, glyph_right);
-                            } else {
-                                ink_left = glyph_left;
-                                ink_right = glyph_right;
-                                found = true;
-                            }
-                        }
-                    }
-
-                    if (!found) {
-                        ink_left = x + line.position.x();
-                        ink_right = ink_left + w;
-                    }
-
-                    GLshort left = ink_left - NAMETAG_PAD;
-                    GLshort right = ink_right + NAMETAG_PAD;
+                    GLshort left = ink.first() - NAMETAG_PAD;
+                    GLshort right = ink.second() + NAMETAG_PAD;
                     Color ntcolor = Color(0.0f, 0.0f, 0.0f, 0.6f);
 
                     // The plate rides with the ink it is behind, so it is submitted in the same

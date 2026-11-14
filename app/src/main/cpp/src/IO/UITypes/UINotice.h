@@ -34,11 +34,21 @@ protected:
 
     UINotice(std::string message, NoticeType type);
 
+    // The whole dialog carries, not just its title band: what is left once the buttons and any
+    // input field are taken out is blank plate.
+    bool is_in_drag_range(Point<int16_t> cursorpos) const override;
+
     void draw(bool textfield) const;
 
     int16_t band_height() const;
 
     int16_t box2offset(bool textfield) const;
+
+protected:
+    // A subclass control that answers a press of its own and so must not be dragged over.
+    virtual bool in_control_range(Point<int16_t> cursorpos) const {
+        return false;
+    }
 
 private:
     Texture top_;
@@ -96,6 +106,8 @@ public:
 
 protected:
     Button::State button_pressed(uint16_t buttonid) override;
+
+    bool in_control_range(Point<int16_t> cursorpos) const override;
 
 private:
     void handlestring(const std::string &numstr);

@@ -1029,7 +1029,7 @@ namespace ms {
                 break;
             case Buttons::DEFAULT: {
                 const std::string message =
-                        "Would you like to revert to default settings?";
+                        "要恢复默认设置吗？";
 
                 auto onok = [&](bool ok) {
                     if (ok) {
@@ -1044,7 +1044,7 @@ namespace ms {
             }
             case Buttons::DELETE: {
                 const std::string message =
-                        "Would you like to clear all key bindings?";
+                        "要清空所有按键绑定吗？";
 
                 auto onok = [&](bool ok) {
                     if (ok) {
@@ -1200,7 +1200,7 @@ namespace ms {
 
     void UIKeyConfig::safe_close() {
         if (dirty_) {
-            const std::string message = "Do you want to save your changes?";
+            const std::string message = "要保存修改吗？";
 
             auto onok = [&](bool ok) {
                 if (ok) {
