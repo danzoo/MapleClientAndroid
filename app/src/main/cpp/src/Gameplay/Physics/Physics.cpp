@@ -272,6 +272,23 @@ double Physics::move_normal(PhysicsObject &phobj) const {
     }
 
     const bool airborne = !phobj.onground || start_vspeed < 0.0;
+
+    // Airborne input that opposes the carried motion is the original's only
+    // measured air steering effect (5.10: 6 px per 30 ms tick toward zero).
+    // Holding the SAME direction has no effect - samples at the walk cap stay
+    // there - so this does not touch ordinary jump-move. The decel is clamped
+    // at zero, never reversing the body in mid-air.
+    if (airborne && phobj.hforce != 0.0 && phobj.hspeed != 0.0) {
+        const double steer = phobj.hforce > 0.0 ? 1.0 : -1.0;
+        const double motion = phobj.hspeed > 0.0 ? 1.0 : -1.0;
+
+        if (steer != motion) {
+            const double slowed = phobj.hspeed
+                - motion * Constants::ORIGINAL_AIR_OPPOSING_DRAG * dt;
+            phobj.hspeed = slowed * motion < 0.0 ? 0.0 : slowed;
+        }
+    }
+
     if (airborne && phobj.is_flag_not_set(PhysicsObject::Flag::NO_GRAVITY)) {
         phobj.vacc = PhysicsParams::gravity();
     }
