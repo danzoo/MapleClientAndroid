@@ -15,7 +15,26 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "PlayerStates.h"
 
+#include "../Gameplay/Physics/PhysicsParams.h"
+
 namespace ms {
+namespace {
+// Current steering sign, using the same key state the ground integrator reads.
+double steer_dir(const Player &player) {
+    return (player.is_key_down(KeyAction::Id::RIGHT) ? 1.0 : 0.0)
+         - (player.is_key_down(KeyAction::Id::LEFT) ? 1.0 : 0.0);
+}
+
+// Every jump impulse starts a new airborne episode. Remember the steering
+// sign it launched with so a different steer pressed in the air can be
+// isolated at touchdown.
+void arm_jump(Player &player) {
+    player.get_phobj().jump_input_dir = steer_dir(player);
+    player.get_phobj().air_direction_changed = false;
+    player.get_phobj().vforce = -player.get_jumpforce();
+}
+}  // namespace
+
 // Base class
 void PlayerState::play_jumpsound() const {
     Sound(Sound::JUMP).play();
@@ -55,7 +74,9 @@ void PlayerNullState::update_state(Player &player) const {
 
 // Standing
 void PlayerStandState::initialize(Player &player) const {
-    player.get_phobj().type = PhysicsObject::Type::NORMAL;
+    player.get_phobj().type = player.is_floating()
+                                  ? PhysicsObject::Type::FLOATING
+                                  : PhysicsObject::Type::NORMAL;
 }
 
 void PlayerStandState::send_action(Player &player,
@@ -77,7 +98,7 @@ void PlayerStandState::send_action(Player &player,
                 break;
             case KeyAction::Id::JUMP:
                 play_jumpsound();
-                player.get_phobj().vforce = -player.get_jumpforce();
+                arm_jump(player);
                 break;
             case KeyAction::Id::DOWN:
                 player.set_state(Char::State::PRONE);
@@ -102,7 +123,9 @@ void PlayerStandState::update_state(Player &player) const {
 
 // Walking
 void PlayerWalkState::initialize(Player &player) const {
-    player.get_phobj().type = PhysicsObject::Type::NORMAL;
+    player.get_phobj().type = player.is_floating()
+                                  ? PhysicsObject::Type::FLOATING
+                                  : PhysicsObject::Type::NORMAL;
 }
 
 void PlayerWalkState::send_action(Player &player,
@@ -126,7 +149,7 @@ void PlayerWalkState::send_action(Player &player,
                     player.set_state(Char::State::FALL);
                 } else if (!player.is_key_down(KeyAction::Id::DOWN)) {
                     play_jumpsound();
-                    player.get_phobj().vforce = -player.get_jumpforce();
+                    arm_jump(player);
                 }
                 break;
             case KeyAction::Id::DOWN:
@@ -166,16 +189,33 @@ void PlayerWalkState::update_state(Player &player) const {
 
 // Falling
 void PlayerFallState::initialize(Player &player) const {
-    player.get_phobj().type = PhysicsObject::Type::NORMAL;
+    player.get_phobj().type = player.is_floating()
+                                  ? PhysicsObject::Type::FLOATING
+                                  : PhysicsObject::Type::NORMAL;
 }
 
 void PlayerFallState::send_action(Player &player,
                                   KeyAction::Id ka,
                                   bool down) const {
     if (down) {
+        // Compare the key being PRESSED with the direction that launched this
+        // jump - do not add it to the already-held key state. A gamepad / virtual
+        // joystick re-sends the held direction every WALK_REPEAT so a press that
+        // arrives mid-air is not necessarily a change; adding it made a held
+        // RIGHT read as 2 and cancelled every auto-jump.
         switch (ka) {
-            case KeyAction::Id::LEFT: player.set_direction(false); break;
-            case KeyAction::Id::RIGHT: player.set_direction(true); break;
+            case KeyAction::Id::LEFT:
+                if (-1.0 != player.get_phobj().jump_input_dir) {
+                    player.get_phobj().air_direction_changed = true;
+                }
+                player.set_direction(false);
+                break;
+            case KeyAction::Id::RIGHT:
+                if (1.0 != player.get_phobj().jump_input_dir) {
+                    player.get_phobj().air_direction_changed = true;
+                }
+                player.set_direction(true);
+                break;
             default: break;
         }
     }
@@ -211,13 +251,16 @@ void PlayerFallState::update_state(Player &player) const {
 
         // Holding the jump key generates a single press event, so the impulse has to be renewed
         // every time the character touches the ground or the jumping stops after one jump.
+        // A steer that changed in the air cancels this re-arm: movement takes over at touchdown
+        // instead (user-specified jump/movement isolation, see REPORT.md 5.10).
         if (!player.is_key_down(KeyAction::Id::DOWN)
             && player.is_key_down(KeyAction::Id::JUMP)
-            && !player.is_attacking()) {
+            && !player.is_attacking()
+            && !player.get_phobj().air_direction_changed) {
             play_jumpsound();
-            player.get_phobj().vforce = -player.get_jumpforce();
+            arm_jump(player);
         }
-    } else if (player.is_underwater()) {
+    } else if (player.is_underwater() || player.is_floating()) {
         player.set_state(Char::State::SWIM);
     }
 }
@@ -279,9 +322,10 @@ void PlayerSitState::send_action(Player &player,
 
 // Flying
 void PlayerFlyState::initialize(Player &player) const {
-    player.get_phobj().type = player.is_underwater()
-                                  ? PhysicsObject::Type::SWIMMING
-                                  : PhysicsObject::Type::FLYING;
+    player.get_phobj().type =
+        player.is_underwater() ? PhysicsObject::Type::SWIMMING
+        : player.is_floating() ? PhysicsObject::Type::FLOATING
+                               : PhysicsObject::Type::FLYING;
 }
 
 void PlayerFlyState::send_action(Player &player,
@@ -291,6 +335,14 @@ void PlayerFlyState::send_action(Player &player,
         switch (ka) {
             case KeyAction::Id::LEFT: player.set_direction(false); break;
             case KeyAction::Id::RIGHT: player.set_direction(true); break;
+            case KeyAction::Id::JUMP:
+                // flyJumpDec is what a jump costs you in the air: the archive's fraction of a
+                // ground jump impulse. It also lifts a floating body out of the water surface.
+                play_jumpsound();
+                player.get_phobj().vforce -=
+                    player.get_jumpforce() * PhysicsParams::fly_jump_dec();
+                break;
+            default: break;
         }
     }
 }
@@ -300,10 +352,13 @@ void PlayerFlyState::update(Player &player) const {
         return;
     }
 
-    // A stroke and a flight are two different pushes in the archive, even though the numbers it
-    // gives them happen to be the same; water damps and caps them differently again.
-    const double drive = player.is_underwater() ? player.get_swimforce()
-                                                 : player.get_flyforce();
+    // A stroke, a surface paddle and a flight are three different pushes in the archive, even
+    // though the numbers it gives the first two happen to be the same; water damps and caps
+    // them differently again. A floating body paddles with the swim drive and is damped by
+    // floatDrag1/floatDrag2 rather than by the flight drag alone.
+    const double drive = (player.is_underwater() || player.is_floating())
+                             ? player.get_swimforce()
+                             : player.get_flyforce();
 
     if (player.is_key_down(KeyAction::Id::LEFT)) {
         player.get_phobj().hforce = -drive;
@@ -319,7 +374,8 @@ void PlayerFlyState::update(Player &player) const {
 }
 
 void PlayerFlyState::update_state(Player &player) const {
-    if (player.get_phobj().onground && player.is_underwater()) {
+    if (player.get_phobj().onground
+        && (player.is_underwater() || player.is_floating())) {
         Char::State state;
 
         if (player.is_key_down(KeyAction::Id::LEFT)) {

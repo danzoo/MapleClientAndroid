@@ -15,16 +15,31 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Foothold.h"
 
+#include <cmath>
+
 namespace ms {
 Foothold::Foothold(const img::node &src, uint16_t id, uint8_t ly) :
     m_id_(id),
     m_prev_(src["prev"]),
     m_next_(src["next"]),
     m_layer_(ly),
+    m_force_(0.0),
     m_horizontal_(src["x1"], src["x2"]),
-    m_vertical_(src["y1"], src["y2"]) {}
+    m_vertical_(src["y1"], src["y2"]) {
+    const img::node force = src["force"];
 
-Foothold::Foothold() : m_id_(0), m_prev_(0), m_next_(0), m_layer_(0) {}
+    if (force && (force.data_type() == img::node::type::integer
+                  || force.data_type() == img::node::type::real)) {
+        m_force_ = force.get_real();
+    }
+}
+
+Foothold::Foothold() :
+    m_id_(0),
+    m_prev_(0),
+    m_next_(0),
+    m_layer_(0),
+    m_force_(0.0) {}
 
 uint16_t Foothold::id() const {
     return m_id_;
@@ -123,6 +138,33 @@ int16_t Foothold::vdelta() const {
 
 double Foothold::slope() const {
     return is_wall() ? 0.0f : static_cast<double>(vdelta()) / hdelta();
+}
+
+double Foothold::unit_cos() const {
+    // get_fh() returns a null foothold (id 0, zero-length span) when a query
+    // finds nothing, and walls have no horizontal extent. Both would otherwise
+    // make slope() a 0/0 NaN that propagates into hspeed and x. Treat them as
+    // flat ground, which is also what the original does for vertical walls.
+    if (!m_id_ || is_wall() || hdelta() == 0) {
+        return 1.0;
+    }
+    const double s = slope();
+    return 1.0 / std::sqrt(1.0 + s * s);
+}
+
+double Foothold::unit_sin() const {
+    if (!m_id_ || is_wall() || hdelta() == 0) {
+        return 0.0;
+    }
+    return slope() * unit_cos();
+}
+
+double Foothold::force() const {
+    return m_force_;
+}
+
+bool Foothold::is_slippery() const {
+    return m_id_ && m_force_ != 0.0;
 }
 
 double Foothold::ground_below(double x) const {

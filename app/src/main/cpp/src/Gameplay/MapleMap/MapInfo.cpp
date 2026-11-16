@@ -45,6 +45,23 @@ MapInfo::MapInfo(const img::node &src,
     swim_ = info["swim"].get_bool();
     town_ = info["town"].get_bool();
 
+    // swimArea holds named rectangles (x1/y1/x2/y2). Their topmost edge is the waterline;
+    // a FLOATING body is pulled back to it by floatCoefficient * gravityAcc. Maps without a
+    // swimArea keep ordinary ground/flight physics.
+    for (const auto &area : src["swimArea"]) {
+        const img::node y1 = area["y1"];
+
+        if (!y1) {
+            continue;
+        }
+
+        const int16_t top = static_cast<int16_t>(y1.get_integer());
+
+        if (!water_surface_y_ || top < *water_surface_y_) {
+            water_surface_y_ = top;
+        }
+    }
+
     for (const auto &seat : src["seat"]) {
         seats_.push_back(seat);
     }
@@ -58,6 +75,10 @@ MapInfo::MapInfo() = default;
 
 bool MapInfo::is_underwater() const {
     return swim_;
+}
+
+std::optional<int16_t> MapInfo::get_water_surface_y() const {
+    return water_surface_y_;
 }
 
 std::string MapInfo::get_bgm() const {

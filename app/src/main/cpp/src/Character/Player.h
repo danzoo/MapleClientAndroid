@@ -15,6 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <optional>
+
 #include "../Gameplay/Combat/Skill.h"
 #include "../Gameplay/MapleMap/Layer.h"
 #include "../Gameplay/MapleMap/MapInfo.h"
@@ -49,8 +51,11 @@ public:
     // Set state ignore if attacking.
     void set_state(State stance) override;
 
-    // Respawn the player at the given position
-    void respawn(Point<int16_t> position, bool underwater);
+    // Respawn the player at the given position. waterline is the map's swimArea surface, if
+    // it has one; a map with a waterline uses the FLOATING engine instead of ground physics.
+    void respawn(Point<int16_t> position,
+                 bool underwater,
+                 std::optional<int16_t> waterline);
 
     // Sends a Keyaction to the player's state, to apply forces, change the
     // state and other behaviour.
@@ -150,6 +155,9 @@ public:
     // Return whether the player is underwater
     bool is_underwater() const;
 
+    // Return whether the map has a water surface for the player to float on
+    bool is_floating() const;
+
     // Returns if a Keyaction is currently active.
     bool is_key_down(KeyAction::Id action) const;
 
@@ -225,6 +233,7 @@ private:
     TimedBool climb_cooldown_;
 
     bool underwater_;
+    std::optional<int16_t> waterline_;
 
     // The speed the hop leaves with, the character's own run included, and whether the tick that
     // launches it is still owed. The launch tick is a ground tick, so it needs the drive that

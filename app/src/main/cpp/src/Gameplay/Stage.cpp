@@ -124,7 +124,9 @@ void Stage::respawn(int8_t portalid) {
 
     Point<int16_t> spawnpoint = portals_.get_portal_by_id(portalid);
     Point<int16_t> startpos = physics_.get_y_below(spawnpoint);
-    player_.respawn(startpos, map_info_.is_underwater());
+    player_.respawn(startpos,
+                    map_info_.is_underwater(),
+                    map_info_.get_water_surface_y());
     camera_.set_position(startpos);
     camera_.set_view(map_info_.get_walls(), map_info_.get_borders());
 }
@@ -248,7 +250,9 @@ void Stage::check_portals() {
             portals_.get_portal_by_name(warpinfo.toname);
         Point<int16_t> startpos = physics_.get_y_below(spawnpoint);
 
-        player_.respawn(startpos, map_info_.is_underwater());
+        player_.respawn(startpos,
+                        map_info_.is_underwater(),
+                        map_info_.get_water_surface_y());
     } else if (warpinfo.valid) {
         // Which map this lands on is the server's to answer, so nothing here records the door's own
         // target: a door the server won't open leaves the character on the map it is actually on.

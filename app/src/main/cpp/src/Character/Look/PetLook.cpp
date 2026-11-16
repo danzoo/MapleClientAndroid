@@ -72,9 +72,9 @@ void PetLook::draw(double viewx, double viewy, float alpha) const {
 
 void PetLook::update(const Physics &physics, Point<int16_t> charpos) {
     // The pet used to be given these two as pushes in pixels per tick squared. Its flight damping
-    // has not changed, so that one only has to be restated as the acceleration it amounted to; the
-    // ground it walks on is damped by the archive's walkDrag now, so what carries over is the speed
-    // the old damping settled at, and that speed is what the new damping is asked to hold.
+    // has not changed, so that one only has to be restated as the acceleration it amounted to;
+    // on the ground it is now driven by the original client's constant acceleration, scaled so
+    // that its hard speed cap stays PET_WALK_SPEED.
     const double walkdrive = PhysicsParams::ground_drive(Constants::PET_WALK_SPEED);
     const double flydrive = Constants::PET_FLY_ACCEL;
 

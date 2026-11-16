@@ -99,6 +99,23 @@ public:
     // Returns the slope as a ratio of vertical/horizontal.
     double slope() const;
 
+    // Unit tangent of the surface in the +x direction. The original client
+    // keeps footholds normalized this way (cos at node+0x30, sin at +0x38),
+    // with cos = 1/sqrt(1+slope^2) and sin = slope*cos.
+    double unit_cos() const;
+    double unit_sin() const;
+
+    // The WZ `force` of this foothold: a conveyor/slide push in px/s^2, positive to the
+    // right and negative to the left. Zero when the property is absent (the usual case).
+    //
+    // The Data tree has no separate per-foothold friction key, so this is the only surface
+    // hint it gives. This client treats footholds carrying `force` as the slippery ones and
+    // gives them the archive's minFriction; that mapping is a model choice, while the push
+    // itself and the friction bounds are read straight out of the data.
+    double force() const;
+
+    bool is_slippery() const;
+
     // Returns a y-coordinate right below the given x-coordinate.
     double ground_below(double x) const;
 
@@ -107,6 +124,7 @@ private:
     uint16_t m_prev_;
     uint16_t m_next_;
     uint8_t m_layer_;
+    double m_force_;
     Range<int16_t> m_horizontal_;
     Range<int16_t> m_vertical_;
 };

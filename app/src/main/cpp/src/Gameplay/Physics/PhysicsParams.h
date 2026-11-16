@@ -16,15 +16,19 @@
 #pragma once
 
 namespace ms {
-// Movement tunables, taken from Map/Physics.img at startup.
+// Movement tunables, taken from Map/Physics.img at startup. All 19 keys in that file are read.
 //
-// Values use px/s for speeds, px/s^2 for accelerations and 1/s for damping. *Speed and *Acc
-// already use those units; legacy fixed-point *Force and *Drag use PHYSICS_REFERENCE_SECONDS
-// for conversion, independently of the simulation timestep. walk_speed() is the coefficient
-// used with (SPEED + 20) / 100, not the player's baseline walking speed.
+// Values use px/s for speeds and px/s^2 for accelerations. *Speed and *Acc already use those
+// units directly and were confirmed against a per-frame capture of the original PC client.
+// Legacy fixed-point walkForce / walkDrag are ground-truthed by PHYSICS_FORCE_DIVISOR (100),
+// also measured there: walkForce/100 = 1400 px/s^2 of acceleration, walkDrag/100 = 800 px/s^2
+// of friction, ratio 1.75 = walkForce : walkDrag. The other *Drag keys still use
+// PHYSICS_REFERENCE_SECONDS, a calibration kept only for the flight / swim / floating models,
+// which have not been measured. walk_speed() is the coefficient used with SPEED / 100, not the
+// player's baseline walking speed.
 //
-// A missing archive, or a missing key inside it, leaves that one value at what this client was
-// built with, so a Data tree that predates the file still plays.
+// A missing archive, or a missing key inside it, leaves that one value at the baseline archive
+// value, so a Data tree that predates the file still plays.
 class PhysicsParams {
 public:
     // Read the archive. Has to run after the img tree has been mounted.
@@ -42,14 +46,55 @@ public:
     // The walking-speed coefficient, before the player's stat multiplier.
     static double walk_speed();
 
-    // How fast ground sheds speed, as a fraction of the current speed per second. This is what
-    // decides how far anything that has been knocked, jumped off or let go of slides.
-    static double ground_damping();
+    // CONSTANT acceleration while a walk key is held, px/s^2: walkForce / 100 = 1400.
+    // Measured on the original PC client (evidence/baseline/physics_baseline.json).
+    static double ground_accel();
 
-    // Acceleration required to hold target_speed under the client's ground damping.
-    // Shared by players, mobs and pets.
+    // CONSTANT friction once the key is released, px/s^2: walkDrag / 100 = 800.
+    // Applied toward zero and clamped there, never overshooting.
+    static double ground_friction();
+
+    // ground_accel() scaled for an entity whose target speed differs from walkSpeed (players
+    // with SPEED stats, mobs, pets). move_normal inverts this relation to recover that target
+    // as the hard speed cap, so every entity keeps its own top speed.
     static double ground_drive(double target_speed);
 
+    // Raw archive drive under the legacy tick_units conversion, in px/s^2. Kept for the
+    // unmeasured models and diagnostics; ground motion does not use it.
+    static double walk_accel();
+
+    // ---- Ice / slippery footholds -------------------------------------------------
+    // Bounds on a foothold's friction coefficient. Ordinary ground is 1.0; the archive's
+    // minFriction is used on footholds that carry a `force` (conveyor/slide) property.
+    static double min_friction();
+
+    static double max_friction();
+
+    static double clamp_friction(double friction);
+
+    // Legacy velocity-proportional ice damping, retained for diagnostics only. ICE now uses the
+    // measured constant-acceleration model with clamp_friction() scaling both constants; no
+    // ice baseline has been captured yet, so that scaling is an inference, not a measurement.
+    static double ice_damping(double friction);
+
+    // The archive's speed cap for the slipping state.
+    static double slip_speed();
+
+    // Raw archive slip drive, in px/s^2.
+    static double slip_accel();
+
+    // ---- Floating / water surface --------------------------------------------------
+    // Horizontal drag of a body at the water surface, from floatDrag1 (1/s).
+    static double float_drag1();
+
+    // Vertical drag, from floatDrag2 (1/s). Also the flight drag.
+    static double float_drag2();
+
+    // floatCoefficient read as a fraction of gravity: the buoyancy spring constant for a
+    // body displaced from the waterline, in 1/s^2.
+    static double float_buoyancy();
+
+    // ---- Flight --------------------------------------------------------------------
     // The force that drives flight, and the speed flight settles at.
     static double fly_accel();
 
@@ -58,6 +103,10 @@ public:
     // Flight drag, from the archive's floatDrag2.
     static double fly_damping();
 
+    // What a jump costs while flying: the fraction of a ground jump impulse left over.
+    static double fly_jump_dec();
+
+    // ---- Swimming ------------------------------------------------------------------
     // The force that drives a stroke, and the speed swimming settles at.
     static double swim_accel();
 
@@ -67,9 +116,10 @@ public:
     static double swim_damping();
 
     // How fast water pulls a swimmer down. The one live figure with no key behind it: the
-    // archive's floatCoefficient is the only candidate, and reading it as a fraction of gravityAcc
-    // would take this from 468.8 to 20 pixels per second squared, which is a change of behaviour
-    // rather than of units, so it stays this client's own SWIMGRAVFORCE until that is asked for.
+    // archive's floatCoefficient is now read as buoyancy for FLOATING, and reading it as a
+    // fraction of gravityAcc here would take this from 468.8 to 20 pixels per second squared,
+    // which is a change of behaviour rather than of units, so it stays this client's own
+    // SWIMGRAVFORCE for fully submerged bodies.
     static double swim_gravity();
 };
 }  // namespace ms

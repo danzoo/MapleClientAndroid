@@ -21,6 +21,8 @@
 #include <limits>
 #include <vector>
 
+#include "PhysicsParams.h"
+
 namespace ms {
 FootholdTree::FootholdTree(const img::node &src) {
     int16_t leftw = 30000;
@@ -115,10 +117,12 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
 
         // Keep walking's query unchanged. Normal airborne motion follows the current landing
         // platform's chain far enough to reach the side wall and all of its connected segments.
-        if (phobj.onground || phobj.type == PhysicsObject::Type::NORMAL) {
-            const uint16_t wall_fhid = phobj.type == PhysicsObject::Type::NORMAL && landed_fhid
+        // Ice uses the same ground integrator and the same swept-terrain queries as NORMAL;
+        // only the surface coefficients differ, so both types take this path.
+        if (phobj.onground || phobj.is_ground_type()) {
+            const uint16_t wall_fhid = phobj.is_ground_type() && landed_fhid
                 ? landed_fhid : phobj.fhid;
-            const bool airborne = phobj.type == PhysicsObject::Type::NORMAL
+            const bool airborne = phobj.is_ground_type()
                 && !landed_fhid && (!phobj.onground || phobj.vspeed < 0.0);
             if (airborne) {
                 auto hits_at_contact = [&](double candidate) {
@@ -202,6 +206,37 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
             const bool lands_at_dest = ground_dest - ground <= drop + 0.5;
             const double landing_x = phobj.crnt_x() + (lands_at_dest ? hmove : 0.0);
             const uint16_t landing_fhid = get_fhid_below(landing_x, crnt_y);
+
+            // A landing replaces the horizontal speed in two cases:
+            //   * nothing steers the body (the standing-jump-on-a-slope slide),
+            //   * a DIFFERENT direction was pressed while airborne. Then the
+            //     client's own projection + opposite-input clamp stops the old
+            //     momentum so the new direction takes over at once. This is a
+            //     user-specified jump/movement isolation rule, marked as such
+            //     in REPORT.md; it is not a PC-measured constant.
+            //
+            // A direction held continuously through the jump keeps its speed,
+            // because applying the impact projection there is what made a
+            // running jump lose its momentum (flat: 125 -> 62.5, uphill: clamped
+            // to 0) and made the slope feel impossible to reach.
+            //
+            // was_airborne is essential: this crossing test also holds on every
+            // standing and walking tick, because gravity keeps vspeed > 0 and
+            // crnt_y <= ground <= next_y. Gating on the onground false->true
+            // edge makes the conversion a one-shot EVENT.
+            const Foothold &landing_fh = get_fh(landing_fhid);
+            const bool steer_changed = phobj.air_direction_changed;
+            const bool no_steer = phobj.landing_input_dir == 0.0;
+            if (phobj.vspeed > 0.0 && landing_fh.id() && phobj.was_airborne
+                && phobj.is_ground_type() && (no_steer || steer_changed)) {
+                phobj.landing_conversion = true;
+                phobj.landing_fhid = landing_fhid;
+                phobj.landing_vx = phobj.hspeed;
+                phobj.landing_vy = phobj.vspeed;
+                phobj.landing_fhcos = landing_fh.unit_cos();
+                phobj.landing_fhsin = landing_fh.unit_sin();
+            }
+
             phobj.limity(lands_at_dest ? ground_dest : ground);
 
             // On slopes y already refers to landing_x, while x has not advanced yet. Carry the
@@ -394,6 +429,22 @@ void FootholdTree::update_fh(PhysicsObject &phobj) const {
 
     const Foothold &nextfh = get_fh(phobj.fhid);
     phobj.fhslope = nextfh.slope();
+    phobj.fhcos = nextfh.unit_cos();
+    phobj.fhsin = nextfh.unit_sin();
+
+    // Refresh the surface every tick. A WZ foothold `force` is a conveyor/slide push; the
+    // Data tree has no separate friction key, so this client treats those footholds as the
+    // slippery ones and gives them the archive's minFriction. Only ground bodies are re-typed:
+    // flying, swimming and floating bodies keep the engine their state selected.
+    phobj.foothold_force = nextfh.force();
+    phobj.surface_friction = nextfh.is_slippery()
+                                 ? PhysicsParams::min_friction()
+                                 : 1.0;
+
+    if (phobj.is_ground_type()) {
+        phobj.type = nextfh.is_slippery() ? PhysicsObject::Type::ICE
+                                          : PhysicsObject::Type::NORMAL;
+    }
 
     double ground = nextfh.ground_below(x);
 

@@ -49,13 +49,18 @@ public:
     const FootholdTree &get_fht() const;
 
 private:
-    // Integrates normal motion. Stores the mean vertical speed for collision travel and returns
-    // the end-of-step speed, restored after movement unless a vertical collision stopped it.
+    // Integrates ground motion (NORMAL and ICE). Stores the mean vertical speed for collision
+    // travel and returns the end-of-step speed, restored after movement unless a vertical
+    // collision stopped it. Ice only changes the drive/damping/cap, not the terrain path.
     double move_normal(PhysicsObject &) const;
 
     void move_flying(PhysicsObject &) const;
 
     void move_swimming(PhysicsObject &) const;
+
+    // Water-surface motion: floatDrag1 horizontally, floatDrag2 vertically, and
+    // floatCoefficient * gravityAcc as a restoring pull towards the map's waterline.
+    void move_floating(PhysicsObject &) const;
 
     FootholdTree fh_tree_;
 };

@@ -69,6 +69,7 @@ Player::Player(const CharEntry &entry, uint8_t wid, uint8_t channel_id) :
     channel_id_(channel_id) {
     attacking_ = false;
     underwater_ = false;
+    waterline_.reset();
 
     set_state(Char::State::STAND);
     set_direction(true);
@@ -76,9 +77,18 @@ Player::Player(const CharEntry &entry, uint8_t wid, uint8_t channel_id) :
 
 Player::Player() : Char(0, {}, "") {}
 
-void Player::respawn(Point<int16_t> pos, bool uw) {
+void Player::respawn(Point<int16_t> pos,
+                     bool uw,
+                     std::optional<int16_t> waterline) {
     set_position(pos.x(), pos.y());
     underwater_ = uw;
+    waterline_ = waterline;
+
+    // The physics object owns the waterline so move_floating() can read it without going
+    // back through the map. It survives state changes, which each re-select the engine.
+    phobj_.floating = waterline_.has_value();
+    phobj_.waterline = static_cast<double>(waterline_.value_or(0));
+
     keys_down_.clear();
     attacking_ = false;
     ladder_ = {};
@@ -504,8 +514,8 @@ bool Player::is_prone() const {
 }
 
 float Player::get_walkforce() const {
-    // Use the same target as walking and rope leaps: at SPEED 100 the archive's 125 is
-    // multiplied by 1.2, giving 150 px/s. Rebuild the drive under the current ground damping.
+    // A constant acceleration scaled so the hard speed cap equals this character's walk speed.
+    // Measured on the original PC client: 1400 px/s^2 at SPEED 100 (walkForce / 100).
     return static_cast<float>(PhysicsParams::ground_drive(get_walkspeed()));
 }
 
@@ -545,6 +555,10 @@ float Player::get_swimforce() const {
 
 bool Player::is_underwater() const {
     return underwater_;
+}
+
+bool Player::is_floating() const {
+    return waterline_.has_value();
 }
 
 bool Player::is_key_down(KeyAction::Id action) const {

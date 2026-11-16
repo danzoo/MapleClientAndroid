@@ -69,7 +69,13 @@ public:
 
     MapInfo();
 
+    // Whether the map is entirely submerged (info/swim).
     bool is_underwater() const;
+
+    // The top of the map's swimArea, or nothing when the map has no water surface. Those
+    // rectangles are what the client's own `swimArea` lookup reads; the smallest y1 is the
+    // waterline a FLOATING body is pulled back to.
+    std::optional<int16_t> get_water_surface_y() const;
 
     std::string get_bgm() const;
 
@@ -97,6 +103,7 @@ private:
     std::string street_name_;
     std::string map_mark_;
     bool swim_;
+    std::optional<int16_t> water_surface_y_;
     bool town_;
     bool hide_minimap_;
     Range<int16_t> map_walls_;

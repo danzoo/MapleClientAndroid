@@ -31,24 +31,44 @@ constexpr double FRAME_RATE = 60;
 // this duration, and animations/timers consume the same duration per update; at simulation
 // speed 1.0, changing the resolution alone must not change the intended px/s movement speeds.
 //
-// Keep a 14 ms simulation step. The corrected baseline walk is 125 * (100 + 20) / 100 =
-// 150 px/s, or 2.1 pixels per step; it does not require changing the simulation frequency.
-// Physics.img does not specify a timestep, so the legacy force/drag ratio is a conversion
-// calibration, not proof of the original client's update period.
+// Keep a 14 ms simulation step. The baseline walk is walkSpeed * SPEED / 100 =
+// 125 px/s at SPEED 100, or 1.75 pixels per step; it does not require changing the simulation
+// frequency. Physics.img does not specify a timestep, so the legacy force/drag ratio is a
+// conversion calibration, not proof of the original client's update period.
 constexpr uint16_t TIMESTEP = 14;
 
-// Reference period for decoding legacy fixed-point force/drag values, independent of the
-// simulation step: (walkForce / walkDrag) / walkSpeed = (140000 / 80000) / 125 = 0.014 s.
-// Applying the same (SPEED + 20) / 100 multiplier to drive and target keeps this ratio unchanged.
+// Legacy unit conversion still used by the flight / swim / floating models, which have NOT been
+// measured against the original client. It is a calibration, not a recovered value. Ground
+// motion no longer uses it: the PC baseline below gives the forces' real magnitude.
 constexpr double PHYSICS_REFERENCE_SECONDS = 0.014;
+
+// Ground motion recovered from a 90 s read-only per-frame capture of the original PC client
+// (evidence/baseline/physics_baseline.json in F:\Rb\pys, REPORT.md section 5.8). Observed on
+// flat ground, with 554 distinct client ticks:
+//
+//   tick dt                 30 ms  (the original's update period; this port keeps 14 ms)
+//   key held     vx += 42 px/tick  -> 1400 px/s^2, hard cap at 125 px/s
+//   key released vx -= 24 px/tick  ->  800 px/s^2, clamped at zero, no overshoot
+//   gravity      vy += 60 px/tick  -> 2000 px/s^2, cap 670 px/s, jump v0 -555 px/s
+//   position     trapezoidal: pos += (v_old + v_new) / 2 * dt (median residual 0 px)
+//
+// The two horizontal accelerations are exactly walkForce / 100 and walkDrag / 100, so their
+// ratio is the archive's walkForce : walkDrag = 1.75. The shared divisor is the runtime mass/t
+// scale that the encrypted getter could not expose statically; it is now MEASURED, not fitted.
+// The speed caps come straight from walkSpeed / gravityAcc / fallSpeed / jumpSpeed, every one
+// of which the capture reproduced exactly. Integrating accelerations in px/s^2 means a different
+// simulation tick only re-samples the same trajectory instead of changing how it feels.
+constexpr double PHYSICS_FORCE_DIVISOR = 100.0;
+constexpr double ORIGINAL_TICK_SECONDS = 0.030;
 
 // Fraction of real time the simulation advances at, so 1.0 is real time. Movement, jumps and
 // animations are all driven by the timestep, so scaling it slows them together and keeps every
 // trajectory intact; lowering walk speed or jump force directly would shorten the jumps instead.
 constexpr double SIMULATION_SPEED = 1.0;
 
-// Seconds used by the movement integrators. Legacy fixed-point decoding instead uses
-// PHYSICS_REFERENCE_SECONDS, so changing the simulation step does not change decoded units.
+// Seconds used by the movement integrators. Ground motion integrates accelerations in px/s^2,
+// so a different tick only re-samples the same trajectory; PHYSICS_REFERENCE_SECONDS remains
+// only for the unmeasured flight / swim / floating conversions.
 constexpr double TICK_SECONDS = TIMESTEP * 0.001 / SIMULATION_SPEED;
 
 // Movement-driven animation consumes 8 ms per pixel. Clock-driven animations instead consume
@@ -167,16 +187,13 @@ constexpr uint16_t CRAWLING_ANIMATION_MS = TIMESTEP / 8;
 // How much of its opacity a buff icon loses a second once its time is nearly up.
 constexpr float BUFF_FADE_PER_SECOND = 6.25f;
 
-// How much of its speed the ground takes off a body per tick. This is the one place the weight of
-// the walking feel is set. The archive's walkDrag is 0.8, which is no slide at all: a character
-// going full speed reaches it in one tick and, key released, is stopped in three - 14 ms up, 42 ms
-// down. The reference client's ground friction (FRICTION 0.5 over GROUNDSLIP 3) sheds a fifth of a
-// speed per tick of its own 8 ms, which is 0.35 per tick of fourteen ms - a tenth of a second and
-// four pixels of floor at a walk. This runs a little lighter still than the reference, which is what
-// reads right on the panel. The drive is rebuilt from walkSpeed under this damping rather than taken
-// from walkForce, so the speed you can see stays the archive's and only the ramp that gets there is
-// this client's.
-constexpr double GROUND_FRICTION = 0.15;
+// Ground motion no longer uses a velocity-proportional damping at all. The original client
+// applies a CONSTANT acceleration while a direction is held and a CONSTANT (weaker) deceleration
+// when it is released; both are hard-clamped, and the two magnitudes are walkForce / 100 and
+// walkDrag / 100. That is why a walk starts in ~90 ms but slides for ~180 ms - one exponential
+// time constant could never produce that asymmetry. See PHYSICS_FORCE_DIVISOR above and
+// Physics::move_normal for the implementation. Ice/floating/swimming behaviour is derived from
+// the same model but has no measured baseline of its own yet.
 
 // The shape of the hop a blow knocks the player into, as the two figures that are actually seen: how
 // many pixels the body is lifted off the ground, and how many pixels back it travels over it. They
@@ -195,8 +212,8 @@ constexpr double MOB_KNOCKBACK_ACCEL_AIR = 1562.5;
 constexpr double MOB_HOP_SPEED = 625.0;
 
 // Pixels per second per stat point. Mob movement retains its own (speed + 100) conversion;
-// player walking uses walkSpeed * (SPEED + 20) / 100, and rope/ladder climbing uses SPEED + 20.
-// The offset changes physical movement only, not the SPEED value displayed in the stat window.
+// player walking uses walkSpeed * SPEED / 100 (125 px/s at SPEED 100), and rope/ladder
+// climbing uses SPEED. The stat window shows SPEED unchanged.
 constexpr float MOB_WALK_SPEED_PER_POINT = 0.9375f;
 constexpr float MOB_FLY_SPEED_PER_POINT = 1.25f;
 constexpr double CLIMB_SPEED_PER_POINT = 1.0;
@@ -209,9 +226,10 @@ constexpr double PET_FLY_ACCEL = 3125.0;
 constexpr double DAMAGE_NUMBER_RISE = 31.25;
 constexpr double BACKGROUND_SCROLL_PER_POINT = 7.8125;
 
-// Nothing that is not being pushed keeps going this slowly: below here an object has stopped. The
-// archive's minFriction does the same job where a map sets its own friction, and this is the
-// client's own restatement for when it does not - the tenth of a pixel a tick it was written at.
+// Nothing that is not being pushed keeps going this slowly: below here an object has stopped.
+// The archive's minFriction is now used for slippery footholds (see PhysicsParams::clamp_friction
+// and Physics::move_normal); this remains the client's own restatement for when a foothold
+// gives no friction of its own - the tenth of a pixel a tick it was written at.
 constexpr double STOP_SPEED = 12.5;
 
 // How much bigger the interface is drawn than the world around it. Everything the UI lays out is

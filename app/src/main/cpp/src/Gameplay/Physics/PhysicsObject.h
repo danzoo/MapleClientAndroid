@@ -130,8 +130,9 @@ struct MovingObject {
 
 // Structure that contains all properties necessary for physics calculations
 struct PhysicsObject : public MovingObject {
-    // Determines which physics engine to use
-    enum Type { NORMAL, ICE, SWIMMING, FLYING, FIXATED };
+    // Determines which physics engine to use. NORMAL and ICE share the ground integrator and
+    // all terrain checks; FLOATING is a water-surface body (floatDrag1/2 + floatCoefficient).
+    enum Type { NORMAL, ICE, SWIMMING, FLYING, FLOATING, FIXATED };
 
     enum Flag {
         NO_GRAVITY = 0x0001,
@@ -143,10 +144,60 @@ struct PhysicsObject : public MovingObject {
     int32_t flags = 0;
     uint16_t fhid = 0;
     double fhslope = 0.0;
+    // Unit tangent of the foothold in the +x direction. The original client stores
+    // footholds as a normalized (cos, sin) pair, not as dy/dx:
+    //   cos = 1 / sqrt(1 + slope^2),  sin = slope * cos.
+    // Flat ground is (1, 0); the sampled slopes are (0.832050, +/-0.554700).
+    // Recovered from the live foothold tree and VA 0x9B242B / 0x9B244A.
+    double fhcos = 1.0;
+    double fhsin = 0.0;
+
+    // Standing-jump landing on a slope: with no direction key held the body
+    // keeps half the impact velocity's tangential projection and slides down
+    // (REPORT.md 5.9). Holding a direction suppresses this entirely so a
+    // running jump keeps its speed. One-shot EVENT, not a per-frame terrain
+    // condition: FootholdTree::limit_movement also fires on every standing /
+    // walking tick (gravity keeps vspeed > 0 and crnt_y <= ground <= next_y),
+    // so was_airborne gates it to the tick onground flips false -> true.
+    bool was_airborne = false;
+    bool landing_conversion = false;
+    uint16_t landing_fhid = 0;
+    double landing_vx = 0.0;
+    double landing_vy = 0.0;
+    double landing_fhcos = 1.0;
+    double landing_fhsin = 0.0;
+    // Sign of hforce at the START of the tick (move_normal clears it). This is
+    // the client's encrypted movement direction at object+0x150, getter 0x416563.
+    double landing_input_dir = 0.0;
+
+    // Direction that was held when this jump was launched, and whether a
+    // DIFFERENT direction was pressed while airborne. The landing rules are
+    // input-priority while a steer is held, except when the steer changed in
+    // mid-air: that one landing is allowed to use the client's own projection
+    // + opposite-input clamp so the body stops the old momentum and the new
+    // direction drives it immediately. Jump and movement are therefore handled
+    // independently: a changed steer cancels the automatic re-jump, a released
+    // steer leaves the jump armed. This is a user-specified behaviour, not a
+    // value measured from the PC client, and is marked as such in REPORT.md.
+    double jump_input_dir = 0.0;
+    bool air_direction_changed = false;
+
     int8_t fhlayer = 0;
     double groundbelow = 0.0;
     bool onground = true;
     bool enablejd = false;
+
+    // Surface of the foothold currently under the object. friction is dimensionless: 1.0 is
+    // ordinary ground, the archive's minFriction is the slipperiest ice, maxFriction the
+    // grippiest. foothold_force is the WZ `force` conveyor push in px/s^2, signed by direction.
+    // FootholdTree::update_fh refreshes both every tick and selects ICE from them.
+    double surface_friction = 1.0;
+    double foothold_force = 0.0;
+
+    // A map that declares a swimArea gives the body a waterline. FLOATING bodies are pulled
+    // back to it by floatCoefficient * gravityAcc instead of falling under full gravity.
+    bool floating = false;
+    double waterline = 0.0;
 
     // Accelerations applied by whatever is steering this object, and the sums the integrator
     // builds from them, both in pixels per second squared.
@@ -168,6 +219,11 @@ struct PhysicsObject : public MovingObject {
     void apply_substep(double dx, double dy) {
         x.shift(dx);
         y.shift(dy);
+    }
+
+    // Ground movement (including ice) shares the swept-terrain path; a floating body does not.
+    bool is_ground_type() const {
+        return type == Type::NORMAL || type == Type::ICE;
     }
 
     bool is_flag_set(Flag f) { return (flags & f) != 0; }
