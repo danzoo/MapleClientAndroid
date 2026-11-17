@@ -16,6 +16,7 @@
 #include "Combat.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 #include "../../Character/SkillId.h"

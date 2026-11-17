@@ -359,6 +359,10 @@ int8_t Mob::update(const Physics &physics) {
         // can leave its platform with a hop and hop back, a flyer is never on a foothold to begin
         // with. Which of the two it is comes from the mob's own animations, not from the player's
         // position; walls stop either kind regardless.
+        if (edge_cooldown_ > 0) {
+            edge_cooldown_ -= Constants::TIMESTEP;
+        }
+
         if (!can_fly_ && !can_jump_ && phobj_.onground && phobj_.fhid) {
             const Physics::Platform platform = physics.get_platform(phobj_.fhid);
             const double edgeleft =
@@ -374,12 +378,18 @@ int8_t Mob::update(const Physics &physics) {
                     x + phobj_.hstep() + phobj_.hpush();
 
                 if (projected > edgeright || projected < edgeleft) {
-                    phobj_.hforce = 0.0;
-                    phobj_.hspeed = 0.0;
+                    // On a slope the downhill push keeps aiming at the end even at a standstill;
+                    // without a cooldown the clamp and the turn would cancel each other every tick
+                    // and the mob would jitter in place.
+                    if (edge_cooldown_ <= 0) {
+                        phobj_.hforce = 0.0;
+                        phobj_.hspeed = 0.0;
 
-                    // Turning is left to the edge logic above, which flips the mob on the tick it
-                    // finds this flag gone. Flipping here as well would cancel that one out.
-                    phobj_.clear_flag(PhysicsObject::Flag::TURN_AT_EDGES);
+                        // Turning is left to the edge logic above, which flips the mob on the tick
+                        // it finds this flag gone. Flipping here as well would cancel that one out.
+                        phobj_.clear_flag(PhysicsObject::Flag::TURN_AT_EDGES);
+                        edge_cooldown_ = 200;
+                    }
                 }
             }
         }

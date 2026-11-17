@@ -220,6 +220,8 @@ private:
     bool not_attack_;
     bool can_move_;
     bool can_jump_;
+    // The edge clamp uses a short cooldown so a slope's downhill push cannot make it flip every tick.
+    int16_t edge_cooldown_ = 0;
     bool can_fly_;
     bool can_hit_;
     bool is_boss_;
