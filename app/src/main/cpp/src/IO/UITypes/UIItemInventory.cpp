@@ -81,6 +81,14 @@ void request_drop(InventoryType::Id tab,
                                              count);
         } else {
             fn_move_item(tab, slot, 0, 1);
+
+            // Throwing out the last piece empties the slot the preview describes, so the preview
+            // goes with it. The count is read live rather than from the preview's snapshot: a
+            // stack previewed at two and spent down to one still closes on its final throw.
+            if (!ask_count
+                && Stage::get().get_player().get_inventory().get_item_count(tab, slot) <= 1) {
+                UI::get().clear_tooltip(Tooltip::Parent::ITEM_INVENTORY);
+            }
         }
     };
 
