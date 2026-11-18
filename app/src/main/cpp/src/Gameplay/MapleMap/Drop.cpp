@@ -299,6 +299,10 @@ bool Drop::landed() const {
     return state_ == Drop::State::FLOATING;
 }
 
+int32_t Drop::itemid() const {
+    return 0;
+}
+
 bool Drop::can_request_pickup(PickupTime now) const {
     return is_active() && landed() && !claimed() && now >= pickup_retry_at_;
 }
@@ -310,12 +314,12 @@ void Drop::note_pickup_request(PickupTime now) {
     awaiting_pickup_reply_ = true;
 }
 
-void Drop::note_pickup_rejection(int32_t retry_after_ms, PickupTime now) {
+bool Drop::consume_pickup_reply() {
     if (!awaiting_pickup_reply_ || !is_active() || claimed()) {
-        return;
+        return false;
     }
     awaiting_pickup_reply_ = false;
-    pickup_retry_at_ = now + std::chrono::milliseconds(std::clamp(retry_after_ms, 100, 5000));
+    return true;
 }
 
 Point<int16_t> Drop::icon_shift(Point<int16_t> origin,

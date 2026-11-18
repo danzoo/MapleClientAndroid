@@ -16,7 +16,9 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <queue>
+#include <unordered_map>
 
 #include "../Graphics/Animation.h"
 #include "../Spawn.h"
@@ -45,7 +47,7 @@ public:
     // Remove all drops, including delayed spawns.
     void clear();
 
-    // Only an explicit server rejection identifies which drop should wait.
+    // Only an explicit server rejection identifies which item type should wait.
     void note_pickup_failure(int32_t oid, int32_t retry_after_ms);
 
     // Find a drop which can be picked up at the specified position.
@@ -57,6 +59,15 @@ public:
     Loot find_loot_near(Point<int16_t> playerpos, int16_t radius);
 
 private:
+    using PickupClock = std::chrono::steady_clock;
+    using PickupTime = PickupClock::time_point;
+
+    // A server rejection holds back every drop of that item type (mesos are one type, key 0),
+    // not just the one instance the request was sent for; other types stay pickable.
+    bool type_pickup_ready(int32_t itemid, PickupTime now) const;
+
+    std::unordered_map<int32_t, PickupTime> pickup_reject_at_;
+
     MapObjects drops_;
 
     enum MesoIcon { BRONZE, GOLD, BUNDLE, BAG, NUM_ICONS };

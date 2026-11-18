@@ -15,6 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "MapDrops.h"
 
+#include <algorithm>
+
 #include <imgwz/node.hpp>
 #include <imgwz/wz.hpp>
 
@@ -131,18 +133,32 @@ void MapDrops::clear() {
     spawns_ = {};
     loot_enabled_ = false;
     drop_sound_cooldown_ = 0;
+    pickup_reject_at_.clear();
+}
+
+bool MapDrops::type_pickup_ready(int32_t itemid, PickupTime now) const {
+    auto retry = pickup_reject_at_.find(itemid);
+
+    return retry == pickup_reject_at_.end() || now >= retry->second;
 }
 
 void MapDrops::note_pickup_failure(int32_t oid, int32_t retry_after_ms) {
-    if (auto drop = drops_.get<Drop>(oid)) {
-        drop->get().note_pickup_rejection(retry_after_ms);
+    auto drop = drops_.get<Drop>(oid);
+
+    if (!drop || !drop->get().consume_pickup_reply()) {
+        return;
     }
+
+    pickup_reject_at_[drop->get().itemid()] =
+        PickupClock::now() + std::chrono::milliseconds(std::clamp(retry_after_ms, 100, 5000));
 }
 
 MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
     if (!loot_enabled_) {
         return { 0, {} };
     }
+
+    const PickupTime now = PickupClock::now();
 
     // Centre of the pile first: of the items under the character, take the one whose icon sits
     // closest to the character horizontally, then left before right, then earliest dropped.
@@ -157,7 +173,8 @@ MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
     for (auto iter = oids.begin(); iter != oids.end(); ++iter) {
         auto drop = drops_.get<const Drop>(*iter);
 
-        if (!drop || !drop->get().can_request_pickup()) {
+        if (!drop || !drop->get().can_request_pickup(now)
+            || !type_pickup_ready(drop->get().itemid(), now)) {
             continue;
         }
 
@@ -183,7 +200,7 @@ MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
 
     if (found) {
         loot_enabled_ = false;
-        drops_.get<Drop>(best_oid)->get().note_pickup_request();
+        drops_.get<Drop>(best_oid)->get().note_pickup_request(now);
 
         return { best_oid, best_pos };
     }
@@ -195,6 +212,8 @@ MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius
     if (!loot_enabled_) {
         return { 0, {} };
     }
+
+    const PickupTime now = PickupClock::now();
 
     const int64_t rangesq = static_cast<int64_t>(radius) * radius;
     const std::vector<int32_t> oids = drops_.draw_order();
@@ -210,7 +229,8 @@ MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius
     for (auto iter = oids.begin(); iter != oids.end(); ++iter) {
         auto drop = drops_.get<const Drop>(*iter);
 
-        if (!drop || !drop->get().can_request_pickup()) {
+        if (!drop || !drop->get().can_request_pickup(now)
+            || !type_pickup_ready(drop->get().itemid(), now)) {
             continue;
         }
 
@@ -255,7 +275,7 @@ MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius
 
     if (found) {
         loot_enabled_ = false;
-        drops_.get<Drop>(best_oid)->get().note_pickup_request();
+        drops_.get<Drop>(best_oid)->get().note_pickup_request(now);
 
         return { best_oid, best_pos };
     }

@@ -26,8 +26,8 @@ ItemDrop::ItemDrop(int32_t oid,
                    bool pd,
                    const Texture &icn) :
     Drop(oid, owner, start, dest, type, mode, pd),
-    icon_(icn)
-    /*item_id_(iid)*/ {}
+    icon_(icn),
+    item_id_(iid) {}
 
 void ItemDrop::draw(double viewx, double viewy, float alpha) const {
     if (!active_) {
@@ -42,5 +42,9 @@ void ItemDrop::draw(double viewx, double viewy, float alpha) const {
 
 Rectangle<int16_t> ItemDrop::bounds() const {
     return icon_bounds(icon_.get_origin(), icon_.get_dimensions());
+}
+
+int32_t ItemDrop::itemid() const {
+    return item_id_;
 }
 }  // namespace ms

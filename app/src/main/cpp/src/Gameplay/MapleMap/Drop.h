@@ -40,11 +40,18 @@ public:
     // there is nothing lying at that spot to pick up.
     bool landed() const;
 
+    // The item type this drop belongs to for the shared rejection cooldown; mesos are one type (0).
+    virtual int32_t itemid() const;
+
     using PickupClock = std::chrono::steady_clock;
     using PickupTime = PickupClock::time_point;
     bool can_request_pickup(PickupTime now = PickupClock::now()) const;
     void note_pickup_request(PickupTime now = PickupClock::now());
-    void note_pickup_rejection(int32_t retry_after_ms, PickupTime now = PickupClock::now());
+
+    // Whether a pickup request is still waiting for its reply, consuming the wait so a second
+    // rejection for the same request is ignored. The retry itself is served per item type by
+    // MapDrops, not by this drop.
+    bool consume_pickup_reply();
 
 protected:
     Drop(int32_t oid,

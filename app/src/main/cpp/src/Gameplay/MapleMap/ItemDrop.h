@@ -35,8 +35,10 @@ public:
 
     Rectangle<int16_t> bounds() const override;
 
+    int32_t itemid() const override;
+
 private:
     const Texture &icon_;
-//    int32_t item_id_;
+    int32_t item_id_;
 };
 }  // namespace ms
