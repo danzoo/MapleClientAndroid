@@ -197,7 +197,7 @@ public:
     PickupItemPacket(int32_t oid, Point<int16_t> position) :
         OutPacket(OutPacket::Opcode::PICKUP_ITEM) {
         write_int(0);
-        write_byte(0);
+        write_byte(0x7f);  // Opt in to OID-bearing rejection; old servers ignore this byte.
         write_point(position);
         write_int(oid);
     }

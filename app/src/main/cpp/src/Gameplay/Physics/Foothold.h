@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <cstdint>
 #include <imgwz/node.hpp>
 
 #include "../../Template/Range.h"
@@ -90,11 +91,15 @@ public:
     // Check whether this foothold blocks an object.
     bool is_blocking(const Range<int16_t> &vertical) const;
 
+    // The existing pixel-height window: [trunc(foot_y) - 50, trunc(foot_y) - 1].
+    // Compute it without narrowing so near-limit coordinates cannot wrap across the map.
+    bool blocks_foot_height(double foot_y) const;
+
     // Returns the width.
-    int16_t hdelta() const;
+    int32_t hdelta() const;
 
     // Returns the height.
-    int16_t vdelta() const;
+    int32_t vdelta() const;
 
     // Returns the slope as a ratio of vertical/horizontal.
     double slope() const;
@@ -125,6 +130,10 @@ private:
     uint16_t m_next_;
     uint8_t m_layer_;
     double m_force_;
+    // Cached once from immutable endpoints; null footholds and walls are flat.
+    double m_slope_ = 0.0;
+    double m_unit_cos_ = 1.0;
+    double m_unit_sin_ = 0.0;
     Range<int16_t> m_horizontal_;
     Range<int16_t> m_vertical_;
 };

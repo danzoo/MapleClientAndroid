@@ -16,6 +16,7 @@
 #include "Foothold.h"
 
 #include <cmath>
+#include <limits>
 
 namespace ms {
 Foothold::Foothold(const img::node &src, uint16_t id, uint8_t ly) :
@@ -26,6 +27,13 @@ Foothold::Foothold(const img::node &src, uint16_t id, uint8_t ly) :
     m_force_(0.0),
     m_horizontal_(src["x1"], src["x2"]),
     m_vertical_(src["y1"], src["y2"]) {
+    const int32_t width = hdelta();
+    if (m_id_ && width != 0) {
+        m_slope_ = static_cast<double>(vdelta()) / width;
+        m_unit_cos_ = 1.0 / std::sqrt(1.0 + m_slope_ * m_slope_);
+        m_unit_sin_ = m_slope_ * m_unit_cos_;
+    }
+
     const img::node force = src["force"];
 
     if (force && (force.data_type() == img::node::type::integer
@@ -114,11 +122,11 @@ bool Foothold::is_right_edge() const {
 }
 
 bool Foothold::hcontains(int16_t x) const {
-    return m_id_ && m_horizontal_.contains(x);
+    return m_id_ && l() <= x && x <= r();
 }
 
 bool Foothold::vcontains(int16_t y) const {
-    return m_id_ && m_vertical_.contains(y);
+    return m_id_ && t() <= y && y <= b();
 }
 
 bool Foothold::is_blocking(const Range<int16_t> &vertical) const {
@@ -128,35 +136,32 @@ bool Foothold::is_blocking(const Range<int16_t> &vertical) const {
     return is_wall() && t() <= vertical.greater() && vertical.smaller() <= b();
 }
 
-int16_t Foothold::hdelta() const {
-    return m_horizontal_.delta();
+bool Foothold::blocks_foot_height(double foot_y) const {
+    if (!std::isfinite(foot_y)) {
+        return false;
+    }
+    const double pixel_y = std::trunc(foot_y);
+    return is_wall() && t() <= pixel_y - 1.0 && pixel_y - 50.0 <= b();
 }
 
-int16_t Foothold::vdelta() const {
-    return m_vertical_.delta();
+int32_t Foothold::hdelta() const {
+    return static_cast<int32_t>(x2()) - static_cast<int32_t>(x1());
+}
+
+int32_t Foothold::vdelta() const {
+    return static_cast<int32_t>(y2()) - static_cast<int32_t>(y1());
 }
 
 double Foothold::slope() const {
-    return is_wall() ? 0.0f : static_cast<double>(vdelta()) / hdelta();
+    return m_slope_;
 }
 
 double Foothold::unit_cos() const {
-    // get_fh() returns a null foothold (id 0, zero-length span) when a query
-    // finds nothing, and walls have no horizontal extent. Both would otherwise
-    // make slope() a 0/0 NaN that propagates into hspeed and x. Treat them as
-    // flat ground, which is also what the original does for vertical walls.
-    if (!m_id_ || is_wall() || hdelta() == 0) {
-        return 1.0;
-    }
-    const double s = slope();
-    return 1.0 / std::sqrt(1.0 + s * s);
+    return m_unit_cos_;
 }
 
 double Foothold::unit_sin() const {
-    if (!m_id_ || is_wall() || hdelta() == 0) {
-        return 0.0;
-    }
-    return slope() * unit_cos();
+    return m_unit_sin_;
 }
 
 double Foothold::force() const {
@@ -168,6 +173,10 @@ bool Foothold::is_slippery() const {
 }
 
 double Foothold::ground_below(double x) const {
+    if (!m_id_) {
+        return std::numeric_limits<double>::infinity();
+    }
+
     return is_floor() ? y1() : slope() * (x - x1()) + y1();
 }
 }  // namespace ms

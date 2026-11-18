@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <limits>
 #include <unordered_map>
 
 #include "Foothold.h"
@@ -105,7 +106,9 @@ private:
     std::unordered_multimap<int16_t, uint16_t> walls_by_x_;
 
     Foothold null_fh_;
-    Range<int16_t> walls_;
-    Range<int16_t> borders_;
+    Range<int16_t> walls_{std::numeric_limits<int16_t>::min(),
+                          std::numeric_limits<int16_t>::max()};
+    Range<int16_t> borders_{std::numeric_limits<int16_t>::min(),
+                            std::numeric_limits<int16_t>::max()};
 };
 }  // namespace ms

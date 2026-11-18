@@ -25,10 +25,12 @@
 
 namespace ms {
 FootholdTree::FootholdTree(const img::node &src) {
-    int16_t leftw = 30000;
-    int16_t rightw = -30000;
-    int16_t botb = -30000;
-    int16_t topb = 30000;
+    const int coordinate_min = std::numeric_limits<int16_t>::min();
+    const int coordinate_max = std::numeric_limits<int16_t>::max();
+    int leftw = coordinate_max;
+    int rightw = coordinate_min;
+    int botb = coordinate_min;
+    int topb = coordinate_max;
 
     for (const auto &basef : src) {
         uint8_t layer;
@@ -48,6 +50,10 @@ FootholdTree::FootholdTree(const img::node &src) {
                     id = static_cast<uint16_t>(std::stoi(lastf.name()));
                 } catch (const std::exception &ex) {
                     std::cout << __func__ << ": " << ex.what() << std::endl;
+                    continue;
+                }
+
+                if (id == 0) {
                     continue;
                 }
 
@@ -81,18 +87,25 @@ FootholdTree::FootholdTree(const img::node &src) {
                     continue;
                 }
 
-                int16_t start = foothold.l();
-                int16_t end = foothold.r();
+                const int start = foothold.l();
+                const int end = foothold.r();
 
                 for (int i = start; i <= end; i++) {
-                    footholds_by_x_.emplace(i, id);
+                    footholds_by_x_.emplace(static_cast<int16_t>(i), id);
                 }
             }
         }
     }
 
-    walls_ = { leftw + 25, rightw - 25 };
-    borders_ = { topb - 300, botb + 100 };
+    if (footholds_.empty()) {
+        return;
+    }
+
+    const int wall_margin = std::min(25, (rightw - leftw) / 2);
+    walls_ = {static_cast<int16_t>(leftw + wall_margin),
+              static_cast<int16_t>(rightw - wall_margin)};
+    borders_ = {static_cast<int16_t>(std::clamp(topb - 300, coordinate_min, coordinate_max)),
+                static_cast<int16_t>(std::clamp(botb + 100, coordinate_min, coordinate_max))};
 }
 
 FootholdTree::FootholdTree() = default;
@@ -161,7 +174,10 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
         }
 
         if (collision) {
-            phobj.limitx(wall);
+            // Stay on the incoming side: at an exact shared endpoint the next ground lookup
+            // may pick the platform beyond the wall and lose the blocking link. Moving away
+            // still works because the wall is then behind the swept segment.
+            phobj.limitx(std::nextafter(wall, crnt_x));
             phobj.clear_flag(PhysicsObject::Flag::TURN_AT_EDGES);
         } else if (left ? next_x < walls_.first() : next_x > walls_.second()) {
             // The crossing test above only fires while the wall is still ahead of the body. One
@@ -184,11 +200,12 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
         double next_y = crnt_y + vmove;
 
         // Measure the drop against the ground actually below the swept columns, not against
-        // phobj.fhid. After a rope leap the foothold is frozen from the grab (or left at zero by
-        // update_fh's airborne early-out), and a stale or null foothold reports a ground the body is
-        // already past - or NaN - so the crossing test never fires and the body sinks through the
-        // platform it should have landed on. Querying the terrain under the path lands it regardless.
-        double ground_start = ground_below_path(phobj.crnt_x(), crnt_y);
+        // phobj.fhid. After a rope leap the foothold may be frozen from the grab or left at zero
+        // when no terrain was found. A stale foothold can report ground the body is already past,
+        // while a null foothold has no ground. Querying the terrain under the path finds the
+        // platform the body should land on regardless of its stored foothold.
+        const uint16_t start_fhid = get_fhid_below(phobj.crnt_x(), crnt_y);
+        double ground_start = get_fh(start_fhid).ground_below(phobj.crnt_x());
         double ground_dest = ground_below_path(phobj.crnt_x() + hmove, crnt_y);
         double ground = std::min(ground_start, ground_dest);
 
@@ -201,8 +218,7 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
             // grounded again, so a slide runs to the bottom of the slope with neither friction nor
             // input. A destination further below than the slope accounts for is another floor - an
             // edge, a platform below - and that one is still met at the crossing point.
-            double drop = std::abs(get_fh(get_fhid_below(phobj.crnt_x(), crnt_y)).slope())
-                * std::abs(hmove);
+            double drop = std::abs(get_fh(start_fhid).slope()) * std::abs(hmove);
             const bool lands_at_dest = ground_dest - ground <= drop + 0.5;
             const double landing_x = phobj.crnt_x() + (lands_at_dest ? hmove : 0.0);
             const uint16_t landing_fhid = get_fhid_below(landing_x, crnt_y);
@@ -299,6 +315,11 @@ bool FootholdTree::swept_ground(double fromx, double fromy, double tox, double t
     // changes sign at most once. Sampling the whole columns it passes plus the point it ends at
     // therefore catches every crossing, including one in the last fraction of a column.
     auto meet = [&](double x, double y) {
+        if (!std::isfinite(x) || !std::isfinite(y)
+            || x < std::numeric_limits<int16_t>::min()
+            || x > std::numeric_limits<int16_t>::max()) {
+            return false;
+        }
         const Foothold *hit = nullptr;
         double best = 0.0;
 
@@ -306,6 +327,11 @@ bool FootholdTree::swept_ground(double fromx, double fromy, double tox, double t
 
         for (auto iter = range.first; iter != range.second; ++iter) {
             const Foothold &fh = footholds_.at(iter->second);
+            // The integer column can select a platform just beyond a fractional endpoint.
+            // A sweep may only meet a surface inside its actual horizontal span.
+            if (x < fh.l() || x > fh.r()) {
+                continue;
+            }
             const double ground = fh.ground_below(x);
 
             // Standing on a surface is not meeting it. The touch-down frame leaves the body exactly
@@ -383,6 +409,7 @@ bool FootholdTree::swept_ground(double fromx, double fromy, double tox, double t
     std::sort(samples.begin(), samples.end(), [direction](double a, double b) {
         return direction > 0 ? a < b : a > b;
     });
+    samples.erase(std::unique(samples.begin(), samples.end()), samples.end());
 
     for (double x : samples) {
         const double y = fromy + (toy - fromy) * (x - fromx) / span;
@@ -420,14 +447,24 @@ void FootholdTree::update_fh(PhysicsObject &phobj) const {
         }
     } else {
         phobj.fhid = get_fhid_below(x, y);
-
-        // fix for stuttering slope walk
-        if (phobj.fhid == 0) {
-            return;
-        }
     }
 
     const Foothold &nextfh = get_fh(phobj.fhid);
+    if (!nextfh.id()) {
+        phobj.fhid = 0;
+        phobj.fhslope = 0.0;
+        phobj.fhcos = 1.0;
+        phobj.fhsin = 0.0;
+        phobj.foothold_force = 0.0;
+        phobj.surface_friction = 1.0;
+        phobj.onground = false;
+        phobj.enablejd = false;
+        if (phobj.is_ground_type()) {
+            phobj.type = PhysicsObject::Type::NORMAL;
+        }
+        return;
+    }
+
     phobj.fhslope = nextfh.slope();
     phobj.fhcos = nextfh.unit_cos();
     phobj.fhsin = nextfh.unit_sin();
@@ -491,11 +528,6 @@ void FootholdTree::update_fh(PhysicsObject &phobj) const {
     if (phobj.fhlayer == 0 || phobj.onground) {
         phobj.fhlayer = nextfh.layer();
     }
-
-    if (phobj.fhid == 0) {
-        phobj.fhid = curfh.id();
-        phobj.limitx(curfh.x1());
-    }
 }
 
 const Foothold &FootholdTree::get_fh(uint16_t fhid) const {
@@ -522,8 +554,6 @@ double FootholdTree::get_air_wall(uint16_t curid, bool left, double fy) const {
         return boundary;
     }
 
-    auto shorty = static_cast<int16_t>(fy);
-    Range<int16_t> vertical(shorty - 50, shorty - 1);
     bool wall_started = false;
     int16_t wall_x = 0;
 
@@ -561,7 +591,7 @@ double FootholdTree::get_air_wall(uint16_t curid, bool left, double fy) const {
             break;
         }
 
-        if (wall_started && next.is_blocking(vertical)) {
+        if (wall_started && next.blocks_foot_height(fy)) {
             return wall_x;
         }
         cur = &next;
@@ -571,20 +601,18 @@ double FootholdTree::get_air_wall(uint16_t curid, bool left, double fy) const {
 }
 
 double FootholdTree::get_wall(uint16_t curid, bool left, double fy) const {
-    auto shorty = static_cast<int16_t>(fy);
-    Range<int16_t> vertical(shorty - 50, shorty - 1);
     const Foothold &cur = get_fh(curid);
 
     if (left) {
         const Foothold &prev = get_fh(cur.prev());
 
-        if (prev.is_blocking(vertical)) {
+        if (prev.blocks_foot_height(fy)) {
             return cur.l();
         }
 
         const Foothold &prev_prev = get_fh(prev.prev());
 
-        if (prev_prev.is_blocking(vertical)) {
+        if (prev_prev.blocks_foot_height(fy)) {
             return prev.l();
         }
 
@@ -593,13 +621,13 @@ double FootholdTree::get_wall(uint16_t curid, bool left, double fy) const {
 
     const Foothold &next = get_fh(cur.next());
 
-    if (next.is_blocking(vertical)) {
+    if (next.blocks_foot_height(fy)) {
         return cur.r();
     }
 
     const Foothold &next_next = get_fh(next.next());
 
-    if (next_next.is_blocking(vertical)) {
+    if (next_next.blocks_foot_height(fy)) {
         return next.r();
     }
 
@@ -643,6 +671,14 @@ double FootholdTree::get_edge(uint16_t curid, bool left) const {
 }
 
 uint16_t FootholdTree::get_fhid_below(double fx, double fy) const {
+    const double coordinate_min = std::numeric_limits<int16_t>::min();
+    const double coordinate_max = std::numeric_limits<int16_t>::max();
+    if (!std::isfinite(fx) || !std::isfinite(fy)
+        || fx < coordinate_min || fx > coordinate_max
+        || fy < coordinate_min || fy > coordinate_max) {
+        return 0;
+    }
+
     uint16_t ret = 0;
     double comp = borders_.second();
 
@@ -651,6 +687,10 @@ uint16_t FootholdTree::get_fhid_below(double fx, double fy) const {
 
     for (auto iter = range.first; iter != range.second; ++iter) {
         const Foothold &fh = footholds_.at(iter->second);
+        if (fx < fh.l() || fx > fh.r()) {
+            continue;
+        }
+
         double ycomp = fh.ground_below(fx);
 
         if (comp >= ycomp && ycomp >= fy) {
@@ -704,22 +744,24 @@ bool FootholdTree::sweep_walls(Point<int16_t> from,
         return false;
     }
 
-    const int16_t direction = to.x() > from.x() ? 1 : -1;
-    const int16_t last = include_end ? to.x() : to.x() - direction;
+    const int direction = to.x() > from.x() ? 1 : -1;
+    const int last = include_end ? to.x() : to.x() - direction;
     const double slope =
         static_cast<double>(to.y() - from.y()) / (to.x() - from.x());
 
-    for (int16_t x = from.x() + direction;
+    for (int x = from.x() + direction;
          direction > 0 ? x <= last : x >= last;
          x += direction) {
         const double y = from.y() + slope * (x - from.x());
         const int16_t crossed = static_cast<int16_t>(std::round(y));
-
-        auto range = walls_by_x_.equal_range(x);
+        // Every visited column lies between the int16 endpoints; the int loop can
+        // advance past an extreme endpoint without wrapping before its condition.
+        const int16_t column = static_cast<int16_t>(x);
+        auto range = walls_by_x_.equal_range(column);
 
         for (auto iter = range.first; iter != range.second; ++iter) {
             if (get_fh(iter->second).vcontains(crossed)) {
-                cross = Point<int16_t>(x, crossed);
+                cross = Point<int16_t>(column, crossed);
                 return true;
             }
         }

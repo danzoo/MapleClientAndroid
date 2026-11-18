@@ -35,13 +35,18 @@ void ShowStatusInfoHandler::handle(InPacket &recv) const {
         int8_t mode2 = recv.read_byte();
 
         if (mode2 == -1) {
-            Stage::get().note_pickup_failure();
+            // These generic notices also come from non-pickup inventory operations and carry no OID.
             show_status(Color::Name::WHITE, "背包已满，无法再拾取物品。");
         } else if (mode2 == -2) {
-            // showItemUnavailable: quest-bound or otherwise refused drop. Same cooldown as a full
-            // bag, so the client stops retrying it instead of flooding the server.
-            Stage::get().note_pickup_failure();
             show_status(Color::Name::WHITE, "该物品当前无法拾取。");
+        } else if (mode2 == -3) {
+            if (recv.length() < 3 * sizeof(int32_t)) {
+                return;
+            }
+            const int32_t mapid = recv.read_int();
+            const int32_t oid = recv.read_int();
+            const int32_t retry_after_ms = recv.read_int();
+            Stage::get().note_pickup_failure(mapid, oid, retry_after_ms);
         } else if (mode2 == 0) {
             int32_t itemid = recv.read_int();
             int32_t qty = recv.read_int();

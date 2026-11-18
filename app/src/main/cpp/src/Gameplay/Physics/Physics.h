@@ -54,6 +54,10 @@ private:
     // collision stopped it. Ice only changes the drive/damping/cap, not the terrain path.
     double move_normal(PhysicsObject &) const;
 
+    // Shared Euler integration for flight, swimming and floating; forces are consumed once.
+    void move_damped(PhysicsObject &, double hdrag, double vdrag,
+                     double vertical_pull, double maxspeed) const;
+
     void move_flying(PhysicsObject &) const;
 
     void move_swimming(PhysicsObject &) const;

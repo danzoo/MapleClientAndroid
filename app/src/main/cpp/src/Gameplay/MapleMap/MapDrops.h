@@ -42,8 +42,11 @@ public:
     // Remove a drop.
     void remove(int32_t oid, int8_t mode, const PhysicsObject *looter);
 
-    // Remove all drops.
+    // Remove all drops, including delayed spawns.
     void clear();
+
+    // Only an explicit server rejection identifies which drop should wait.
+    void note_pickup_failure(int32_t oid, int32_t retry_after_ms);
 
     // Find a drop which can be picked up at the specified position.
     using Loot = std::pair<int32_t, Point<int16_t>>;

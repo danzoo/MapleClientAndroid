@@ -112,6 +112,15 @@ void MapDrops::spawn(DropSpawn &&spawn) {
 }
 
 void MapDrops::remove(int32_t oid, int8_t mode, const PhysicsObject *looter) {
+    // Another player can collect it while its local death animation still delays the spawn.
+    // A final removal must cancel that queue entry too, or it later reappears as phantom loot.
+    for (size_t pending = spawns_.size(); pending > 0; --pending) {
+        DropSpawn spawn = std::move(spawns_.front());
+        spawns_.pop();
+        if (spawn.get_oid() != oid) {
+            spawns_.emplace(std::move(spawn));
+        }
+    }
     if (auto drop = drops_.get<Drop>(oid)) {
         drop->get().expire(mode, looter);
     }
@@ -119,6 +128,15 @@ void MapDrops::remove(int32_t oid, int8_t mode, const PhysicsObject *looter) {
 
 void MapDrops::clear() {
     drops_.clear();
+    spawns_ = {};
+    loot_enabled_ = false;
+    drop_sound_cooldown_ = 0;
+}
+
+void MapDrops::note_pickup_failure(int32_t oid, int32_t retry_after_ms) {
+    if (auto drop = drops_.get<Drop>(oid)) {
+        drop->get().note_pickup_rejection(retry_after_ms);
+    }
 }
 
 MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
@@ -139,8 +157,7 @@ MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
     for (auto iter = oids.begin(); iter != oids.end(); ++iter) {
         auto drop = drops_.get<const Drop>(*iter);
 
-        if (!drop || !drop->get().is_active() || drop->get().claimed()
-            || !drop->get().landed()) {
+        if (!drop || !drop->get().can_request_pickup()) {
             continue;
         }
 
@@ -166,6 +183,7 @@ MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
 
     if (found) {
         loot_enabled_ = false;
+        drops_.get<Drop>(best_oid)->get().note_pickup_request();
 
         return { best_oid, best_pos };
     }
@@ -192,8 +210,7 @@ MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius
     for (auto iter = oids.begin(); iter != oids.end(); ++iter) {
         auto drop = drops_.get<const Drop>(*iter);
 
-        if (!drop || !drop->get().is_active() || drop->get().claimed()
-            || !drop->get().landed()) {
+        if (!drop || !drop->get().can_request_pickup()) {
             continue;
         }
 
@@ -238,6 +255,7 @@ MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius
 
     if (found) {
         loot_enabled_ = false;
+        drops_.get<Drop>(best_oid)->get().note_pickup_request();
 
         return { best_oid, best_pos };
     }

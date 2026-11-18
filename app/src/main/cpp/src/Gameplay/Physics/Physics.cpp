@@ -38,9 +38,7 @@ const double MAX_SUBSTEP = 4.0;
 // It only binds past v*v/2g, roughly a hundred pixels down, so platform-height drops and jumps
 // still fall exactly as they always have.
 
-Physics::Physics(const img::node &src) {
-    fh_tree_ = src;
-}
+Physics::Physics(const img::node &src) : fh_tree_(src) {}
 
 Physics::Physics() = default;
 
@@ -53,6 +51,16 @@ void Physics::move_object(PhysicsObject &phobj) const {
     phobj.landing_input_dir = phobj.hforce > 0.0 ? 1.0
                               : phobj.hforce < 0.0 ? -1.0 : 0.0;
     phobj.landing_conversion = false;
+    phobj.vertical_limited = false;
+
+    // Ropes and scripted motion retain their own foothold/layer. They do not query terrain,
+    // even without a foothold id: an empty query must not snap a fixated object to x = 0.
+    // No collision substeps are needed, and shifting once retains the interpolation origin.
+    if (phobj.type == PhysicsObject::Type::FIXATED) {
+        phobj.normalize();
+        phobj.apply_substep(phobj.hstep(), phobj.vstep());
+        return;
+    }
 
     // Determine which platform the object is currently on
     fh_tree_.update_fh(phobj);
@@ -63,7 +71,6 @@ void Physics::move_object(PhysicsObject &phobj) const {
     // speed saved for travel and the end-of-step speed restored afterwards.
     const bool normal = phobj.is_ground_type();
     double end_vspeed = 0.0;
-    phobj.vertical_limited = false;
     switch (phobj.type) {
         case PhysicsObject::Type::NORMAL:
         case PhysicsObject::Type::ICE:
@@ -106,14 +113,7 @@ void Physics::move_object(PhysicsObject &phobj) const {
         double dh = hrem * share;
         double dv = vrem * share;
 
-        // A fixated body is never asked about against the terrain, which is what the reference does
-        // too - it limits movement only for normal, flying and swimming bodies - and it has to be
-        // that way: a climber keeps the foothold it grabbed from, because update_fh returns early for
-        // a fixated object, so the floor test would measure it against that very platform and clamp
-        // every downward piece back onto it. Descent would be impossible.
-        if (phobj.type != PhysicsObject::Type::FIXATED) {
-            fh_tree_.limit_movement(phobj, dh, dv);
-        }
+        fh_tree_.limit_movement(phobj, dh, dv);
 
         // A piece that ran into something is already over: the check put the object against the
         // obstacle it hit and took that direction's speed away, so the rest of the tick has nothing
@@ -167,7 +167,7 @@ void Physics::move_object(PhysicsObject &phobj) const {
         // The original integrates position with (v_old + v_new) / 2 * dt. The
         // airborne part of this tick already travelled at v_air_x for the whole
         // step, so only half of the velocity change belongs to the landing step.
-        phobj.x.shift(0.5 * (v_new - v_air_x) * Constants::TICK_SECONDS);
+        const double correction = 0.5 * (v_new - v_air_x) * Constants::TICK_SECONDS;
         phobj.hspeed = v_new;
 
         const Foothold &landing = fh_tree_.get_foothold(phobj.landing_fhid);
@@ -176,10 +176,29 @@ void Physics::move_object(PhysicsObject &phobj) const {
             phobj.fhslope = landing.slope();
             phobj.fhcos = c;
             phobj.fhsin = s;
+            if (correction != 0.0) {
+                // Correction can point against the new velocity, so use its own direction
+                // in the ordinary grounded collision path. A local probe retains the tick's
+                // interpolation origin and does not integrate gravity or the impact twice.
+                PhysicsObject projected = phobj;
+                projected.onground = true;
+                projected.hspeed = correction / Constants::TICK_SECONDS;
+                projected.vspeed = 0.0;
+                fh_tree_.limit_movement(projected, correction, landing.slope() * correction);
+                if (projected.hmobile()) {
+                    phobj.x.shift(correction);
+                } else {
+                    phobj.x.shift(projected.crnt_x() - phobj.crnt_x());
+                    phobj.hspeed = 0.0;
+                }
+                phobj.flags = projected.flags;
+            }
             // Re-seat the body on the surface at its corrected x; otherwise the
             // next update_fh would see y != ground and start a spurious fall.
             phobj.limity(landing.ground_below(phobj.crnt_x()));
             phobj.onground = true;
+        } else {
+            phobj.x.shift(correction);
         }
         phobj.landing_conversion = false;
         // Keep air_direction_changed set through the landing tick: the player
@@ -225,7 +244,6 @@ double Physics::move_normal(PhysicsObject &phobj) const {
         start_vspeed += phobj.vforce * dt;
 
         const double base_accel = PhysicsParams::ground_accel();
-        const double accel = base_accel * surface;
         const double decel = PhysicsParams::ground_friction() * surface;
         const double c = phobj.fhcos;
         const double s = phobj.fhsin;
@@ -238,11 +256,13 @@ double Physics::move_normal(PhysicsObject &phobj) const {
 
         if (phobj.hforce != 0.0) {
             const double dir = phobj.hforce > 0.0 ? 1.0 : -1.0;
-            const double cap = (accel > 0.0
-                ? std::abs(phobj.hforce) * PhysicsParams::walk_speed() / accel
+            // hforce encodes the entity's target using the unscaled ground acceleration.
+            // Surface friction changes its ramp, not the target encoded by ground_drive().
+            const double cap = (base_accel > 0.0
+                ? std::abs(phobj.hforce) * PhysicsParams::walk_speed() / base_accel
                 : PhysicsParams::walk_speed())
                 * (dir * s > 0.0 ? 1.0 + sin2 : 1.0);
-            const double along_acc = phobj.hforce * drive_factor;
+            const double along_acc = phobj.hforce * surface * drive_factor;
 
             phobj.hacc = along_acc * c;
             along += along_acc * dt;
@@ -321,92 +341,41 @@ double Physics::move_normal(PhysicsObject &phobj) const {
     return end_vspeed;
 }
 
-void Physics::move_flying(PhysicsObject &phobj) const {
-    const double damping = PhysicsParams::fly_damping();
-
-    phobj.hacc = phobj.hforce - damping * phobj.hspeed;
-    phobj.vacc = phobj.vforce - damping * phobj.vspeed;
+void Physics::move_damped(PhysicsObject &phobj, double hdrag, double vdrag,
+                          double vertical_pull, double maxspeed) const {
+    phobj.hacc = phobj.hforce - hdrag * phobj.hspeed;
+    phobj.vacc = phobj.vforce - vdrag * phobj.vspeed + vertical_pull;
     phobj.hforce = 0.0;
     phobj.vforce = 0.0;
 
-    phobj.hspeed += phobj.hacc * Constants::TICK_SECONDS;
-    phobj.vspeed += phobj.vacc * Constants::TICK_SECONDS;
-
-    // floatDrag2 leaves a flight settling far above the speed the archive names for flying, so it
-    // is that named speed, not the drag, that bounds one.
-    const double maxfly = PhysicsParams::fly_speed();
-
-    if (phobj.hspeed > maxfly) {
-        phobj.hspeed = maxfly;
-    } else if (phobj.hspeed < -maxfly) {
-        phobj.hspeed = -maxfly;
-    }
-
-    if (phobj.vspeed > maxfly) {
-        phobj.vspeed = maxfly;
-    } else if (phobj.vspeed < -maxfly) {
-        phobj.vspeed = -maxfly;
-    }
+    // All three damped engines use the same Euler step, symmetric cap and rest threshold.
+    phobj.hspeed = std::clamp(phobj.hspeed + phobj.hacc * Constants::TICK_SECONDS,
+                             -maxspeed, maxspeed);
+    phobj.vspeed = std::clamp(phobj.vspeed + phobj.vacc * Constants::TICK_SECONDS,
+                             -maxspeed, maxspeed);
 
     if (phobj.hacc == 0.0 && std::abs(phobj.hspeed) < Constants::STOP_SPEED) {
         phobj.hspeed = 0.0;
     }
-
     if (phobj.vacc == 0.0 && std::abs(phobj.vspeed) < Constants::STOP_SPEED) {
         phobj.vspeed = 0.0;
     }
+}
+
+void Physics::move_flying(PhysicsObject &phobj) const {
+    const double damping = PhysicsParams::fly_damping();
+    move_damped(phobj, damping, damping, 0.0, PhysicsParams::fly_speed());
 }
 
 void Physics::move_swimming(PhysicsObject &phobj) const {
     const double damping = PhysicsParams::swim_damping();
-
-    phobj.hacc = phobj.hforce - damping * phobj.hspeed;
-    phobj.vacc = phobj.vforce - damping * phobj.vspeed;
-    phobj.hforce = 0.0;
-    phobj.vforce = 0.0;
-
-    // The one pull in here that has no key behind it.
-    if (phobj.is_flag_not_set(PhysicsObject::Flag::NO_GRAVITY)) {
-        phobj.vacc += PhysicsParams::swim_gravity();
-    }
-
-    phobj.hspeed += phobj.hacc * Constants::TICK_SECONDS;
-    phobj.vspeed += phobj.vacc * Constants::TICK_SECONDS;
-
-    // The speed the archive names for swimming is the speed the strokes settle at, so it caps both
-    // axes rather than only the direction being paddled towards.
-    const double maxswim = PhysicsParams::swim_speed();
-
-    if (phobj.hspeed > maxswim) {
-        phobj.hspeed = maxswim;
-    } else if (phobj.hspeed < -maxswim) {
-        phobj.hspeed = -maxswim;
-    }
-
-    if (phobj.vspeed > maxswim) {
-        phobj.vspeed = maxswim;
-    } else if (phobj.vspeed < -maxswim) {
-        phobj.vspeed = -maxswim;
-    }
-
-    if (phobj.hacc == 0.0 && std::abs(phobj.hspeed) < Constants::STOP_SPEED) {
-        phobj.hspeed = 0.0;
-    }
-
-    if (phobj.vacc == 0.0 && std::abs(phobj.vspeed) < Constants::STOP_SPEED) {
-        phobj.vspeed = 0.0;
-    }
+    const double pull = phobj.is_flag_not_set(PhysicsObject::Flag::NO_GRAVITY)
+        ? PhysicsParams::swim_gravity() : 0.0;
+    move_damped(phobj, damping, damping, pull, PhysicsParams::swim_speed());
 }
 
 void Physics::move_floating(PhysicsObject &phobj) const {
-    const double dt = Constants::TICK_SECONDS;
-
-    // A body at the water surface is dragged hard sideways (floatDrag1) and gently up and
-    // down (floatDrag2), with strokes still driven by swimForce and bounded by swimSpeed.
-    phobj.hacc = phobj.hforce - PhysicsParams::float_drag1() * phobj.hspeed;
-    phobj.vacc = phobj.vforce - PhysicsParams::float_drag2() * phobj.vspeed;
-    phobj.hforce = 0.0;
-    phobj.vforce = 0.0;
+    double pull = 0.0;
 
     // floatCoefficient is read as a fraction of gravity: a spring constant pulling the body
     // back to the map's waterline. +y is down, so a body above the line is pulled down and
@@ -420,26 +389,14 @@ void Physics::move_floating(PhysicsObject &phobj) const {
         if (k > 0.0) {
             const double reach = PhysicsParams::gravity() / k;
             const double offset = std::clamp(phobj.waterline - phobj.crnt_y(), -reach, reach);
-            phobj.vacc += k * offset;
+            pull = k * offset;
         }
     } else if (phobj.is_flag_not_set(PhysicsObject::Flag::NO_GRAVITY)) {
-        phobj.vacc += PhysicsParams::swim_gravity();
+        pull = PhysicsParams::swim_gravity();
     }
 
-    phobj.hspeed += phobj.hacc * dt;
-    phobj.vspeed += phobj.vacc * dt;
-
-    const double maxspeed = PhysicsParams::swim_speed();
-    phobj.hspeed = std::clamp(phobj.hspeed, -maxspeed, maxspeed);
-    phobj.vspeed = std::clamp(phobj.vspeed, -maxspeed, maxspeed);
-
-    if (phobj.hacc == 0.0 && std::abs(phobj.hspeed) < Constants::STOP_SPEED) {
-        phobj.hspeed = 0.0;
-    }
-
-    if (phobj.vacc == 0.0 && std::abs(phobj.vspeed) < Constants::STOP_SPEED) {
-        phobj.vspeed = 0.0;
-    }
+    move_damped(phobj, PhysicsParams::float_drag1(), PhysicsParams::float_drag2(),
+                pull, PhysicsParams::swim_speed());
 }
 
 Point<int16_t> Physics::get_y_below(Point<int16_t> position) const {

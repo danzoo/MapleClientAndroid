@@ -15,6 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <chrono>
+
 #include "../Template/Interpolated.h"
 #include "../Template/Rectangle.h"
 #include "MapObject.h"
@@ -37,6 +39,12 @@ public:
     // of the character is a flight to the spot the server measured the drop at, and until it arrives
     // there is nothing lying at that spot to pick up.
     bool landed() const;
+
+    using PickupClock = std::chrono::steady_clock;
+    using PickupTime = PickupClock::time_point;
+    bool can_request_pickup(PickupTime now = PickupClock::now()) const;
+    void note_pickup_request(PickupTime now = PickupClock::now());
+    void note_pickup_rejection(int32_t retry_after_ms, PickupTime now = PickupClock::now());
 
 protected:
     Drop(int32_t oid,
@@ -65,6 +73,10 @@ protected:
 
 private:
     enum State { DROPPED, FLOATING, PICKED_UP };
+
+    // State dies with this drop. Generic inventory messages never update it.
+    PickupTime pickup_retry_at_{};
+    bool awaiting_pickup_reply_ = false;
 
     int32_t owner_;
     int8_t pickup_type_;

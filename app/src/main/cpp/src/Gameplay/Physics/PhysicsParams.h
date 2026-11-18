@@ -27,11 +27,12 @@ namespace ms {
 // which have not been measured. walk_speed() is the coefficient used with SPEED / 100, not the
 // player's baseline walking speed.
 //
-// A missing archive, or a missing key inside it, leaves that one value at the baseline archive
-// value, so a Data tree that predates the file still plays.
+// Each load starts from baseline defaults. Missing, nonnumeric, nonfinite or negative values
+// retain their defaults; remaining-speed/jump fractions must also be in [0, 1]. A partial or
+// older Data tree therefore cannot inherit values from a previously mounted archive.
 class PhysicsParams {
 public:
-    // Read the archive. Has to run after the img tree has been mounted.
+    // Reset defaults and read the archive after the img tree has been mounted.
     static void load();
 
     // Free fall acceleration.

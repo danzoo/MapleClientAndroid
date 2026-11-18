@@ -19,6 +19,7 @@
 #include <imgwz/wz.hpp>
 
 #include <algorithm>
+#include <cmath>
 
 #include "Constants.h"
 #include "PhysicsObject.h"
@@ -73,6 +74,36 @@ struct Params {
     double swim_gravity = 468.75;
 };
 
+struct ParamField {
+    const char *name;
+    double Params::*member;
+    bool fraction = false;
+};
+
+// Keep the archive-to-field mapping in one place. Speeds, forces, drag and friction are
+// nonnegative; the two remaining-speed/jump fractions additionally lie in [0, 1].
+constexpr ParamField PARAM_FIELDS[] = {
+    {"gravityAcc", &Params::gravity},
+    {"fallSpeed", &Params::max_fall_speed},
+    {"jumpSpeed", &Params::jump_speed},
+    {"walkForce", &Params::walk_force},
+    {"walkDrag", &Params::walk_drag},
+    {"walkSpeed", &Params::walk_speed},
+    {"slipForce", &Params::slip_force},
+    {"slipSpeed", &Params::slip_speed},
+    {"minFriction", &Params::min_friction},
+    {"maxFriction", &Params::max_friction},
+    {"floatDrag1", &Params::float_drag1},
+    {"floatDrag2", &Params::float_drag2},
+    {"floatCoefficient", &Params::float_coefficient},
+    {"flyForce", &Params::fly_force},
+    {"flySpeed", &Params::fly_speed},
+    {"flyJumpDec", &Params::fly_jump_dec, true},
+    {"swimForce", &Params::swim_force},
+    {"swimSpeed", &Params::swim_speed},
+    {"swimSpeedDec", &Params::swim_speed_dec, true},
+};
+
 Params params;
 
 bool numeric(const img::node &src, const char *name, double &out) {
@@ -89,12 +120,14 @@ bool numeric(const img::node &src, const char *name, double &out) {
     }
 
     out = value.get_real();
-    return true;
+    return std::isfinite(out);
 }
 }  // namespace
 
 namespace ms {
 void PhysicsParams::load() {
+    // Loading a different/incomplete archive must not inherit values from the previous one.
+    params = Params{};
     const img::node src = img::wz::map["Physics.img"];
 
     if (!src) {
@@ -107,90 +140,11 @@ void PhysicsParams::load() {
     }
 
     double raw;
-
-    if (numeric(src, "gravityAcc", raw)) {
-        params.gravity = raw;
-    }
-
-    if (numeric(src, "fallSpeed", raw)) {
-        params.max_fall_speed = raw;
-    }
-
-    if (numeric(src, "jumpSpeed", raw)) {
-        params.jump_speed = raw;
-    }
-
-    // The pair that calibrates walking. drive / damping = walkSpeed by construction, so the
-    // archive's ratio - not a panel-tuned fraction - decides both the top speed and the ramp.
-    if (numeric(src, "walkForce", raw)) {
-        params.walk_force = raw;
-    }
-
-    if (numeric(src, "walkDrag", raw)) {
-        params.walk_drag = raw;
-    }
-
-    if (numeric(src, "walkSpeed", raw)) {
-        params.walk_speed = raw;
-    }
-
-    // The weaker drive/cap pair used on slippery footholds, plus the bounds on the friction
-    // coefficient a foothold may ask for.
-    if (numeric(src, "slipForce", raw)) {
-        params.slip_force = raw;
-    }
-
-    if (numeric(src, "slipSpeed", raw)) {
-        params.slip_speed = raw;
-    }
-
-    if (numeric(src, "minFriction", raw)) {
-        params.min_friction = raw;
-    }
-
-    if (numeric(src, "maxFriction", raw)) {
-        params.max_friction = raw;
-    }
-
-    // Water-surface drag. floatDrag1 damps horizontal motion, floatDrag2 vertical; the
-    // coefficient is read as buoyancy against gravity. floatDrag2 also bounds flight, which is
-    // why fly_damping() below simply forwards to float_drag2().
-    if (numeric(src, "floatDrag1", raw)) {
-        params.float_drag1 = raw;
-    }
-
-    if (numeric(src, "floatDrag2", raw)) {
-        params.float_drag2 = raw;
-    }
-
-    if (numeric(src, "floatCoefficient", raw)) {
-        params.float_coefficient = raw;
-    }
-
-    if (numeric(src, "flyForce", raw)) {
-        params.fly_force = raw;
-    }
-
-    if (numeric(src, "flySpeed", raw)) {
-        params.fly_speed = raw;
-    }
-
-    // The cost of a jump made while flying (and out of the water while floating).
-    if (numeric(src, "flyJumpDec", raw)) {
-        params.fly_jump_dec = raw;
-    }
-
-    if (numeric(src, "swimForce", raw)) {
-        params.swim_force = raw;
-    }
-
-    if (numeric(src, "swimSpeed", raw)) {
-        params.swim_speed = raw;
-    }
-
-    // swimSpeedDec names how much of the speed is left after a tick, not how much is taken off.
-    if (numeric(src, "swimSpeedDec", raw)) {
-        params.swim_speed_dec = raw;
+    for (const ParamField &field : PARAM_FIELDS) {
+        if (numeric(src, field.name, raw) && raw >= 0.0
+            && (!field.fraction || raw <= 1.0)) {
+            params.*field.member = raw;
+        }
     }
 
 #ifdef __ANDROID__

@@ -16,7 +16,6 @@
 #pragma once
 
 #include <chrono>
-#include <unordered_map>
 
 #include "../Character/Player.h"
 #include "../IO/KeyType.h"
@@ -124,14 +123,11 @@ public:
     // Pick up the closest drop within radius of the player.
     void pick_up_near(int16_t radius);
 
-    // A drop the server refused (full bag, one-of-a-kind, ...) is left alone for a while: the client
-    // skips it and sends no pickup packet, so a refused drop cannot flood the server with retries.
-    void note_pickup_failure();
+    // An opted-in rejection includes both the map and drop, never the last requested OID.
+    void note_pickup_failure(int32_t mapid, int32_t oid, int32_t retry_after_ms);
 
 private:
     void load_map(int32_t mapid);
-
-    bool pickup_on_cooldown(int32_t oid) const;
 
     void respawn(int8_t portalid);
 
@@ -170,8 +166,5 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> start_;
     uint16_t level_before_;
     int64_t exp_before_;
-
-    int32_t last_pickup_oid_ = 0;
-    std::unordered_map<int32_t, int64_t> pickup_cooldown_;
 };
 }  // namespace ms

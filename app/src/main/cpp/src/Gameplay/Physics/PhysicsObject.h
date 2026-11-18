@@ -25,8 +25,8 @@ namespace ms {
 // without being translated first. The simulation still only runs once per timestep, which is where
 // the step() accessors come in: they are the distance actually covered in one update.
 struct MovingObject {
-    Linear<double> x;
-    Linear<double> y;
+    Linear<double> x{};
+    Linear<double> y{};
     double hspeed = 0.0;
     double vspeed = 0.0;
     // Records a vertical constraint even when this step's mean vertical travel is zero.

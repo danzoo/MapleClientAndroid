@@ -102,8 +102,6 @@ void Stage::clear() {
 
 void Stage::load_map(int32_t mapid) {
     Stage::map_id_ = mapid;
-    pickup_cooldown_.clear();
-    last_pickup_oid_ = 0;
 
     std::string strid = string_format::extend_id(mapid, 9);
     std::string prefix = std::to_string(mapid / 100000000);
@@ -289,8 +287,7 @@ void Stage::check_drops() {
     Point<int16_t> playerpos = player_.get_position();
     auto [drop_oid, drop_pos] = drops_.find_loot_at(playerpos);
 
-    if (drop_oid && !pickup_on_cooldown(drop_oid)) {
-        last_pickup_oid_ = drop_oid;
+    if (drop_oid) {
         fn_pickup_item(drop_oid, drop_pos);
     }
 }
@@ -298,32 +295,14 @@ void Stage::check_drops() {
 void Stage::pick_up_near(int16_t radius) {
     auto [drop_oid, drop_pos] = drops_.find_loot_near(player_.get_position(), radius);
 
-    if (drop_oid && !pickup_on_cooldown(drop_oid)) {
-        last_pickup_oid_ = drop_oid;
+    if (drop_oid) {
         fn_pickup_item(drop_oid, drop_pos);
     }
 }
 
-bool Stage::pickup_on_cooldown(int32_t oid) const {
-    auto it = pickup_cooldown_.find(oid);
-
-    if (it == pickup_cooldown_.end()) {
-        return false;
-    }
-
-    const int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::steady_clock::now().time_since_epoch())
-                            .count();
-
-    return it->second > now;
-}
-
-void Stage::note_pickup_failure() {
-    if (last_pickup_oid_) {
-        const int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                std::chrono::steady_clock::now().time_since_epoch())
-                                .count();
-        pickup_cooldown_[last_pickup_oid_] = now + 5000;
+void Stage::note_pickup_failure(int32_t mapid, int32_t oid, int32_t retry_after_ms) {
+    if (state_ == State::ACTIVE && mapid == map_id_) {
+        drops_.note_pickup_failure(oid, retry_after_ms);
     }
 }
 

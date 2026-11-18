@@ -255,6 +255,7 @@ void Drop::expire(int8_t type, const PhysicsObject *lt) {
         case 0: state_ = Drop::State::PICKED_UP; break;
         case 1: deactivate(); break;
         case 2:
+        case 5:  // Pet pickup is also final, even without a local pet physics object.
             angle_.set(0.0f);
             state_ = Drop::State::PICKED_UP;
             looter_ = lt;
@@ -296,6 +297,25 @@ bool Drop::claimed() const {
 
 bool Drop::landed() const {
     return state_ == Drop::State::FLOATING;
+}
+
+bool Drop::can_request_pickup(PickupTime now) const {
+    return is_active() && landed() && !claimed() && now >= pickup_retry_at_;
+}
+
+void Drop::note_pickup_request(PickupTime now) {
+    // Old servers have no OID-bearing rejection. Bound their retry rate too, without blocking
+    // another drop or turning every successful pickup into a five-second wait.
+    pickup_retry_at_ = now + std::chrono::milliseconds(500);
+    awaiting_pickup_reply_ = true;
+}
+
+void Drop::note_pickup_rejection(int32_t retry_after_ms, PickupTime now) {
+    if (!awaiting_pickup_reply_ || !is_active() || claimed()) {
+        return;
+    }
+    awaiting_pickup_reply_ = false;
+    pickup_retry_at_ = now + std::chrono::milliseconds(std::clamp(retry_after_ms, 100, 5000));
 }
 
 Point<int16_t> Drop::icon_shift(Point<int16_t> origin,
