@@ -160,15 +160,10 @@ MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
 
     const PickupTime now = PickupClock::now();
 
-    // Centre of the pile first: of the items under the character, take the one whose icon sits
-    // closest to the character horizontally, then left before right, then earliest dropped.
+    // Earliest dropped first: draw_order() is the order drops were added to their layer, so the
+    // bottom of a stack is the first one registered and the one the hand closes on. This matches
+    // the original PC client; do not rank candidates by their distance to the character.
     const std::vector<int32_t> oids = drops_.draw_order();
-
-    int32_t best_oid = 0;
-    Point<int16_t> best_pos;
-    bool found = false;
-    int64_t best_absdx = 0;
-    int64_t best_dx = 0;
 
     for (auto iter = oids.begin(); iter != oids.end(); ++iter) {
         auto drop = drops_.get<const Drop>(*iter);
@@ -178,31 +173,14 @@ MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
             continue;
         }
 
-        const Rectangle<int16_t> box = drop->get().bounds();
-
-        if (!box.contains(playerpos)) {
+        if (!drop->get().bounds().contains(playerpos)) {
             continue;
         }
 
-        const int64_t dx =
-            (static_cast<int64_t>(box.left()) + static_cast<int64_t>(box.right())) / 2
-            - static_cast<int64_t>(playerpos.x());
-        const int64_t absdx = dx < 0 ? -dx : dx;
-
-        if (!found || absdx < best_absdx || (absdx == best_absdx && dx < best_dx)) {
-            found = true;
-            best_oid = *iter;
-            best_pos = drop->get().get_position();
-            best_absdx = absdx;
-            best_dx = dx;
-        }
-    }
-
-    if (found) {
         loot_enabled_ = false;
-        drops_.get<Drop>(best_oid)->get().note_pickup_request(now);
+        drops_.get<Drop>(*iter)->get().note_pickup_request(now);
 
-        return { best_oid, best_pos };
+        return { *iter, drop->get().get_position() };
     }
 
     return { 0, {} };
@@ -216,15 +194,10 @@ MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius
     const PickupTime now = PickupClock::now();
 
     const int64_t rangesq = static_cast<int64_t>(radius) * radius;
-    const std::vector<int32_t> oids = drops_.draw_order();
 
-    // Of everything within reach, take the item closest to the character horizontally (centre of
-    // the spread first), then left before right, then earliest dropped.
-    int32_t best_oid = 0;
-    Point<int16_t> best_pos;
-    bool found = false;
-    int64_t best_absdx = 0;
-    int64_t best_dx = 0;
+    // Earliest dropped first, for the gamepad radius path too. Being nearer to the character does
+    // not change the order; draw_order() already has the bottom of a stack before its upper items.
+    const std::vector<int32_t> oids = drops_.draw_order();
 
     for (auto iter = oids.begin(); iter != oids.end(); ++iter) {
         auto drop = drops_.get<const Drop>(*iter);
@@ -259,25 +232,10 @@ MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius
             continue;
         }
 
-        const int64_t dx =
-            (static_cast<int64_t>(box.left()) + static_cast<int64_t>(box.right())) / 2
-            - static_cast<int64_t>(playerpos.x());
-        const int64_t absdx = dx < 0 ? -dx : dx;
-
-        if (!found || absdx < best_absdx || (absdx == best_absdx && dx < best_dx)) {
-            found = true;
-            best_oid = *iter;
-            best_pos = drop->get().get_position();
-            best_absdx = absdx;
-            best_dx = dx;
-        }
-    }
-
-    if (found) {
         loot_enabled_ = false;
-        drops_.get<Drop>(best_oid)->get().note_pickup_request(now);
+        drops_.get<Drop>(*iter)->get().note_pickup_request(now);
 
-        return { best_oid, best_pos };
+        return { *iter, drop->get().get_position() };
     }
 
     return { 0, {} };

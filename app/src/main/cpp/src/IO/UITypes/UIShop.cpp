@@ -153,16 +153,21 @@ UIShop::UIShop(const CharLook &in_charlook, const Inventory &in_inventory) :
     previewed_ = false;
     dimension_ = bg_dimensions;
     drag_area_ = bg_dimensions;
+
+    // A shop that has never been dragged opens in the middle of the screen; one that has been
+    // moved keeps the position the drag saved.
+    if (Setting<PosSHOP>::get().is_default()) {
+        position_ = Point<int16_t>(
+            (Constants::Constants::get().get_ui_viewwidth() - dimension_.x()) / 2,
+            (Constants::Constants::get().get_ui_viewheight() - dimension_.y()) / 2);
+    }
 }
 
 void UIShop::draw(float alpha) const {
     UIElement::draw(alpha);
 
-    npc_.draw(DrawArgument(position_ + Point<int16_t>(58, 85), true));
-    charlook_.draw(position_ + Point<int16_t>(338, 85),
-                   false,
-                   Stance::Id::STAND1,
-                   Expression::Id::DEFAULT);
+    npc_.draw(DrawArgument(position_ + Point<int16_t>(58, 85), true), alpha);
+    portrait_.draw({ position_ + Point<int16_t>(338, 85), false }, alpha);
 
     meso_label_.draw(position_ + Point<int16_t>(493, 51));
 
@@ -174,6 +179,9 @@ void UIShop::draw(float alpha) const {
 }
 
 void UIShop::update() {
+    npc_.update();
+    portrait_.update(Constants::TIMESTEP);
+
     int64_t num_mesos = inventory_.get_meso();
     std::string mesostr = std::to_string(num_mesos);
     string_format::split_number(mesostr);
@@ -434,7 +442,15 @@ void UIShop::changeselltab(InventoryType::Id type) {
 
 void UIShop::reset(int32_t npcid) {
     std::string strid = string_format::extend_id(npcid, 7);
-    npc_ = img::wz::npc[strid + ".img"]["stand"]["0"];
+    // The whole stand action, not its first frame: the frames hang directly off the action node,
+    // so reading stand/0 froze every NPC on frame 0. A stand with a single frame stays still.
+    npc_ = img::wz::npc[strid + ".img"]["stand"];
+
+    // The player's portrait is a copy of the live look standing still, so it blinks and shifts
+    // its weight on its own animation clock without touching the character in the world.
+    portrait_ = charlook_;
+    portrait_.reset();
+    portrait_.set_direction(false);
 
     for (auto &button : buttons_) {
         button.second->set_state(Button::State::NORMAL);

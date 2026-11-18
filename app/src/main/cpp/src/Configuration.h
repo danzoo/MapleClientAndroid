@@ -142,10 +142,11 @@ public:
     // Base class for an entry in the settings file
     class Entry {
     protected:
-        Entry(const char *n, const char *v) : name(n), value(v) {}
+        Entry(const char *n, const char *v) : name(n), value(v), default_value(v) {}
 
         std::string name;
         std::string value;
+        std::string default_value;
 
     private:
         friend class Configuration;
@@ -181,6 +182,12 @@ public:
         void save(Point<int16_t> p);
 
         Point<int16_t> load() const;
+
+        // Whether the position is still the built-in default, i.e. the window has never been
+        // dragged away from it.
+        bool is_default() const {
+            return value == default_value;
+        }
 
     protected:
         using Entry::Entry;

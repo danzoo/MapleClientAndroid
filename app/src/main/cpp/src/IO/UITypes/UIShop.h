@@ -17,6 +17,7 @@
 
 #include "../Character/Look/CharLook.h"
 #include "../Components/Slider.h"
+#include "../Graphics/Animation.h"
 #include "../Graphics/Text.h"
 #include "../UIDragElement.h"
 
@@ -122,7 +123,10 @@ private:
     const CharLook &charlook_;
     const Inventory &inventory_;
 
-    Texture npc_;
+    // The player's portrait, a standing copy of the live look with its own animation clock.
+    CharLook portrait_;
+
+    Animation npc_;
     Texture buy_selection_;
     Texture sell_selection_;
     Texture meso_;

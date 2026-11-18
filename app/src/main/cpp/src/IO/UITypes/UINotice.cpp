@@ -39,15 +39,17 @@ UINotice::UINotice(const std::string &message,
     bottom_ = src["s"];
     bottombox_ = src["s_box"];
 
+    int16_t lift = 0;
+
     if (type_ == NoticeType::YESNO) {
-        position_.shift_y(-8);
+        lift = -8;
         question_ = Text(Text::Font::A11M,
                          alignment_,
                          Color::Name::WHITE,
                          message,
                          200);
     } else if (type_ == NoticeType::ENTER_NUMBER) {
-        position_.shift_y(-16);
+        lift = -16;
         question_ = Text(Text::Font::A12M,
                          Text::Alignment::LEFT,
                          Color::Name::WHITE,
@@ -56,7 +58,7 @@ UINotice::UINotice(const std::string &message,
     } else if (type_ == NoticeType::OK) {
         uint16_t maxwidth = top_.width() - 6;
 
-        position_.shift_y(-8);
+        lift = -8;
         question_ = Text(Text::Font::A11M,
                          Text::Alignment::CENTER,
                          Color::Name::WHITE,
@@ -67,8 +69,18 @@ UINotice::UINotice(const std::string &message,
     height_ = question_.height();
     dimension_ = Point<int16_t>(top_.width(),
                                 top_.height() + height_ + bottom_.height());
-    position_ = Point<int16_t>(position_.x() - dimension_.x() / 2,
-                               position_.y() - dimension_.y() / 2);
+
+    // The drag saves the top-left corner, so a saved position is already where the dialog was
+    // dropped and is used as-is. Only the never-dragged default is built from the screen centre:
+    // half the box off it, with the same small type lift the old default carried. Reading a saved
+    // top-left as a centre and subtracting half the box again is what walked moved dialogs up and
+    // left on every reopen.
+    if (Setting<PosNOTICE>::get().is_default()) {
+        position_ = Point<int16_t>(
+            Constants::Constants::get().get_ui_viewwidth() / 2 - dimension_.x() / 2,
+            Constants::Constants::get().get_ui_viewheight() / 2 + lift - dimension_.y() / 2);
+    }
+
     drag_area_ = Point<int16_t>(dimension_.x(), 20);
 
     if (type_ != NoticeType::ENTER_NUMBER) {
