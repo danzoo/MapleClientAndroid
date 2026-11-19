@@ -15,6 +15,10 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <algorithm>
+#include <cmath>
+#include <vector>
+
 #include "../../Constants.h"
 #include "../../Template/Interpolated.h"
 #include "../../Template/Point.h"
@@ -186,6 +190,34 @@ struct PhysicsObject : public MovingObject {
     double groundbelow = 0.0;
     bool onground = true;
     bool enablejd = false;
+
+    // A deliberate down-jump releases only its old connected floor component.
+    // Keep the departure id separate from the candidate landing foothold; walls
+    // still use it, while the tree lazily collects the finite non-wall floor ids.
+    uint16_t drop_from_fhid = 0;
+    std::vector<uint16_t> drop_footholds;
+
+    bool drop_through() {
+        if (!onground || !enablejd || !fhid || !std::isfinite(groundbelow)
+            || groundbelow <= crnt_y()) {
+            return false;
+        }
+        drop_from_fhid = fhid;
+        drop_footholds.clear();
+        y = groundbelow;
+        onground = false;
+        return true;
+    }
+
+    bool ignores_drop_floor(uint16_t id) const {
+        return drop_from_fhid && (id == drop_from_fhid
+            || std::binary_search(drop_footholds.begin(), drop_footholds.end(), id));
+    }
+
+    void clear_drop() {
+        drop_from_fhid = 0;
+        drop_footholds.clear();
+    }
 
     // Surface of the foothold currently under the object. friction is dimensionless: 1.0 is
     // ordinary ground, the archive's minFriction is the slipperiest ice, maxFriction the

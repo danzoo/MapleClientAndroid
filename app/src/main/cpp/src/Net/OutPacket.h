@@ -275,6 +275,8 @@ public:
         PLAYER_INTERACTION = 123,
         PARTY_OPERATION = 124,
         ADMIN_COMMAND = 128,
+        MOVE_PET = 167,
+        PET_LOOT = 170,
         MOVE_MONSTER = 188,
         PICKUP_ITEM = 202,
         DAMAGE_REACTOR = 205,

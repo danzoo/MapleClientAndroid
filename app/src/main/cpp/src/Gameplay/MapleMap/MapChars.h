@@ -15,7 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
-#include <queue>
+#include <deque>
+#include <vector>
 
 #include "../Character/OtherChar.h"
 #include "../Movement.h"
@@ -47,6 +48,13 @@ public:
     // Update a characters movement.
     void send_movement(int32_t cid, const std::vector<Movement> &movements);
 
+    // Apply remote pet events now, or in packet order after a pending spawn.
+    // Events without a character or pending spawn are ignored.
+    void add_pet(int32_t cid, uint8_t slot, const PetSpawn &pet);
+    void remove_pet(int32_t cid, uint8_t slot, bool hunger);
+    void send_pet_movement(int32_t cid, uint8_t slot, int32_t uniqueid,
+                           const std::vector<Movement> &movements);
+
     // Update a characters look.
     void update_look(int32_t cid, const LookEntry &look);
 
@@ -61,8 +69,27 @@ public:
                  Point<int16_t> viewpos) const;
 
 private:
+    struct PetEvent {
+        enum class Type { ADD, REMOVE, MOVEMENT };
+        Type type;
+        uint8_t slot;
+        PetSpawn pet{};
+        bool hunger = false;
+        int32_t uniqueid = 0;
+        std::vector<Movement> movements{};
+    };
+
+    struct PendingSpawn {
+        CharSpawn spawn;
+        std::vector<PetEvent> pet_events;
+    };
+
+    void send_pet_event(int32_t cid, PetEvent event);
+    static void apply_pet_event(OtherChar &character, const PetEvent &event);
+
     MapObjects chars_;
 
-    std::queue<CharSpawn> spawns_;
+    // Events belong to this exact snapshot, never to a future use of its CID.
+    std::deque<PendingSpawn> spawns_;
 };
 }  // namespace ms

@@ -115,6 +115,7 @@ void FootholdTree::limit_movement(PhysicsObject &phobj) const {
 }
 
 void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmove) const {
+    prepare_drop(phobj);
     limit_movement(phobj, hmove, vmove, 0);
 }
 
@@ -128,8 +129,9 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
         bool collision = false;
         double wall = 0.0;
 
-        // Keep walking's query unchanged. Normal airborne motion follows the current landing
-        // platform's chain far enough to reach the side wall and all of its connected segments.
+        // Grounded queries retain the nearby check and follow only the swept floor spans.
+        // Airborne motion follows the current landing platform's chain far enough to reach
+        // the side wall and all of its connected segments.
         // Ice uses the same ground integrator and the same swept-terrain queries as NORMAL;
         // only the surface coefficients differ, so both types take this path.
         if (phobj.onground || phobj.is_ground_type()) {
@@ -160,9 +162,29 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
                     collision = hits_at_contact(wall);
                 }
             } else {
-                wall = get_wall(wall_fhid, left, phobj.crnt_y() + vmove);
+                // A single substep can cross several very short floors before their wall.
+                // Keep the nearby query first, then follow only as far as this movement needs.
+                wall = get_air_wall(wall_fhid, left, phobj.crnt_y() + vmove, next_x);
                 collision = left ? crnt_x >= wall && next_x <= wall
                                  : crnt_x <= wall && next_x >= wall;
+            }
+        }
+
+        // Releasing a floor is not permission to cross its associated wall.
+        // Ground lookup may already refer to a lower floor, so check the original
+        // component too, at the actual contact height, and keep the nearest hit.
+        if (phobj.drop_from_fhid) {
+            for (double fy : {phobj.crnt_y() + vmove, phobj.crnt_y()}) {
+                const double candidate = get_air_wall(phobj.drop_from_fhid, left, fy);
+                const bool crosses = left ? crnt_x >= candidate && next_x <= candidate
+                                          : crnt_x <= candidate && next_x >= candidate;
+                const double fraction = hmove != 0.0 ? (candidate - crnt_x) / hmove : 0.0;
+                const double contact_y = phobj.crnt_y() + vmove * fraction;
+                if (crosses && get_air_wall(phobj.drop_from_fhid, left, contact_y) == candidate
+                    && (!collision || (left ? candidate > wall : candidate < wall))) {
+                    wall = candidate;
+                    collision = true;
+                }
             }
         }
 
@@ -204,9 +226,12 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
         // when no terrain was found. A stale foothold can report ground the body is already past,
         // while a null foothold has no ground. Querying the terrain under the path finds the
         // platform the body should land on regardless of its stored foothold.
-        const uint16_t start_fhid = get_fhid_below(phobj.crnt_x(), crnt_y);
+        const uint16_t start_fhid = find_fhid_below(phobj.crnt_x(), crnt_y,
+                                                   &phobj, hmove, vmove);
+        const uint16_t dest_fhid = find_fhid_below(phobj.crnt_x() + hmove, crnt_y,
+                                                  &phobj, hmove, vmove);
         double ground_start = get_fh(start_fhid).ground_below(phobj.crnt_x());
-        double ground_dest = ground_below_path(phobj.crnt_x() + hmove, crnt_y);
+        double ground_dest = get_fh(dest_fhid).ground_below(phobj.crnt_x() + hmove);
         double ground = std::min(ground_start, ground_dest);
 
         bool collision = vmove > 0.0 && crnt_y <= ground && next_y >= ground;
@@ -220,8 +245,7 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
             // edge, a platform below - and that one is still met at the crossing point.
             double drop = std::abs(get_fh(start_fhid).slope()) * std::abs(hmove);
             const bool lands_at_dest = ground_dest - ground <= drop + 0.5;
-            const double landing_x = phobj.crnt_x() + (lands_at_dest ? hmove : 0.0);
-            const uint16_t landing_fhid = get_fhid_below(landing_x, crnt_y);
+            const uint16_t landing_fhid = lands_at_dest ? dest_fhid : start_fhid;
 
             // A landing replaces the horizontal speed in two cases:
             //   * nothing steers the body (the standing-jump-on-a-slope slide),
@@ -254,9 +278,13 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
             }
 
             phobj.limity(lands_at_dest ? ground_dest : ground);
+            phobj.fhid = landing_fhid;
+            phobj.onground = landing_fh.id() && !landing_fh.is_wall();
 
             // On slopes y already refers to landing_x, while x has not advanced yet. Carry the
             // selected surface into the recursive wall check instead of querying mismatched x/y.
+            // After x is applied, update_fh follows this support at the actual x, including
+            // when that wall check shortened the horizontal piece or the body left its edge.
             limit_movement(phobj, hmove, 0.0, landing_fhid);
             landed = true;
         } else {
@@ -277,33 +305,25 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
     // Ground that rises to meet a body in the air is met sideways, not fallen onto. The hop a
     // knockback gives lifts less than the slope it shoves the body up, so the feet end the piece
     // below the surface; the fall test above only fires while the ground is still under the body,
-    // so from then on nothing lands it again and it drops through the hillside. A body on the
-    // ground is left out because update_fh already carries it along the surface it stands on.
-    if (!landed && !phobj.onground) {
+    // so from then on nothing lands it again and it drops through the hillside. A settled body
+    // is left out only when its ground engine follows the support. Flying, swimming and
+    // floating bodies still need the sweep at contact, as do launches with upward speed.
+    if (!landed && (!phobj.onground || phobj.vspeed < 0.0 || !phobj.is_ground_type())) {
         double crossx = 0.0;
         double crossy = 0.0;
 
         if (swept_ground(phobj.crnt_x(), phobj.crnt_y(),
                          phobj.crnt_x() + hmove, phobj.crnt_y() + vmove,
-                         crossx, crossy)) {
+                         crossx, crossy, phobj)) {
             phobj.limitx(crossx);
             phobj.limity(crossy);
         }
     }
 }
 
-double FootholdTree::ground_below_path(double x, double y) const {
-    uint16_t fhid = get_fhid_below(x, y);
-
-    if (fhid == 0) {
-        return std::numeric_limits<double>::infinity();
-    }
-
-    return get_fh(fhid).ground_below(x);
-}
-
 bool FootholdTree::swept_ground(double fromx, double fromy, double tox, double toy,
-                                double &crossx, double &crossy) const {
+                                double &crossx, double &crossy,
+                                const PhysicsObject &object) const {
     if (fromx == tox) {
         return false;
     }
@@ -327,6 +347,9 @@ bool FootholdTree::swept_ground(double fromx, double fromy, double tox, double t
 
         for (auto iter = range.first; iter != range.second; ++iter) {
             const Foothold &fh = footholds_.at(iter->second);
+            if (object.ignores_drop_floor(fh.id())) {
+                continue;
+            }
             // The integer column can select a platform just beyond a fractional endpoint.
             // A sweep may only meet a surface inside its actual horizontal span.
             if (x < fh.l() || x > fh.r()) {
@@ -342,13 +365,16 @@ bool FootholdTree::swept_ground(double fromx, double fromy, double tox, double t
                 continue;
             }
 
-            // Terrain is one-way. A body that started under this surface is on its way up through
-            // it, and the surface it is leaving from below is not the one it is meeting.
+            // Terrain is one-way. Compare the body and surface at the SAME point:
+            // when this piece enters a new foothold's span, its starting height is
+            // not its height at that endpoint. Using fromy there can misclassify
+            // a hop from a lower neighbouring slope as rising through this one.
             const double refx = std::clamp(fromx,
                                            static_cast<double>(fh.l()),
                                            static_cast<double>(fh.r()));
+            const double refy = fromy + (toy - fromy) * (refx - fromx) / span;
 
-            if (fromy > fh.ground_below(refx)) {
+            if (refy > fh.ground_below(refx)) {
                 continue;
             }
 
@@ -422,31 +448,123 @@ bool FootholdTree::swept_ground(double fromx, double fromy, double tox, double t
     return false;
 }
 
-void FootholdTree::update_fh(PhysicsObject &phobj) const {
-    if (phobj.type == PhysicsObject::Type::FIXATED && phobj.fhid > 0) {
+void FootholdTree::prepare_drop(PhysicsObject &object) const {
+    if (!object.drop_from_fhid || !object.drop_footholds.empty()) {
+        return;
+    }
+    const Foothold &start = get_fh(object.drop_from_fhid);
+    if (!start.id() || start.is_wall()) {
+        object.clear_drop();
         return;
     }
 
+    object.drop_footholds.push_back(start.id());
+    for (bool left : {true, false}) {
+        const Foothold *cur = &start;
+        for (size_t remaining = footholds_.size(); remaining > 0; --remaining) {
+            const Foothold &next = get_fh(left ? cur->prev() : cur->next());
+            if (!next.id() || next.is_wall() || next.layer() != start.layer()) {
+                break;
+            }
+            const int16_t edge_x = left ? cur->l() : cur->r();
+            const int16_t edge_y = cur->x1() == edge_x ? cur->y1() : cur->y2();
+            const int16_t next_x = left ? next.r() : next.l();
+            const int16_t next_y = next.x1() == next_x ? next.y1() : next.y2();
+            if (next_x != edge_x || next_y != edge_y
+                || (left ? next.l() >= cur->l() : next.r() <= cur->r())
+                || std::find(object.drop_footholds.begin(), object.drop_footholds.end(),
+                             next.id()) != object.drop_footholds.end()) {
+                break;
+            }
+            object.drop_footholds.push_back(next.id());
+            cur = &next;
+        }
+    }
+    std::sort(object.drop_footholds.begin(), object.drop_footholds.end());
+}
+
+void FootholdTree::finish_drop(PhysicsObject &object) const {
+    if (!object.drop_from_fhid) {
+        return;
+    }
+    if (object.onground && !object.ignores_drop_floor(object.fhid)) {
+        object.clear_drop();
+        return;
+    }
+
+    double left = std::numeric_limits<double>::infinity();
+    double right = -std::numeric_limits<double>::infinity();
+    for (uint16_t id : object.drop_footholds) {
+        const Foothold &fh = get_fh(id);
+        left = std::min(left, static_cast<double>(fh.l()));
+        right = std::max(right, static_cast<double>(fh.r()));
+    }
+    // Keep the original wall association until landing or leaving the component;
+    // a wall may extend below its floor. The map bottom is also a safe endpoint.
+    // A timer alone would restore a long downhill too early. No other platform
+    // or wall is disabled while falling.
+    if (object.crnt_x() < left || object.crnt_x() > right
+        || object.crnt_y() >= borders_.second()) {
+        object.clear_drop();
+    }
+}
+
+void FootholdTree::update_fh(PhysicsObject &phobj, bool follow_ground) const {
+    if (phobj.type == PhysicsObject::Type::FIXATED && phobj.fhid > 0) {
+        phobj.clear_drop();
+        return;
+    }
+    prepare_drop(phobj);
+
+    const double x = phobj.crnt_x();
+    const double y = phobj.crnt_y();
     const Foothold &curfh = get_fh(phobj.fhid);
-    bool checkslope = false;
+    const Foothold *support = &curfh;
+    bool supported = phobj.is_ground_type() && phobj.onground && phobj.vspeed == 0.0
+        && curfh.id() && !curfh.is_wall() && !phobj.ignores_drop_floor(curfh.id())
+        && (follow_ground || (x >= curfh.l() && x <= curfh.r()
+                               && y == curfh.ground_below(x)));
 
-    double x = phobj.crnt_x();
-    double y = phobj.crnt_y();
+    if (supported) {
+        // A settled body follows only its actual, end-to-end floor chain. Use the
+        // floating-point x, including the first fraction beyond an endpoint; never
+        // extrapolate the old slope through a wall, missing link or gap.
+        size_t remaining = footholds_.size();
+        while (x < support->l() || x > support->r()) {
+            if (remaining == 0) {
+                supported = false;
+                break;
+            }
+            --remaining;
 
-    if (phobj.onground) {
-        if (std::floor(x) > curfh.r()) {
-            phobj.fhid = curfh.next();
-        } else if (std::ceil(x) < curfh.l()) {
-            phobj.fhid = curfh.prev();
+            const bool left = x < support->l();
+            const Foothold &next = get_fh(left ? support->prev() : support->next());
+            if (!next.id() || next.is_wall() || next.layer() != support->layer()
+                || phobj.ignores_drop_floor(next.id())) {
+                supported = false;
+                break;
+            }
+
+            const int16_t edge_x = left ? support->l() : support->r();
+            const int16_t edge_y = support->x1() == edge_x
+                ? support->y1() : support->y2();
+            const int16_t next_edge_x = left ? next.r() : next.l();
+            const int16_t next_edge_y = next.x1() == next_edge_x
+                ? next.y1() : next.y2();
+            if (next_edge_x != edge_x || next_edge_y != edge_y
+                || (left ? next.l() >= support->l() : next.r() <= support->r())) {
+                supported = false;
+                break;
+            }
+            support = &next;
         }
+    }
 
-        if (phobj.fhid == 0) {
-            phobj.fhid = get_fhid_below(x, y);
-        } else {
-            checkslope = true;
-        }
+    if (supported) {
+        phobj.fhid = support->id();
     } else {
-        phobj.fhid = get_fhid_below(x, y);
+        phobj.onground = false;
+        phobj.fhid = get_fhid_below(x, y, &phobj);
     }
 
     const Foothold &nextfh = get_fh(phobj.fhid);
@@ -462,6 +580,7 @@ void FootholdTree::update_fh(PhysicsObject &phobj) const {
         if (phobj.is_ground_type()) {
             phobj.type = PhysicsObject::Type::NORMAL;
         }
+        finish_drop(phobj);
         return;
     }
 
@@ -483,34 +602,26 @@ void FootholdTree::update_fh(PhysicsObject &phobj) const {
                                           : PhysicsObject::Type::NORMAL;
     }
 
-    double ground = nextfh.ground_below(x);
+    const double ground = nextfh.ground_below(x);
 
-    if (phobj.vspeed == 0.0 && checkslope) {
-        double vdelta = abs(phobj.fhslope);
-
-        if (phobj.fhslope < 0.0) {
-            vdelta *= (ground - y);
-        } else if (phobj.fhslope > 0.0) {
-            vdelta *= (y - ground);
-        }
-
-        if (curfh.slope() != 0.0 || nextfh.slope() != 0.0) {
-            // vdelta is a number of pixels, so it is compared against the distance this tick will
-            // actually cover rather than against the speed it is covered at.
-            const double hstep = phobj.hstep();
-
-            if (phobj.hspeed > 0.0 && vdelta <= hstep) {
-                phobj.y = ground;
-            } else if (phobj.hspeed < 0.0 && vdelta >= hstep) {
-                phobj.y = ground;
-            }
-        }
+    if (supported) {
+        // Ground following is geometric, independent of speed sign and slope change.
+        // Seat exactly while preserving the interpolation origin: a delta addition can
+        // round above or below this height, which is not a different one-way contact.
+        phobj.y.shift_to(ground);
+        phobj.onground = true;
+    } else {
+        // A spawn, airborne lookup or broken connection is not permission to snap down.
+        phobj.onground = phobj.y == ground;
     }
 
-    phobj.onground = phobj.y == ground;
+    finish_drop(phobj);
 
-    if (phobj.enablejd || phobj.is_flag_set(PhysicsObject::Flag::CHECK_BELOW)) {
-        uint16_t belowid = get_fhid_below(x, nextfh.ground_below(x) + 1.0);
+    // A newly landed player can receive Down+Jump before its next state update.
+    // Refresh eligibility with the actual contact, not a false cache that waits
+    // for the following STAND/WALK/PRONE tick to set CHECK_BELOW.
+    if (phobj.onground || phobj.enablejd || phobj.is_flag_set(PhysicsObject::Flag::CHECK_BELOW)) {
+        uint16_t belowid = get_fhid_below(x, ground + 1.0, &phobj);
 
         if (belowid > 0) {
             // How far the next platform down lies says nothing about whether the drop is allowed:
@@ -540,7 +651,8 @@ const Foothold &FootholdTree::get_fh(uint16_t fhid) const {
     return iter->second;
 }
 
-double FootholdTree::get_air_wall(uint16_t curid, bool left, double fy) const {
+double FootholdTree::get_air_wall(uint16_t curid, bool left, double fy,
+                                  double to_x) const {
     const double boundary = left ? walls_.first() : walls_.second();
     const double nearby = get_wall(curid, left, fy);
 
@@ -561,6 +673,12 @@ double FootholdTree::get_air_wall(uint16_t curid, bool left, double fy) const {
     // check the whole same-column wall chain, not only the two pieces closest to the floor.
     // Endpoint/layer checks exclude unrelated geometry; the budget also bounds malformed cycles.
     for (size_t remaining = footholds_.size(); remaining > 0; --remaining) {
+        // Grounded motion only needs the floors the substep can actually reach. Still
+        // inspect a wall exactly at the destination and all its same-column segments.
+        if (!wall_started && std::isfinite(to_x)
+            && (left ? to_x > cur->l() : to_x < cur->r())) {
+            break;
+        }
         const Foothold &next = get_fh(left ? cur->prev() : cur->next());
         if (!next.id() || next.layer() != cur->layer()) {
             break;
@@ -601,37 +719,52 @@ double FootholdTree::get_air_wall(uint16_t curid, bool left, double fy) const {
 }
 
 double FootholdTree::get_wall(uint16_t curid, bool left, double fy) const {
-    const Foothold &cur = get_fh(curid);
+    const double boundary = left ? walls_.first() : walls_.second();
+    const Foothold *cur = &get_fh(curid);
+    if (!cur->id() || cur->is_wall()) {
+        return boundary;
+    }
 
-    if (left) {
-        const Foothold &prev = get_fh(cur.prev());
+    bool wall_started = false;
+    int16_t wall_x = 0;
 
-        if (prev.blocks_foot_height(fy)) {
-            return cur.l();
+    // Keep the two-neighbour fast path, but only accept real connected geometry.
+    for (int remaining = 2; remaining > 0; --remaining) {
+        const Foothold &next = get_fh(left ? cur->prev() : cur->next());
+        if (!next.id() || next.layer() != cur->layer()) {
+            break;
         }
 
-        const Foothold &prev_prev = get_fh(prev.prev());
-
-        if (prev_prev.blocks_foot_height(fy)) {
-            return prev.l();
+        const bool connected = next.is_wall() || cur->is_wall()
+            ? ((next.x1() == cur->x1() && next.y1() == cur->y1())
+               || (next.x1() == cur->x2() && next.y1() == cur->y2())
+               || (next.x2() == cur->x1() && next.y2() == cur->y1())
+               || (next.x2() == cur->x2() && next.y2() == cur->y2()))
+            : (left ? next.x2() == cur->x1() && next.y2() == cur->y1()
+                    : next.x1() == cur->x2() && next.y1() == cur->y2());
+        if (!connected) {
+            break;
         }
 
-        return walls_.first();
+        if (wall_started) {
+            // Once a wall begins, do not follow another floor or wall column.
+            if (!next.is_wall() || next.x1() != wall_x) {
+                break;
+            }
+        } else if (next.is_wall()) {
+            wall_started = true;
+            wall_x = next.x1();
+        } else if (left ? next.l() >= cur->l() : next.r() <= cur->r()) {
+            break;
+        }
+
+        if (wall_started && next.blocks_foot_height(fy)) {
+            return next.x1();
+        }
+        cur = &next;
     }
 
-    const Foothold &next = get_fh(cur.next());
-
-    if (next.blocks_foot_height(fy)) {
-        return cur.r();
-    }
-
-    const Foothold &next_next = get_fh(next.next());
-
-    if (next_next.blocks_foot_height(fy)) {
-        return next.r();
-    }
-
-    return walls_.second();
+    return boundary;
 }
 
 double FootholdTree::get_edge(uint16_t curid, bool left) const {
@@ -670,7 +803,13 @@ double FootholdTree::get_edge(uint16_t curid, bool left) const {
     return walls_.second();
 }
 
-uint16_t FootholdTree::get_fhid_below(double fx, double fy) const {
+uint16_t FootholdTree::get_fhid_below(double fx, double fy,
+                                      const PhysicsObject *object) const {
+    return find_fhid_below(fx, fy, object);
+}
+
+uint16_t FootholdTree::find_fhid_below(double fx, double fy, const PhysicsObject *object,
+                                       double hmove, double vmove) const {
     const double coordinate_min = std::numeric_limits<int16_t>::min();
     const double coordinate_max = std::numeric_limits<int16_t>::max();
     if (!std::isfinite(fx) || !std::isfinite(fy)
@@ -687,8 +826,23 @@ uint16_t FootholdTree::get_fhid_below(double fx, double fy) const {
 
     for (auto iter = range.first; iter != range.second; ++iter) {
         const Foothold &fh = footholds_.at(iter->second);
-        if (fx < fh.l() || fx > fh.r()) {
+        if (fx < fh.l() || fx > fh.r()
+            || (object && object->ignores_drop_floor(fh.id()))) {
             continue;
+        }
+
+        if (object && std::isfinite(hmove)) {
+            const double fromx = object->crnt_x();
+            const double refx = std::clamp(fromx, static_cast<double>(fh.l()),
+                                           static_cast<double>(fh.r()));
+            const double refy = object->crnt_y()
+                + (hmove != 0.0 ? vmove * (refx - fromx) / hmove : 0.0);
+            // A destination column's ground can lie below fromy even though
+            // the whole body path is below this slope. Compare at the entry x,
+            // just as the sideways sweep does, before selecting this candidate.
+            if (refy > fh.ground_below(refx)) {
+                continue;
+            }
         }
 
         double ycomp = fh.ground_below(fx);

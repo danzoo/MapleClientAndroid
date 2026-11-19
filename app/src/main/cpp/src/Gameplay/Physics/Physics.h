@@ -49,6 +49,10 @@ public:
     const FootholdTree &get_fht() const;
 
 private:
+    // Walk an already integrated displacement through collision checks and actual support.
+    // The caller normalizes once; neither ordinary substeps nor landing corrections add gravity.
+    void move_substeps(PhysicsObject &, double hmove, double vmove) const;
+
     // Integrates ground motion (NORMAL and ICE). Stores the mean vertical speed for collision
     // travel and returns the end-of-step speed, restored after movement unless a vertical
     // collision stopped it. Ice only changes the drive/damping/cap, not the terrain path.

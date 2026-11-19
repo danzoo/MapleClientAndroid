@@ -15,6 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "MapChars.h"
 
+#include <algorithm>
+
 #include "OptionalCreator.h"
 
 namespace ms {
@@ -26,16 +28,22 @@ void MapChars::draw(Layer::Id layer,
 }
 
 void MapChars::update(const Physics &physics) {
-    for (; !spawns_.empty(); spawns_.pop()) {
-        const CharSpawn &spawn = spawns_.front();
+    for (; !spawns_.empty(); spawns_.pop_front()) {
+        const auto &pending = spawns_.front();
+        const CharSpawn &spawn = pending.spawn;
+        const int32_t cid = spawn.get_cid();
 
-        int32_t cid = spawn.get_cid();
-        auto ochar = get_char(cid);
-
-        if (ochar) {
-            // TODO: Blank
-        } else {
+        if (!get_char(cid)) {
             chars_.add(spawn.instantiate());
+            auto &character = get_char(cid)->get();
+            const auto &pets = spawn.get_pets();
+            for (size_t index = 0; index < pets.size(); ++index) {
+                add_pet(cid, static_cast<uint8_t>(index), pets[index]);
+            }
+            // Slot/UID checks must see every earlier add/remove, not the spawn snapshot.
+            for (const auto &event : pending.pet_events) {
+                apply_pet_event(character, event);
+            }
         }
     }
 
@@ -43,14 +51,32 @@ void MapChars::update(const Physics &physics) {
 }
 
 void MapChars::spawn(CharSpawn &&spawn) {
-    spawns_.emplace(std::move(spawn));
+    const int32_t cid = spawn.get_cid();
+    if (get_char(cid)) {
+        return;
+    }
+    for (auto &pending : spawns_) {
+        if (pending.spawn.get_cid() == cid) {
+            // A replacement is a new snapshot; old events must not replay on it.
+            pending.spawn = std::move(spawn);
+            pending.pet_events.clear();
+            return;
+        }
+    }
+    spawns_.push_back({std::move(spawn), {}});
 }
 
 void MapChars::remove(int32_t cid) {
+    spawns_.erase(std::remove_if(spawns_.begin(), spawns_.end(),
+                                 [cid](const PendingSpawn &pending) {
+                                     return pending.spawn.get_cid() == cid;
+                                 }),
+                   spawns_.end());
     chars_.remove(cid);
 }
 
 void MapChars::clear() {
+    spawns_.clear();
     chars_.clear();
 }
 
@@ -62,6 +88,69 @@ void MapChars::send_movement(int32_t cid,
                              const std::vector<Movement> &movements) {
     if (auto otherchar = get_char(cid)) {
         otherchar->get().send_movement(movements);
+    }
+}
+
+void MapChars::add_pet(int32_t cid, uint8_t slot, const PetSpawn &pet) {
+    if (pet.itemid <= 0 || !pet.uniqueid || pet.stance >= PetLook::Stance::LENGTH * 2) {
+        return;
+    }
+    PetEvent event{PetEvent::Type::ADD, slot};
+    event.pet = pet;
+    send_pet_event(cid, std::move(event));
+}
+
+void MapChars::remove_pet(int32_t cid, uint8_t slot, bool hunger) {
+    PetEvent event{PetEvent::Type::REMOVE, slot};
+    event.hunger = hunger;
+    send_pet_event(cid, std::move(event));
+}
+
+void MapChars::send_pet_movement(int32_t cid, uint8_t slot, int32_t uniqueid,
+                                  const std::vector<Movement> &movements) {
+    PetEvent event{PetEvent::Type::MOVEMENT, slot};
+    event.uniqueid = uniqueid;
+    event.movements = movements;
+    send_pet_event(cid, std::move(event));
+}
+
+void MapChars::send_pet_event(int32_t cid, PetEvent event) {
+    if (auto character = get_char(cid)) {
+        apply_pet_event(character->get(), event);
+        return;
+    }
+    for (auto &pending : spawns_) {
+        if (pending.spawn.get_cid() == cid) {
+            pending.pet_events.push_back(std::move(event));
+            return;
+        }
+    }
+    // No pending generation: do not retain this event for a later same-CID spawn.
+}
+
+void MapChars::apply_pet_event(OtherChar &character, const PetEvent &event) {
+    auto &pets = character.get_pets();
+    if (event.slot >= pets.size()) {
+        return;
+    }
+    switch (event.type) {
+        case PetEvent::Type::ADD: {
+            const auto &pet = event.pet;
+            character.add_pet(event.slot, pet.itemid, pet.name, pet.uniqueid,
+                              pet.position, pet.stance, pet.fhid);
+            pets[event.slot].set_remote();
+            break;
+        }
+        case PetEvent::Type::REMOVE:
+            character.remove_pet(event.slot, event.hunger);
+            break;
+        case PetEvent::Type::MOVEMENT:
+            if (pets[event.slot].get_itemid() && event.uniqueid
+                && pets[event.slot].get_uniqueid() == event.uniqueid) {
+                // receive_movement also enforces the pet's remote_ flag.
+                pets[event.slot].receive_movement(event.movements);
+            }
+            break;
     }
 }
 

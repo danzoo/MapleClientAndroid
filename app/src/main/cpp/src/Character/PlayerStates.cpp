@@ -97,8 +97,15 @@ void PlayerStandState::send_action(Player &player,
                 player.set_state(Char::State::WALK);
                 break;
             case KeyAction::Id::JUMP:
-                play_jumpsound();
-                arm_jump(player);
+                if (player.is_key_down(KeyAction::Id::DOWN)) {
+                    if (player.get_phobj().drop_through()) {
+                        play_jumpsound();
+                        player.set_state(Char::State::FALL);
+                    }
+                } else {
+                    play_jumpsound();
+                    arm_jump(player);
+                }
                 break;
             case KeyAction::Id::DOWN:
                 player.set_state(Char::State::PRONE);
@@ -140,14 +147,13 @@ void PlayerWalkState::send_action(Player &player,
             case KeyAction::Id::LEFT: player.set_direction(false); break;
             case KeyAction::Id::RIGHT: player.set_direction(true); break;
             case KeyAction::Id::JUMP:
-                // Down plus jump drops through a one-way platform. A press that means no drop means
-                // nothing at all, so a platform that cannot be dropped never gets the jump sound.
-                if (player.is_key_down(KeyAction::Id::DOWN)
-                    && player.get_phobj().enablejd) {
-                    play_jumpsound();
-                    player.get_phobj().y = player.get_phobj().groundbelow;
-                    player.set_state(Char::State::FALL);
-                } else if (!player.is_key_down(KeyAction::Id::DOWN)) {
+                // A rejected down-jump must neither jump upward nor play a sound.
+                if (player.is_key_down(KeyAction::Id::DOWN)) {
+                    if (player.get_phobj().drop_through()) {
+                        play_jumpsound();
+                        player.set_state(Char::State::FALL);
+                    }
+                } else {
                     play_jumpsound();
                     arm_jump(player);
                 }
@@ -180,7 +186,9 @@ void PlayerWalkState::update(Player &player) const {
 void PlayerWalkState::update_state(Player &player) const {
     if (player.get_phobj().onground) {
         if (!haswalkinput(player) || player.get_phobj().hspeed == 0.0f) {
-            player.set_state(Char::State::STAND);
+            player.set_state(player.is_key_down(KeyAction::Id::DOWN)
+                                 ? Char::State::PRONE
+                                 : Char::State::STAND);
         }
     } else {
         player.set_state(Char::State::FALL);
@@ -272,10 +280,9 @@ void PlayerProneState::send_action(Player &player,
     if (down) {
         switch (ka) {
             case KeyAction::Id::JUMP:
-                if (player.get_phobj().enablejd
-                    && player.is_key_down(KeyAction::Id::DOWN)) {
+                if (player.is_key_down(KeyAction::Id::DOWN)
+                    && player.get_phobj().drop_through()) {
                     play_jumpsound();
-                    player.get_phobj().y = player.get_phobj().groundbelow;
                     player.set_state(Char::State::FALL);
                 }
 

@@ -473,6 +473,18 @@ void UIShop::modify(InventoryType::Id type) {
     }
 }
 
+void UIShop::confirm_transaction(uint8_t result) {
+    // The server sends 0x00 for a purchase and 0x08 for a sale. This shop UI
+    // does not send recharge requests, which would also be confirmed with 0x08.
+    if (!is_active() || (result != 0x00 && result != 0x08)) {
+        return;
+    }
+
+    // Reset first so another successful transaction restarts an ongoing smile.
+    portrait_.set_expression(Expression::Id::DEFAULT);
+    portrait_.set_expression(Expression::Id::SMILE);
+}
+
 void UIShop::add_item(int32_t id,
                       int32_t price,
                       int32_t pitch,

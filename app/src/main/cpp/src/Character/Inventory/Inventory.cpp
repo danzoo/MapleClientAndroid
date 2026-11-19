@@ -25,6 +25,15 @@ Inventory::Inventory() : running_uid_(0), meso_(0), bullet_slot_(0) {
     slot_maxima_[InventoryType::Id::EQUIPPED] = EquipSlot::Id::LENGTH;
 }
 
+void Inventory::clear_items() {
+    inventories_.clear();
+    items_.clear();
+    equips_.clear();
+    pets_.clear();
+    total_stats_.clear();
+    bullet_slot_ = 0;
+}
+
 void Inventory::recalc_stats(Weapon::Type type) {
     total_stats_.clear();
 

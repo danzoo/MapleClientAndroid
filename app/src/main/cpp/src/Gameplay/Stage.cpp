@@ -98,6 +98,9 @@ void Stage::clear() {
     mobs_.clear();
     drops_.clear();
     reactors_.clear();
+    for (auto &pet : player_.get_pets()) {
+        pet.reset_movement();
+    }
 }
 
 void Stage::load_map(int32_t mapid) {
@@ -182,6 +185,7 @@ void Stage::update() {
     chars_.update(physics_);
     drops_.update(physics_);
     player_.update(physics_);
+    update_pet_pickup();
 
     // A ladder has to be re-checked while the key is held rather than only on the edge of the press.
     // The edge arrives once - the stick reports a direction when the direction changes, not every
@@ -297,6 +301,42 @@ void Stage::pick_up_near(int16_t radius) {
 
     if (drop_oid) {
         fn_pickup_item(drop_oid, drop_pos);
+    }
+}
+
+void Stage::update_pet_pickup() {
+    const Inventory &inventory = player_.get_inventory();
+    const bool can_meso = inventory.find_item(InventoryType::Id::EQUIPPED, 1812000) != 0;
+    const bool can_item = inventory.find_item(InventoryType::Id::EQUIPPED, 1812001) != 0;
+    const bool use_ignore = inventory.find_item(InventoryType::Id::EQUIPPED, 1812007) != 0;
+    std::vector<int32_t> excluded;
+    if (use_ignore) {
+        // The server applies the union of all summoned pets' exception lists.
+        for (const auto &pet : player_.get_pets()) {
+            if (pet.get_itemid()) {
+                const auto &items = pet.get_excluded_items();
+                excluded.insert(excluded.end(), items.begin(), items.end());
+            }
+        }
+    }
+
+    for (auto &pet : player_.get_pets()) {
+        if (!pet.get_itemid() || !pet.get_uniqueid()) {
+            continue;
+        }
+        int32_t oid = 0;
+        if (player_.get_stats().get_stat(MapleStat::Id::HP) > 0 && (can_meso || can_item)) {
+            oid = drops_.find_pet_loot(pet.get_position(), can_meso, can_item, excluded).first;
+        }
+        // Always synchronize this exact foot position before its loot request.
+        // Both packets use the same ordered connection; server validation never
+        // needs to authorize a client-supplied loot coordinate.
+        if (auto movement = pet.take_movement(oid != 0)) {
+            MovePetPacket(pet.get_uniqueid(), *movement).dispatch();
+        }
+        if (oid) {
+            PetLootPacket(pet.get_uniqueid(), oid, pet.get_position()).dispatch();
+        }
     }
 }
 

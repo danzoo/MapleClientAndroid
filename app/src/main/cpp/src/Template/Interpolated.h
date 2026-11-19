@@ -101,6 +101,10 @@ public:
     // from where the object started to where it ends up.
     void shift(T value) { now_ += value; }
 
+    // Seat at an exact contact coordinate without changing the interpolation origin.
+    // Adding (target - now_) can round away the contact height near a slope's zero crossing.
+    void shift_to(T value) { now_ = value; }
+
     void operator-=(T value) {
         before_ = now_;
         now_ -= value;

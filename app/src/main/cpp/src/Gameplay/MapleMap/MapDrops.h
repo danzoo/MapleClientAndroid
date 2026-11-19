@@ -19,6 +19,7 @@
 #include <chrono>
 #include <queue>
 #include <unordered_map>
+#include <vector>
 
 #include "../Graphics/Animation.h"
 #include "../Spawn.h"
@@ -50,17 +51,25 @@ public:
     // Only an explicit server rejection identifies which item type should wait.
     void note_pickup_failure(int32_t oid, int32_t retry_after_ms);
 
-    // Find a drop which can be picked up at the specified position.
+    // Find the first eligible drop in draw order; return its OID and stable server destination.
     using Loot = std::pair<int32_t, Point<int16_t>>;
 
     Loot find_loot_at(Point<int16_t> playerpos);
 
-    // Find the closest drop within radius of the specified position.
+    // Same geometry and priority; radius applies only to mesos (normally Constants::PICKUP_RANGE).
     Loot find_loot_near(Point<int16_t> playerpos, int16_t radius);
+
+    // Filter pet equipment and ignored types before registering a request. INT32_MAX means mesos.
+    Loot find_pet_loot(Point<int16_t> petpos, bool can_meso, bool can_item,
+                       const std::vector<int32_t> &excluded);
 
 private:
     using PickupClock = std::chrono::steady_clock;
     using PickupTime = PickupClock::time_point;
+
+    // All looters share geometry, retry/type cooldowns, priority and the one-request-per-frame gate.
+    Loot find_loot(Point<int16_t> looterpos, int16_t radius, bool can_meso, bool can_item,
+                   const std::vector<int32_t> &excluded);
 
     // A server rejection holds back every drop of that item type (mesos are one type, key 0),
     // not just the one instance the request was sent for; other types stay pickable.

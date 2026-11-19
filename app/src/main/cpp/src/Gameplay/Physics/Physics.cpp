@@ -57,6 +57,7 @@ void Physics::move_object(PhysicsObject &phobj) const {
     // even without a foothold id: an empty query must not snap a fixated object to x = 0.
     // No collision substeps are needed, and shifting once retains the interpolation origin.
     if (phobj.type == PhysicsObject::Type::FIXATED) {
+        phobj.clear_drop();
         phobj.normalize();
         phobj.apply_substep(phobj.hstep(), phobj.vstep());
         return;
@@ -103,35 +104,7 @@ void Physics::move_object(PhysicsObject &phobj) const {
     // segment once per piece instead would make a fast object stutter between the pieces it is drawn
     // across.
     phobj.normalize();
-
-    double hrem = phobj.hstep();
-    double vrem = phobj.vstep();
-
-    while (hrem != 0.0 || vrem != 0.0) {
-        double reach = std::max(std::abs(hrem), std::abs(vrem));
-        double share = reach > MAX_SUBSTEP ? MAX_SUBSTEP / reach : 1.0;
-        double dh = hrem * share;
-        double dv = vrem * share;
-
-        fh_tree_.limit_movement(phobj, dh, dv);
-
-        // A piece that ran into something is already over: the check put the object against the
-        // obstacle it hit and took that direction's speed away, so the rest of the tick has nothing
-        // left to cover the way it was going.
-        bool hstopped = hrem != 0.0 && !phobj.hmobile();
-        bool vstopped = vrem != 0.0 && !phobj.vmobile();
-
-        phobj.apply_substep(hstopped ? 0.0 : dh, vstopped ? 0.0 : dv);
-
-        hrem = hstopped ? 0.0 : hrem - dh;
-        vrem = vstopped ? 0.0 : vrem - dv;
-
-        // Whichever platform the tick started on is not necessarily the one under the object now,
-        // and a piece is only worth taking if it is measured against the ground actually below it.
-        if (hrem != 0.0 || vrem != 0.0) {
-            fh_tree_.update_fh(phobj);
-        }
-    }
+    move_substeps(phobj, phobj.hstep(), phobj.vstep());
 
     // ---- Landing conversion (one-shot, input-priority) --------------------
     // This is the standing-jump-on-a-slope behaviour: with no direction key
@@ -170,35 +143,18 @@ void Physics::move_object(PhysicsObject &phobj) const {
         const double correction = 0.5 * (v_new - v_air_x) * Constants::TICK_SECONDS;
         phobj.hspeed = v_new;
 
-        const Foothold &landing = fh_tree_.get_foothold(phobj.landing_fhid);
-        if (landing.id()) {
-            phobj.fhid = phobj.landing_fhid;
-            phobj.fhslope = landing.slope();
-            phobj.fhcos = c;
-            phobj.fhsin = s;
-            if (correction != 0.0) {
-                // Correction can point against the new velocity, so use its own direction
-                // in the ordinary grounded collision path. A local probe retains the tick's
-                // interpolation origin and does not integrate gravity or the impact twice.
-                PhysicsObject projected = phobj;
-                projected.onground = true;
-                projected.hspeed = correction / Constants::TICK_SECONDS;
-                projected.vspeed = 0.0;
-                fh_tree_.limit_movement(projected, correction, landing.slope() * correction);
-                if (projected.hmobile()) {
-                    phobj.x.shift(correction);
-                } else {
-                    phobj.x.shift(projected.crnt_x() - phobj.crnt_x());
-                    phobj.hspeed = 0.0;
-                }
-                phobj.flags = projected.flags;
+        if (correction != 0.0) {
+            // The impact tangent above belongs to the landing surface, but the body may
+            // already have walked onto a different one. Correct its position through the
+            // same substeps, retaining their actual foothold, height and contact state.
+            // Its temporary speed supplies the correction's direction to wall checks;
+            // no normalization or second gravity integration belongs to this displacement.
+            phobj.hspeed = correction / Constants::TICK_SECONDS;
+            phobj.vspeed = 0.0;
+            move_substeps(phobj, correction, 0.0);
+            if (phobj.hmobile()) {
+                phobj.hspeed = v_new;
             }
-            // Re-seat the body on the surface at its corrected x; otherwise the
-            // next update_fh would see y != ground and start a spurious fall.
-            phobj.limity(landing.ground_below(phobj.crnt_x()));
-            phobj.onground = true;
-        } else {
-            phobj.x.shift(correction);
         }
         phobj.landing_conversion = false;
         // Keep air_direction_changed set through the landing tick: the player
@@ -208,6 +164,44 @@ void Physics::move_object(PhysicsObject &phobj) const {
 
     if (normal && !phobj.vertical_limited) {
         phobj.vspeed = end_vspeed;
+    }
+}
+
+void Physics::move_substeps(PhysicsObject &phobj, double hmove, double vmove) const {
+    // was_airborne records the settled state before this tick's launch. Until a collision
+    // actually limits vertical motion, an equality lookup must not reattach a take-off
+    // whose mean vertical displacement is zero (or rounds back to the launch height).
+    const bool taking_off = phobj.is_ground_type() && !phobj.was_airborne
+        && !phobj.onground && !phobj.vertical_limited;
+    double hrem = hmove;
+    double vrem = vmove;
+
+    while (hrem != 0.0 || vrem != 0.0) {
+        double reach = std::max(std::abs(hrem), std::abs(vrem));
+        double share = reach > MAX_SUBSTEP ? MAX_SUBSTEP / reach : 1.0;
+        double dh = hrem * share;
+        double dv = vrem * share;
+
+        fh_tree_.limit_movement(phobj, dh, dv);
+
+        // A piece that ran into something is already over: the check put the object against the
+        // obstacle it hit and took that direction's speed away, so the rest of the tick has nothing
+        // left to cover the way it was going.
+        bool hstopped = hrem != 0.0 && !phobj.hmobile();
+        bool vstopped = vrem != 0.0 && !phobj.vmobile();
+
+        phobj.apply_substep(hstopped ? 0.0 : dh, vstopped ? 0.0 : dv);
+
+        hrem = hstopped ? 0.0 : hrem - dh;
+        vrem = vstopped ? 0.0 : vrem - dv;
+
+        // Refresh even after the final piece: touchdown and correction must leave the body
+        // on the surface at its actual floating-point x, not at the last collision probe.
+        // This displacement was collision-checked, so its verified support may follow x.
+        fh_tree_.update_fh(phobj, true);
+        if (taking_off && !phobj.vertical_limited) {
+            phobj.onground = false;
+        }
     }
 }
 
@@ -292,6 +286,14 @@ double Physics::move_normal(PhysicsObject &phobj) const {
     }
 
     const bool airborne = !phobj.onground || start_vspeed < 0.0;
+    if (airborne) {
+        // The launch impulse has already detached the body, even though update_fh saw
+        // it standing on the surface at the start of this tick. Collision queries must
+        // see that same state: a shallow knockback hop can enter an uphill slope in
+        // its very first substep, before another update_fh has a chance to run.
+        // Keep the ground drive above and was_airborne's previous-tick landing gate.
+        phobj.onground = false;
+    }
 
     // Airborne input that opposes the carried motion is the original's only
     // measured air steering effect (5.10: 6 px per 30 ms tick toward zero).

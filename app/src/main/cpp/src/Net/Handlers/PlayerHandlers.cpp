@@ -134,6 +134,18 @@ bool ChangeStatsHandler::handle_stat(MapleStat::Id stat, InPacket &recv) const {
         case MapleStat::Id::MESO:
             player.get_inventory().set_meso(recv.read_int());
             break;
+        case MapleStat::Id::PET: {
+            std::array<int64_t, 3> uniqueids;
+            for (auto &uniqueid : uniqueids) {
+                uniqueid = recv.read_long();
+            }
+            player.reorder_pets(uniqueids);
+            break;
+        }
+        case MapleStat::Id::GACHAEXP:
+            // Not exposed by this client, but the field still occupies four bytes.
+            recv.read_int();
+            break;
         default:
             player.get_stats().set_stat(stat, recv.read_short());
             recalculate = true;

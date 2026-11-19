@@ -142,6 +142,12 @@ public:
     // Remove a pet with the specified index and reason.
     void remove_pet(uint8_t index, bool hunger);
 
+    // Reconcile the server's summoned slots without discarding surviving pet state.
+    void reorder_pets(const std::array<int64_t, 3> &uniqueids);
+
+    std::array<PetLook, 3> &get_pets();
+    const std::array<PetLook, 3> &get_pets() const;
+
     // Return if the character is facing left
     bool getflip() const;
     // Return the name of this character

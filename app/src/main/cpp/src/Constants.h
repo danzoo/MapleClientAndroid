@@ -284,9 +284,11 @@ constexpr Point<int16_t> to_view_space(const Point<int16_t> &uipos) {
 // The bands the game itself measures things in - how close you have to be for an action to take -
 // as opposed to how any one input device is driven.
 //
-// Loot has to be right at the feet. Counted to the nearest edge of the item's picture rather than to
-// the point it is stored at, which is what made the reach differ by side.
-constexpr int16_t PICKUP_RANGE = 24;
+// Mesos use Euclidean distance to the nearest edge of their drawn icon: 25% more than the old 24px.
+// Items instead use the server's stable destination within this inclusive box around the feet.
+constexpr int16_t PICKUP_RANGE = 30;
+constexpr int16_t ITEM_PICKUP_RANGE_X = 12;
+constexpr int16_t ITEM_PICKUP_RANGE_Y = 10;
 constexpr int16_t TALK_RANGE = 350;
 
 // How wide a band around a rope or ladder still counts as standing at it. The reference client's ten

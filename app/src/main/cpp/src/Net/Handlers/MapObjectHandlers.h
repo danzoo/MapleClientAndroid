@@ -37,6 +37,18 @@ class SpawnPetHandler : public PacketHandler {
     void handle(InPacket &recv) const override;
 };
 
+// Receive authoritative movement for another character's pet.
+// Opcode: MOVE_PET(170)
+class MovePetHandler : public PacketHandler {
+    void handle(InPacket &recv) const override;
+};
+
+// Update the summoned pets' pickup exception lists.
+// Opcode: PET_EXCEPTION_LIST(173)
+class PetExceptionListHandler : public PacketHandler {
+    void handle(InPacket &recv) const override;
+};
+
 // Move a character
 // Opcode: CHAR_MOVED(185)
 class CharMovedHandler : public PacketHandler {

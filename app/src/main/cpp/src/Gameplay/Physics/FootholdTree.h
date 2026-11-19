@@ -39,15 +39,17 @@ public:
     // whole tick's speed whether it fits would test the end of the tick from the middle of it.
     void limit_movement(PhysicsObject &touse, double hmove, double vmove) const;
 
-    // Updates a PhysicsObject's fhid based on it's position.
-    void update_fh(PhysicsObject &touse) const;
+    // Updates a PhysicsObject's fhid based on its position. Only a completed collision
+    // substep may carry its verified support to the new x; external placements must requery.
+    void update_fh(PhysicsObject &touse, bool follow_ground = false) const;
 
     // Determine the point on the ground below the specified position.
     int16_t get_y_below(Point<int16_t> position) const;
 
     // Determine the platform directly below the specified position, or zero if there is none
-    // within the borders of the map.
-    uint16_t get_fhid_below(double fx, double fy) const;
+    // within the borders of the map. Object queries exclude only its released drop floors.
+    uint16_t get_fhid_below(double fx, double fy,
+                           const PhysicsObject *object = nullptr) const;
 
     // Returns the platform with the specified identifier, or a null platform.
     const Foothold &get_foothold(uint16_t fhid) const;
@@ -76,8 +78,10 @@ private:
     void limit_movement(PhysicsObject &object, double hmove, double vmove,
                         uint16_t landed_fhid) const;
 
-    // Fill airborne omissions along the landing platform's floor chain and its side-wall column.
-    double get_air_wall(uint16_t fhid, bool left, double fy) const;
+    // Follow the connected floor/wall chain. Airborne lookups have no horizontal bound;
+    // grounded lookups stop once the current substep's destination is inside a floor span.
+    double get_air_wall(uint16_t fhid, bool left, double fy,
+                        double to_x = std::numeric_limits<double>::quiet_NaN()) const;
 
     double get_wall(uint16_t fhid, bool left, double fy) const;
 
@@ -85,16 +89,21 @@ private:
 
     const Foothold &get_fh(uint16_t fhid) const;
 
-    // The ground a falling body would meet under one column of its swept path, or +inf where the
-    // column has no terrain. Read off the tree rather than the body's own foothold so a stale or
-    // null foothold cannot let the body sink through the platform below it.
-    double ground_below_path(double x, double y) const;
+    // With a displacement, reject one-way floors approached from below at the
+    // same x on the path. A plain lookup uses NaN and does no path classification.
+    uint16_t find_fhid_below(double fx, double fy, const PhysicsObject *object,
+                            double hmove = std::numeric_limits<double>::quiet_NaN(),
+                            double vmove = 0.0) const;
+
+    void prepare_drop(PhysicsObject &object) const;
+    void finish_drop(PhysicsObject &object) const;
 
     // Where a movement segment first meets terrain it started above, or false when it meets none.
     // Unlike the fall test this also sees ground that rises to meet the body sideways, which is
     // what a slope does to a body knocked back up it.
     bool swept_ground(double fromx, double fromy, double tox, double toy,
-                      double &crossx, double &crossy) const;
+                      double &crossx, double &crossy,
+                      const PhysicsObject &object) const;
 
     bool sweep_walls(Point<int16_t> from,
                      Point<int16_t> to,

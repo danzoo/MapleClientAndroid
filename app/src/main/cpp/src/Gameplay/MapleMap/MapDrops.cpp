@@ -16,6 +16,7 @@
 #include "MapDrops.h"
 
 #include <algorithm>
+#include <limits>
 
 #include <imgwz/node.hpp>
 #include <imgwz/wz.hpp>
@@ -154,6 +155,21 @@ void MapDrops::note_pickup_failure(int32_t oid, int32_t retry_after_ms) {
 }
 
 MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
+    return find_loot(playerpos, Constants::PICKUP_RANGE, true, true, {});
+}
+
+MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius) {
+    return find_loot(playerpos, radius, true, true, {});
+}
+
+MapDrops::Loot MapDrops::find_pet_loot(Point<int16_t> petpos, bool can_meso, bool can_item,
+                                     const std::vector<int32_t> &excluded) {
+    return find_loot(petpos, Constants::PICKUP_RANGE, can_meso, can_item, excluded);
+}
+
+MapDrops::Loot MapDrops::find_loot(Point<int16_t> looterpos, int16_t radius,
+                                 bool can_meso, bool can_item,
+                                 const std::vector<int32_t> &excluded) {
     if (!loot_enabled_) {
         return { 0, {} };
     }
@@ -168,74 +184,29 @@ MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
     for (auto iter = oids.begin(); iter != oids.end(); ++iter) {
         auto drop = drops_.get<const Drop>(*iter);
 
-        if (!drop || !drop->get().can_request_pickup(now)
-            || !type_pickup_ready(drop->get().itemid(), now)) {
+        if (!drop) {
             continue;
         }
 
-        if (!drop->get().bounds().contains(playerpos)) {
+        const int32_t itemid = drop->get().itemid();
+        const bool meso = itemid == 0;
+        const int32_t excluded_id = meso ? std::numeric_limits<int32_t>::max() : itemid;
+
+        // A filtered pet candidate must not consume the frame gate or start its pickup retry.
+        if ((meso ? !can_meso : !can_item)
+            || std::find(excluded.begin(), excluded.end(), excluded_id) != excluded.end()) {
             continue;
         }
 
-        loot_enabled_ = false;
-        drops_.get<Drop>(*iter)->get().note_pickup_request(now);
-
-        return { *iter, drop->get().get_position() };
-    }
-
-    return { 0, {} };
-}
-
-MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius) {
-    if (!loot_enabled_) {
-        return { 0, {} };
-    }
-
-    const PickupTime now = PickupClock::now();
-
-    const int64_t rangesq = static_cast<int64_t>(radius) * radius;
-
-    // Earliest dropped first, for the gamepad radius path too. Being nearer to the character does
-    // not change the order; draw_order() already has the bottom of a stack before its upper items.
-    const std::vector<int32_t> oids = drops_.draw_order();
-
-    for (auto iter = oids.begin(); iter != oids.end(); ++iter) {
-        auto drop = drops_.get<const Drop>(*iter);
-
-        if (!drop || !drop->get().can_request_pickup(now)
-            || !type_pickup_ready(drop->get().itemid(), now)) {
-            continue;
-        }
-
-        // Measured against the icon as it is drawn, and to its nearest edge. The point the drop is
-        // stored at sits inside that picture instead of at its middle, so a radius counted from it
-        // reached further on one side of the character than on the other.
-        const Rectangle<int16_t> box = drop->get().bounds();
-
-        int64_t deltax = 0;
-
-        if (playerpos.x() < box.left()) {
-            deltax = box.left() - playerpos.x();
-        } else if (playerpos.x() > box.right()) {
-            deltax = playerpos.x() - box.right();
-        }
-
-        int64_t deltay = 0;
-
-        if (playerpos.y() < box.top()) {
-            deltay = box.top() - playerpos.y();
-        } else if (playerpos.y() > box.bottom()) {
-            deltay = playerpos.y() - box.bottom();
-        }
-
-        if (deltax * deltax + deltay * deltay > rangesq) {
+        if (!drop->get().can_request_pickup(now) || !type_pickup_ready(itemid, now)
+            || !drop->get().within_pickup_range(looterpos, radius)) {
             continue;
         }
 
         loot_enabled_ = false;
         drops_.get<Drop>(*iter)->get().note_pickup_request(now);
 
-        return { *iter, drop->get().get_position() };
+        return { *iter, drop->get().get_pickup_position() };
     }
 
     return { 0, {} };

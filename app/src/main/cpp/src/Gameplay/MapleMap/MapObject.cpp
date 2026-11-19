@@ -28,6 +28,7 @@ int8_t MapObject::update(const Physics &physics) {
 }
 
 void MapObject::set_position(int16_t x, int16_t y) {
+    phobj_.clear_drop();
     phobj_.set_x(x);
     phobj_.set_y(y);
 }

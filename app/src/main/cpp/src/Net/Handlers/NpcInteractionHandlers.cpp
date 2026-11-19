@@ -100,4 +100,11 @@ void OpenNpcShopHandler::handle(InPacket &recv) const {
         }
     }
 }
+
+void ConfirmShopTransactionHandler::handle(InPacket &recv) const {
+    const uint8_t result = recv.read_ubyte();
+    if (auto shop = UI::get().get_element<UIShop>()) {
+        shop->get().confirm_transaction(result);
+    }
+}
 }  // namespace ms

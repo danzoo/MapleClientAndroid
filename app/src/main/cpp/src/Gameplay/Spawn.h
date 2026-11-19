@@ -16,6 +16,8 @@
 #pragma once
 
 #include <memory>
+#include <utility>
+#include <vector>
 
 #include "../Graphics/Animation.h"
 #include "../Net/Login.h"
@@ -131,6 +133,15 @@ private:
     int16_t delay_;
 };
 
+struct PetSpawn {
+    int32_t itemid;
+    std::string name;
+    int32_t uniqueid;
+    Point<int16_t> position;
+    uint8_t stance;
+    int32_t fhid;
+};
+
 class CharSpawn {
 public:
     CharSpawn(int32_t cid,
@@ -145,7 +156,11 @@ public:
 
     std::unique_ptr<MapObject> instantiate() const;
 
+    void set_pets(std::vector<PetSpawn> pets) { pets_ = std::move(pets); }
+    const std::vector<PetSpawn> &get_pets() const { return pets_; }
+
 private:
+    std::vector<PetSpawn> pets_;
     int32_t cid_;
     uint8_t level_;
     int16_t job_;

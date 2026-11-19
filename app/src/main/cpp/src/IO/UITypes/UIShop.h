@@ -59,6 +59,8 @@ public:
 
     void modify(InventoryType::Id type);
 
+    void confirm_transaction(uint8_t result);
+
 protected:
     Button::State button_pressed(uint16_t buttonid) override;
 

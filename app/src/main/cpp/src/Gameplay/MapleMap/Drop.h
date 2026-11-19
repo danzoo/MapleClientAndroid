@@ -30,6 +30,12 @@ public:
 
     virtual Rectangle<int16_t> bounds() const;
 
+    // Stable server destination for pickup requests, independent of the icon's flight or idle bob.
+    Point<int16_t> get_pickup_position() const;
+
+    // Mesos measure radius from their icon bounds; items use the inclusive box around the feet.
+    bool within_pickup_range(Point<int16_t> looterpos, int16_t radius) const;
+
     // Whether the item has already been claimed and is flying to whoever claimed it. It is still
     // drawn and still active while that happens, so without this a pile keeps handing out the same
     // item until the flight has faded.

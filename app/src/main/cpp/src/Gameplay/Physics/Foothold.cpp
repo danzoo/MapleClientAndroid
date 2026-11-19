@@ -177,6 +177,16 @@ double Foothold::ground_below(double x) const {
         return std::numeric_limits<double>::infinity();
     }
 
+    // Preserve shared WZ endpoints exactly. Reconstructing y2 from the slope can
+    // round just below it (e.g. 15 / 22 * 22), making a body at the endpoint look
+    // underneath the platform and lose its connected wall in get_fhid_below().
+    if (x == x1()) {
+        return y1();
+    }
+    if (x == x2()) {
+        return y2();
+    }
+
     return is_floor() ? y1() : slope() * (x - x1()) + y1();
 }
 }  // namespace ms

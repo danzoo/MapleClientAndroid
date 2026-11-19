@@ -26,12 +26,13 @@ PetLook::PetLook(int32_t iid,
                  int32_t uqid,
                  Point<int16_t> pos,
                  uint8_t st,
-                 int32_t) {
+                 int32_t fhid) {
     item_id_ = iid;
     name_ = std::move(nm);
     unique_id_ = uqid;
 
     set_position(pos.x(), pos.y());
+    phobj_.fhid = static_cast<uint16_t>(fhid);
     set_stance(st);
 
     name_label_ = Text(Text::Font::A13M,
@@ -61,6 +62,7 @@ PetLook::PetLook() {
     name_ = "";
     unique_id_ = 0;
     stance_ = Stance::STAND;
+    flip_ = false;
 }
 
 void PetLook::draw(double viewx, double viewy, float alpha) const {
@@ -71,6 +73,11 @@ void PetLook::draw(double viewx, double viewy, float alpha) const {
 }
 
 void PetLook::update(const Physics &physics, Point<int16_t> charpos) {
+    if (remote_) {
+        animations_[stance_].update();
+        return;
+    }
+
     // The pet used to be given these two as pushes in pixels per tick squared. Its flight damping
     // has not changed, so that one only has to be restated as the acceleration it amounted to;
     // on the ground it is now driven by the original client's constant acceleration, scaled so
@@ -143,13 +150,49 @@ void PetLook::update(const Physics &physics, Point<int16_t> charpos) {
     animations_[stance_].update();
 }
 
+void PetLook::set_remote() {
+    remote_ = true;
+    reset_movement();
+}
+
+void PetLook::receive_movement(const std::vector<Movement> &movements) {
+    if (!remote_ || !item_id_) {
+        return;
+    }
+
+    for (const auto &movement : movements) {
+        if (movement.newstate >= Stance::LENGTH * 2) {
+            continue;
+        }
+        switch (movement.type) {
+            case Movement::ABSOLUTE:
+            case Movement::JUMPDOWN:
+                set_position(movement.xpos, movement.ypos);
+                phobj_.fhid = movement.fh;
+                break;
+            case Movement::CHAIR:
+                // Teleport/chair fragments carry a position, but no foothold.
+                set_position(movement.xpos, movement.ypos);
+                break;
+            case Movement::RELATIVE:
+                // Relative x/y are velocities, not a new map position.
+                break;
+            default:
+                continue;
+        }
+        set_stance(movement.newstate);
+    }
+}
+
 void PetLook::set_position(int16_t x, int16_t y) {
+    phobj_.clear_drop();
     phobj_.set_x(x);
     phobj_.set_y(y);
 }
 
 void PetLook::set_stance(Stance st) {
-    if (stance_ != st) {
+    // Char::update derives these overrides from the owner's ladder/swim state.
+    if (!remote_ && stance_ != st) {
         stance_ = st;
         animations_[stance_].reset();
     }
@@ -157,7 +200,11 @@ void PetLook::set_stance(Stance st) {
 
 void PetLook::set_stance(uint8_t stancebyte) {
     flip_ = stancebyte % 2 == 1;
-    stance_ = stancebyvalue(stancebyte);
+    const Stance st = stancebyvalue(stancebyte);
+    if (stance_ != st) {
+        stance_ = st;
+        animations_[stance_].reset();
+    }
 }
 
 int32_t PetLook::get_itemid() const {
@@ -166,5 +213,46 @@ int32_t PetLook::get_itemid() const {
 
 PetLook::Stance PetLook::get_stance() const {
     return stance_;
+}
+
+int32_t PetLook::get_uniqueid() const {
+    return unique_id_;
+}
+
+Point<int16_t> PetLook::get_position() const {
+    return phobj_.get_position();
+}
+
+std::optional<Movement> PetLook::take_movement(bool force) {
+    if (remote_ || !item_id_ || !unique_id_) {
+        return std::nullopt;
+    }
+    sync_elapsed_ = std::min(sync_elapsed_ + Constants::TIMESTEP, 1000);
+    Movement movement(phobj_, static_cast<uint8_t>(stance_ * 2 + (flip_ ? 1 : 0)));
+    // These two fields are speeds in the server's absolute movement format.
+    movement.lastx = static_cast<int16_t>(std::clamp(std::round(phobj_.hspeed), -32768.0, 32767.0));
+    movement.lasty = static_cast<int16_t>(std::clamp(std::round(phobj_.vspeed), -32768.0, 32767.0));
+    movement.duration = static_cast<int16_t>(sync_elapsed_);
+    const bool changed = !last_sent_move_ || last_sent_move_->hasmoved(movement)
+                         || last_sent_move_->fh != movement.fh;
+    if (!force && last_sent_move_ && (sync_elapsed_ < 100 || !changed)) {
+        return std::nullopt;
+    }
+    last_sent_move_ = movement;
+    sync_elapsed_ = 0;
+    return movement;
+}
+
+void PetLook::reset_movement() {
+    last_sent_move_.reset();
+    sync_elapsed_ = 0;
+}
+
+void PetLook::set_excluded_items(std::vector<int32_t> items) {
+    excluded_items_ = std::move(items);
+}
+
+const std::vector<int32_t> &PetLook::get_excluded_items() const {
+    return excluded_items_;
 }
 }  // namespace ms

@@ -15,6 +15,10 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <optional>
+#include <vector>
+
+#include "../../Gameplay/Movement.h"
 #include "../../Gameplay/Physics/Physics.h"
 #include "../../Graphics/Animation.h"
 #include "../../Graphics/Text.h"
@@ -54,7 +58,12 @@ public:
 
     void update(const Physics &physics, Point<int16_t> charpos);
 
+    // Remote pets animate locally but are positioned only by server movement.
+    void set_remote();
+    void receive_movement(const std::vector<Movement> &movements);
+
     void set_position(int16_t xpos, int16_t ypos);
+    void set_foothold(uint16_t fhid) { phobj_.fhid = fhid; }
 
     void set_stance(Stance stance);
 
@@ -64,12 +73,27 @@ public:
 
     Stance get_stance() const;
 
+    int32_t get_uniqueid() const;
+    Point<int16_t> get_position() const;
+
+    // Called only for the local player's pets, never from shared look updates.
+    std::optional<Movement> take_movement(bool force);
+    void reset_movement();
+
+    void set_excluded_items(std::vector<int32_t> items);
+    const std::vector<int32_t> &get_excluded_items() const;
+
 private:
+    std::optional<Movement> last_sent_move_;
+    int32_t sync_elapsed_ = 0;
+    std::vector<int32_t> excluded_items_;
+
     int32_t item_id_;
     std::string name_;
     int32_t unique_id_;
-    Stance stance_;
-    bool flip_;
+    Stance stance_ = Stance::STAND;
+    bool flip_ = false;
+    bool remote_ = false;
 
     EnumMap<Stance, Animation> animations_;
     PhysicsObject phobj_;

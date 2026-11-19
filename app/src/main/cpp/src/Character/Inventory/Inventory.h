@@ -44,6 +44,9 @@ public:
 
     Inventory();
 
+    // Clear contents and derived caches before a full snapshot, retaining slot limits and UID sequence.
+    void clear_items();
+
     // Recalculate sums of equip stats
     void recalc_stats(Weapon::Type weapontype);
 

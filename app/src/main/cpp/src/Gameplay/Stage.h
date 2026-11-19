@@ -120,7 +120,7 @@ public:
 
     void change_channel(uint8_t ch);
 
-    // Pick up the closest drop within radius of the player.
+    // Pick the earliest eligible drop: meso edge radius, item foot rectangle.
     void pick_up_near(int16_t radius);
 
     // An opted-in rejection includes both the map and drop, never the last requested OID.
@@ -138,6 +138,8 @@ private:
     void check_ladders(bool up);
 
     void check_drops();
+
+    void update_pet_pickup();
 
     enum State { INACTIVE, TRANSITION, ACTIVE };
 

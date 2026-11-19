@@ -16,6 +16,7 @@
 #include "Char.h"
 
 #include <imgwz/wz.hpp>
+#include <utility>
 
 #include "../Data/WeaponData.h"
 
@@ -335,10 +336,40 @@ void Char::add_pet(uint8_t index,
                    Point<int16_t> pos,
                    uint8_t stance,
                    int32_t fhid) {
-    if (index >= pets_.size()) {
+    if (index >= pets_.size() || !iid || !uniqueid) {
         return;
     }
 
+    size_t existing = pets_.size();
+    for (size_t i = 0; i < pets_.size(); ++i) {
+        if (pets_[i].get_itemid() && pets_[i].get_uniqueid() == uniqueid) {
+            existing = i;
+            break;
+        }
+    }
+
+    if (existing != pets_.size()) {
+        PetLook pet = std::move(pets_[existing]);
+        for (size_t i = existing; i < index; ++i) {
+            pets_[i] = std::move(pets_[i + 1]);
+        }
+        for (size_t i = existing; i > index; --i) {
+            pets_[i] = std::move(pets_[i - 1]);
+        }
+        pets_[index] = std::move(pet);
+        // A repeated spawn must not erase the pet's ignore list or send cache.
+        pets_[index].set_position(pos.x(), pos.y());
+        pets_[index].set_foothold(static_cast<uint16_t>(fhid));
+        pets_[index].set_stance(stance);
+        return;
+    }
+
+    // A newly summoned lead pet occupies slot zero; the existing pets move right.
+    if (pets_[index].get_itemid()) {
+        for (size_t i = pets_.size() - 1; i > index; --i) {
+            pets_[i] = std::move(pets_[i - 1]);
+        }
+    }
     pets_[index] = PetLook(iid, name, uniqueid, pos, stance, fhid);
 }
 
@@ -347,11 +378,40 @@ void Char::remove_pet(uint8_t index, bool hunger) {
         return;
     }
 
-    pets_[index] = PetLook();
+    for (size_t i = index; i + 1 < pets_.size(); ++i) {
+        pets_[i] = std::move(pets_[i + 1]);
+    }
+    pets_.back() = PetLook();
 
     if (hunger) {
         // TODO: Empty
     }
+}
+
+void Char::reorder_pets(const std::array<int64_t, 3> &uniqueids) {
+    std::array<PetLook, 3> ordered;
+    for (size_t slot = 0; slot < uniqueids.size(); ++slot) {
+        if (!uniqueids[slot]) {
+            continue;
+        }
+        for (auto &pet : pets_) {
+            if (pet.get_itemid()
+                && static_cast<int64_t>(pet.get_uniqueid()) == uniqueids[slot]) {
+                ordered[slot] = std::move(pet);
+                pet = PetLook();
+                break;
+            }
+        }
+    }
+    pets_ = std::move(ordered);
+}
+
+std::array<PetLook, 3> &Char::get_pets() {
+    return pets_;
+}
+
+const std::array<PetLook, 3> &Char::get_pets() const {
+    return pets_;
 }
 
 bool Char::is_invincible() const {

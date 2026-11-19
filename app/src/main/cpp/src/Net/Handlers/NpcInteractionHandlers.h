@@ -27,4 +27,9 @@ class NpcDialogueHandler : public PacketHandler {
 class OpenNpcShopHandler : public PacketHandler {
     void handle(InPacket &recv) const override;
 };
+
+// Confirms a buy/sell request without guessing from generic inventory updates.
+class ConfirmShopTransactionHandler : public PacketHandler {
+    void handle(InPacket &recv) const override;
+};
 }  // namespace ms

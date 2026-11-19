@@ -397,6 +397,8 @@ enum Opcode : uint16_t {
 
     /// MapObject
     SPAWN_PET = 168,
+    MOVE_PET = 170,
+    PET_EXCEPTION_LIST = 173,
     CHAR_MOVED = 185,
 
     /// Attack
@@ -499,6 +501,8 @@ PacketSwitch::PacketSwitch() {
     emplace<CANCEL_FOREIGN_BUFF, CancelForeignBuffHandler>();
     emplace<REMOVE_CHAR, RemoveCharHandler>();
     emplace<SPAWN_PET, SpawnPetHandler>();
+    emplace<MOVE_PET, MovePetHandler>();
+    emplace<PET_EXCEPTION_LIST, PetExceptionListHandler>();
     emplace<SPAWN_NPC, SpawnNpcHandler>();
     emplace<SPAWN_NPC_C, SpawnNpcControllerHandler>();
     emplace<SET_NPC_SCRIPTABLE, SetNpcScriptableHandler>();
@@ -550,6 +554,7 @@ PacketSwitch::PacketSwitch() {
     // NPC Interaction Handlers
     emplace<NPC_DIALOGUE, NpcDialogueHandler>();
     emplace<OPEN_NPC_SHOP, OpenNpcShopHandler>();
+    emplace<CONFIRM_SHOP_TRANSACTION, ConfirmShopTransactionHandler>();
 
     // Player Interaction
     emplace<CHAR_INFO, CharInfoHandler>();

@@ -67,6 +67,32 @@ public:
     }
 };
 
+// Opcode: MOVE_PET(167)
+class MovePetPacket : public MovementPacket {
+public:
+    MovePetPacket(int32_t petid, const Movement &movement) :
+        MovementPacket(OutPacket::Opcode::MOVE_PET) {
+        write_int(petid);
+        skip(8);
+        write_byte(1);
+        write_movement(movement);
+    }
+};
+
+// Opcode: PET_LOOT(170)
+class PetLootPacket : public OutPacket {
+public:
+    PetLootPacket(int32_t petid, int32_t oid, Point<int16_t> position) :
+        OutPacket(OutPacket::Opcode::PET_LOOT) {
+        write_int(petid);
+        skip(4);  // High half of the pet's wire ID.
+        write_int(0);
+        write_byte(0x7f);  // Reuse the OID-bearing pickup rejection opt-in.
+        write_point(position);
+        write_int(oid);
+    }
+};
+
 // Opcode: PARTY_OPERATION(124)
 class PartyOperationPacket : public OutPacket {
 public:

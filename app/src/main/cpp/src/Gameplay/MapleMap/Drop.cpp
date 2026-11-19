@@ -291,6 +291,42 @@ Rectangle<int16_t> Drop::bounds() const {
     return Rectangle<int16_t>(lt, rb);
 }
 
+Point<int16_t> Drop::get_pickup_position() const {
+    return dest_;
+}
+
+bool Drop::within_pickup_range(Point<int16_t> looterpos, int16_t radius) const {
+    if (itemid() != 0) {
+        // Widen before subtracting: map coordinates can be negative or span the int16_t range.
+        const int32_t deltax = static_cast<int32_t>(dest_.x()) - looterpos.x();
+        const int32_t deltay = static_cast<int32_t>(dest_.y()) - looterpos.y();
+
+        return std::abs(deltax) <= Constants::ITEM_PICKUP_RANGE_X
+               && std::abs(deltay) <= Constants::ITEM_PICKUP_RANGE_Y;
+    }
+
+    const Rectangle<int16_t> box = bounds();
+    int64_t deltax = 0;
+
+    if (looterpos.x() < box.left()) {
+        deltax = static_cast<int64_t>(box.left()) - looterpos.x();
+    } else if (looterpos.x() > box.right()) {
+        deltax = static_cast<int64_t>(looterpos.x()) - box.right();
+    }
+
+    int64_t deltay = 0;
+
+    if (looterpos.y() < box.top()) {
+        deltay = static_cast<int64_t>(box.top()) - looterpos.y();
+    } else if (looterpos.y() > box.bottom()) {
+        deltay = static_cast<int64_t>(looterpos.y()) - box.bottom();
+    }
+
+    const int64_t rangesq = static_cast<int64_t>(radius) * radius;
+
+    return deltax * deltax + deltay * deltay <= rangesq;
+}
+
 bool Drop::claimed() const {
     return state_ == Drop::State::PICKED_UP;
 }

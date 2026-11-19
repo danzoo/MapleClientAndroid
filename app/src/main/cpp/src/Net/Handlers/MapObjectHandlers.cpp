@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <limits>
 #include <optional>
 
 #include "../../Constants.h"
@@ -25,6 +26,112 @@
 #include "Helpers/MovementParser.h"
 
 namespace ms {
+namespace {
+void require_pet_bytes(const InPacket &recv, size_t count) {
+    if (recv.length() < count) {
+        throw PacketError("Truncated pet packet");
+    }
+}
+
+// addPetInfo(false) starts directly at itemid after the availability byte.
+PetSpawn parse_pet_info(InPacket &recv) {
+    require_pet_bytes(recv, 6);
+    PetSpawn pet;
+    pet.itemid = recv.read_int();
+    const uint16_t name_length = static_cast<uint16_t>(recv.inspect_short());
+    require_pet_bytes(recv, 2 + static_cast<size_t>(name_length) + 17);
+    pet.name = recv.read_string();
+    const int64_t uniqueid = recv.read_long();
+    pet.position = recv.read_point();
+    pet.stance = recv.read_ubyte();
+    pet.fhid = recv.read_int();
+    if (pet.itemid <= 0 || !uniqueid
+        || uniqueid < std::numeric_limits<int32_t>::min()
+        || uniqueid > std::numeric_limits<int32_t>::max()
+        || pet.stance >= PetLook::Stance::LENGTH * 2) {
+        throw PacketError("Invalid pet spawn identity or stance");
+    }
+    pet.uniqueid = static_cast<int32_t>(uniqueid);
+    return pet;
+}
+
+// Match the server's serialized fragments, not the incomplete character parser.
+std::vector<Movement> parse_pet_movements(InPacket &recv) {
+    require_pet_bytes(recv, 1);
+    const uint8_t count = recv.read_ubyte();
+    std::vector<Movement> movements;
+    movements.reserve(count);
+    for (uint16_t i = 0; i < count; ++i) {
+        require_pet_bytes(recv, 1);
+        Movement movement;
+        // Movement's legacy default constructor resolves to the ABSOLUTE overload.
+        movement.type = Movement::NONE;
+        movement.command = recv.read_ubyte();
+        switch (movement.command) {
+            case 0:
+            case 5:
+            case 17:
+            case 15:
+                require_pet_bytes(recv, movement.command == 15 ? 15 : 13);
+                movement.type = movement.command == 15 ? Movement::JUMPDOWN : Movement::ABSOLUTE;
+                movement.xpos = recv.read_short();
+                movement.ypos = recv.read_short();
+                movement.lastx = recv.read_short();
+                movement.lasty = recv.read_short();
+                movement.fh = recv.read_ushort();
+                if (movement.command == 15) {
+                    recv.read_short();  // origin foothold, not the new foothold
+                }
+                movement.newstate = recv.read_ubyte();
+                movement.duration = recv.read_short();
+                break;
+            case 1:
+            case 2:
+            case 6:
+            case 12:
+            case 13:
+            case 16:
+            case 18:
+            case 19:
+            case 20:
+            case 22:
+                require_pet_bytes(recv, 7);
+                movement.type = Movement::RELATIVE;
+                movement.xpos = recv.read_short();
+                movement.ypos = recv.read_short();
+                movement.newstate = recv.read_ubyte();
+                movement.duration = recv.read_short();
+                break;
+            case 3:
+            case 4:
+            case 7:
+            case 8:
+            case 9:
+            case 11:
+                require_pet_bytes(recv, 9);
+                movement.type = Movement::CHAIR;
+                movement.xpos = recv.read_short();
+                movement.ypos = recv.read_short();
+                movement.lastx = recv.read_short();
+                movement.lasty = recv.read_short();
+                movement.newstate = recv.read_ubyte();
+                break;
+            case 10:
+                require_pet_bytes(recv, 1);
+                recv.read_byte();  // ChangeEquip has no movement state.
+                break;
+            default:
+                throw PacketError("Unsupported pet movement command");
+        }
+        movements.push_back(movement);
+    }
+    if (recv.available()) {
+        throw PacketError("Trailing pet movement bytes");
+    }
+    return movements;
+}
+}  // namespace
+
 void SpawnCharHandler::handle(InPacket &recv) const {
     int32_t cid = recv.read_int();
 
@@ -72,21 +179,17 @@ void SpawnCharHandler::handle(InPacket &recv) const {
 
     recv.skip(3);
 
-    for (size_t i = 0; i < 3; i++) {
-        int8_t available = recv.read_byte();
-
-        if (available == 1) {
-            recv.read_byte();    // 'byte2'
-            recv.read_int();     // petid
-            recv.read_string();  // name
-            recv.read_int();     // unique id
-            recv.read_int();
-            recv.read_point();  // pos
-            recv.read_byte();   // stance
-            recv.read_int();    // fhid
-        } else {
-            break;
+    std::vector<PetSpawn> pets;
+    for (;;) {
+        require_pet_bytes(recv, 1);
+        const uint8_t available = recv.read_ubyte();
+        if (available == 0) {
+            break;  // The terminator is present even after all three pets.
         }
+        if (available != 1 || pets.size() >= 3) {
+            throw PacketError("Invalid embedded pet list");
+        }
+        pets.push_back(parse_pet_info(recv));
     }
 
     recv.read_int();  // mountlevel
@@ -103,8 +206,9 @@ void SpawnCharHandler::handle(InPacket &recv) const {
     recv.skip(3);
     recv.read_byte();  // team
 
-    Stage::get().get_chars().spawn(
-        { cid, look, level, job, name, stance, position });
+    CharSpawn spawn(cid, look, level, job, name, stance, position);
+    spawn.set_pets(std::move(pets));
+    Stage::get().get_chars().spawn(std::move(spawn));
 }
 
 void RemoveCharHandler::handle(InPacket &recv) const {
@@ -114,35 +218,61 @@ void RemoveCharHandler::handle(InPacket &recv) const {
 }
 
 void SpawnPetHandler::handle(InPacket &recv) const {
-    int32_t cid = recv.read_int();
-    auto character = Stage::get().get_character(cid);
-
-    if (!character) {
-        return;
-    }
-
-    uint8_t petindex = recv.read_ubyte();
-    int8_t mode = recv.read_byte();
+    require_pet_bytes(recv, 6);
+    const int32_t cid = recv.read_int();
+    const uint8_t petindex = recv.read_ubyte();
+    const int8_t mode = recv.read_byte();
 
     if (mode == 1) {
-        recv.skip(1);
-
-        int32_t itemid = recv.read_int();
-        std::string name = recv.read_string();
-        int32_t uniqueid = recv.read_int();
-
-        recv.skip(4);
-
-        Point<int16_t> pos = recv.read_point();
-        uint8_t stance = recv.read_ubyte();
-        int32_t fhid = recv.read_int();
-
-        character->get()
-            .add_pet(petindex, itemid, name, uniqueid, pos, stance, fhid);
+        require_pet_bytes(recv, 1);
+        recv.skip(1);  // addPetInfo(true) only
+        const PetSpawn pet = parse_pet_info(recv);
+        if (Stage::get().is_player(cid)) {
+            Stage::get().get_player().add_pet(petindex, pet.itemid, pet.name, pet.uniqueid,
+                                              pet.position, pet.stance, pet.fhid);
+        } else {
+            Stage::get().get_chars().add_pet(cid, petindex, pet);
+        }
     } else if (mode == 0) {
-        bool hunger = recv.read_bool();
+        require_pet_bytes(recv, 1);
+        const bool hunger = recv.read_bool();
+        if (Stage::get().is_player(cid)) {
+            Stage::get().get_player().remove_pet(petindex, hunger);
+        } else {
+            Stage::get().get_chars().remove_pet(cid, petindex, hunger);
+        }
+    }
+}
 
-        character->get().remove_pet(petindex, hunger);
+void MovePetHandler::handle(InPacket &recv) const {
+    require_pet_bytes(recv, 9);
+    const int32_t cid = recv.read_int();
+    const uint8_t slot = recv.read_ubyte();
+    const int32_t uniqueid = recv.read_int();
+    if (Stage::get().is_player(cid)) {
+        return;
+    }
+    const auto movements = parse_pet_movements(recv);
+    Stage::get().get_chars().send_pet_movement(cid, slot, uniqueid, movements);
+}
+
+void PetExceptionListHandler::handle(InPacket &recv) const {
+    const int32_t cid = recv.read_int();
+    const uint8_t index = recv.read_ubyte();
+    const int64_t petid = recv.read_long();
+    const uint8_t count = recv.read_ubyte();
+    std::vector<int32_t> items;
+    items.reserve(count);
+    for (uint16_t i = 0; i < count; ++i) {
+        items.push_back(recv.read_int());
+    }
+    if (!Stage::get().is_player(cid)) {
+        return;
+    }
+    auto &pets = Stage::get().get_player().get_pets();
+    if (index < pets.size() && pets[index].get_itemid()
+        && static_cast<int64_t>(pets[index].get_uniqueid()) == petid) {
+        pets[index].set_excluded_items(std::move(items));
     }
 }
 

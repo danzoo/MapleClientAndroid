@@ -19,6 +19,7 @@
 
 namespace ms {
 void CharacterParser::parse_inventory(InPacket &recv, Inventory &invent) {
+    invent.clear_items();
     invent.set_meso(recv.read_int());
     invent.set_slotmax(InventoryType::EQUIP, recv.read_ubyte());
     invent.set_slotmax(InventoryType::USE, recv.read_ubyte());
@@ -34,7 +35,8 @@ void CharacterParser::parse_inventory(InPacket &recv, Inventory &invent) {
         int16_t pos = recv.read_short();
 
         while (pos != 0) {
-            int16_t slot = (i == 1) ? -pos : pos;
+            // Cash-equipped snapshots omit 100; deltas use the real negative slot.
+            int16_t slot = (i == 1) ? -(pos + 100) : pos;
             ItemParser::parse_item(recv, inv, slot, invent);
             pos = recv.read_short();
         }
