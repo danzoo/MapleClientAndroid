@@ -50,6 +50,13 @@ public:
                   int16_t hspace,
                   const DrawArgument &args) const;
 
+    // The same run stepped by each glyph's own width plus a 2px gap, for sets whose glyphs are
+    // wider than any fixed step would be: the summary digits run 14-20px, so a fixed step overlaps
+    // them into each other.
+    int16_t build(NativeTooltip::List &list,
+                  const std::string &text,
+                  const DrawArgument &args) const;
+
     int16_t getw(int8_t character) const;
 
 private:

@@ -33,6 +33,12 @@ auto fn_npc_shop_action = []<typename... T>(T && ...args) {
     NpcShopActionPacket(std::forward<T>(args)...).dispatch();
 };
 
+// The strip at the right end of a sell row that carries the batch-sale tick box. The row button
+// stops where the strip begins, so one press cannot both select the row and tick the box: the
+// window's button pass fires every control whose bounds hold the press.
+constexpr int16_t CHECK_ZONE = 24;
+constexpr int16_t CHECK_BOX = 12;
+
 // Taking a piece out of the character's bag and into the shop. A stack is asked for with a box that
 // starts filled at the most that can be sold, so the usual case is a press through the box rather
 // than a typed number; one piece goes straight out. `slot` is the slot in the bag, not the row the
@@ -105,12 +111,21 @@ UIShop::UIShop(const CharLook &in_charlook, const Inventory &in_inventory) :
 
     for (int i = Buttons::SELL0; i <= Buttons::SELL8; i++) {
         Point<int16_t> pos(sell_x_, item_y + 42 * (i - Buttons::SELL0));
-        Point<int16_t> dim(sell_width_, item_height);
+        Point<int16_t> dim(sell_width_ - CHECK_ZONE, item_height);
+        buttons_[i] = std::make_unique<AreaButton>(pos, dim);
+    }
+
+    for (int i = Buttons::CHECK0; i <= Buttons::CHECK8; i++) {
+        Point<int16_t> pos(sell_x_ + sell_width_ - CHECK_ZONE,
+                           item_y + 42 * (i - Buttons::CHECK0));
+        Point<int16_t> dim(CHECK_ZONE, item_height);
         buttons_[i] = std::make_unique<AreaButton>(pos, dim);
     }
 
     buy_selection_ = src["select"];
     sell_selection_ = src["select2"];
+    check_on_ = src["checkBox"][0];
+    check_off_ = src["checkBox"][1];
     meso_ = src["meso"];
 
     meso_label_ =
@@ -172,7 +187,7 @@ void UIShop::draw(float alpha) const {
     meso_label_.draw(position_ + Point<int16_t>(493, 51));
 
     buy_state_.draw(position_, buy_selection_);
-    sell_state_.draw(position_, sell_selection_);
+    sell_state_.draw(position_, sell_selection_, check_on_, check_off_);
 
     buy_slider_.draw(position_);
     sell_slider_.draw(position_);
@@ -208,10 +223,21 @@ Button::State UIShop::button_pressed(uint16_t buttonid) {
 
         return Button::State::NORMAL;
     }
+    constexpr Range<uint16_t> check(Buttons::CHECK0, Buttons::CHECK8);
+
+    if (check.contains(buttonid)) {
+        sell_state_.toggle(buttonid - Buttons::CHECK0);
+
+        return Button::State::NORMAL;
+    }
     switch (buttonid) {
         case Buttons::BUY_ITEM: buy_state_.buy(); return Button::State::NORMAL;
         case Buttons::SELL_ITEM:
-            sell_state_.sell(false);
+            if (sell_state_.has_checked()) {
+                sell_state_.sell_checked();
+            } else {
+                sell_state_.sell(false);
+            }
 
             return Button::State::NORMAL;
         case Buttons::EXIT: exit_shop(); return Button::State::PRESSED;
@@ -325,7 +351,7 @@ Cursor::State UIShop::send_cursor(bool clicked, Point<int16_t> cursorpos) {
     int16_t slot = slot_by_position(yoff);
     bool on_row = slot >= 0 && slot <= 8;
     bool on_buy = on_row && xoff >= buy_x_ && xoff <= buy_width_;
-    bool on_sell = on_row && xoff >= sell_x_ && xoff <= sell_x_ + sell_width_;
+    bool on_sell = on_row && xoff >= sell_x_ && xoff <= sell_x_ + sell_width_ - CHECK_ZONE;
 
     if (clicked && (on_buy || on_sell)) {
         // The second click on a row sells the piece it stands on. That one leaves the preview down:
@@ -431,8 +457,16 @@ void UIShop::changeselltab(InventoryType::Id type) {
 
     sell_slider_.setrows(5, sell_state_.last_slot);
 
-    for (size_t i = Buttons::SELL0; i < Buttons::SELL8; i++) {
+    for (size_t i = Buttons::SELL0; i <= Buttons::SELL8; i++) {
         if (i - Buttons::SELL0 < sell_state_.last_slot) {
+            buttons_[i]->set_state(Button::State::NORMAL);
+        } else {
+            buttons_[i]->set_state(Button::State::DISABLED);
+        }
+    }
+
+    for (size_t i = Buttons::CHECK0; i <= Buttons::CHECK8; i++) {
+        if (i - Buttons::CHECK0 < sell_state_.last_slot) {
             buttons_[i]->set_state(Button::State::NORMAL);
         } else {
             buttons_[i]->set_state(Button::State::DISABLED);
@@ -764,11 +798,18 @@ void UIShop::SellState::reset() {
     last_slot = 0;
     selection = -1;
     tab = InventoryType::Id::NONE;
+    checked_slots.clear();
 }
 
 void UIShop::SellState::change_tab(const Inventory &inventory,
                                    InventoryType::Id newtab,
                                    Texture meso) {
+    // Ticks belong to the tab they were made on; carrying them into another tab would tick pieces
+    // the player never looked at. A rebuild of the same tab keeps them, minus whatever left the bag.
+    if (newtab != tab) {
+        checked_slots.clear();
+    }
+
     tab = newtab;
 
     offset = 0;
@@ -789,10 +830,29 @@ void UIShop::SellState::change_tab(const Inventory &inventory,
     }
 
     last_slot = static_cast<int16_t>(items.size());
+
+    for (auto iter = checked_slots.begin(); iter != checked_slots.end();) {
+        bool present = false;
+
+        for (const SellItem &item : items) {
+            if (item.get_slot() == *iter) {
+                present = true;
+                break;
+            }
+        }
+
+        if (present) {
+            ++iter;
+        } else {
+            iter = checked_slots.erase(iter);
+        }
+    }
 }
 
 void UIShop::SellState::draw(Point<int16_t> parentpos,
-                             const Texture &selected) const {
+                             const Texture &selected,
+                             const Texture &check_on,
+                             const Texture &check_off) const {
     for (int i = 0; i <= 8; i++) {
         auto slot = i + offset;
 
@@ -807,6 +867,12 @@ void UIShop::SellState::draw(Point<int16_t> parentpos,
         }
 
         items[slot].draw(parentpos + itempos);
+
+        // The tick box sits at the right end of the row band, in the strip the row button gave up.
+        // The sprite's own origin is the old control's anchor, so it is added back to place the box.
+        const Texture &tick =
+            checked_slots.count(items[slot].get_slot()) ? check_on : check_off;
+        tick.draw(parentpos + itempos + Point<int16_t>(221, 20) + tick.get_origin());
     }
 }
 
@@ -872,5 +938,59 @@ bool UIShop::SellState::select(int16_t selected, bool previewed) {
     sell(false);
 
     return true;
+}
+
+void UIShop::SellState::toggle(int16_t row) {
+    int16_t slot = row + offset;
+
+    if (slot < 0 || slot >= last_slot) {
+        return;
+    }
+
+    int16_t bagslot = items[slot].get_slot();
+    auto found = checked_slots.find(bagslot);
+
+    if (found != checked_slots.end()) {
+        checked_slots.erase(found);
+    } else {
+        checked_slots.insert(bagslot);
+    }
+}
+
+bool UIShop::SellState::has_checked() const {
+    return !checked_slots.empty();
+}
+
+void UIShop::SellState::sell_checked() const {
+    struct Piece {
+        int32_t itemid;
+        int16_t slot;
+        int16_t sellable;
+    };
+
+    std::vector<Piece> pieces;
+
+    for (const SellItem &item : items) {
+        if (item.get_sellable() > 0 && checked_slots.count(item.get_slot())) {
+            pieces.push_back({ item.get_id(), item.get_slot(), item.get_sellable() });
+        }
+    }
+
+    if (pieces.empty()) {
+        return;
+    }
+
+    const std::string question =
+        "确定要出售勾选的 " + std::to_string(pieces.size()) + " 件物品吗？";
+
+    auto ondecide = [pieces](bool yes) {
+        if (yes) {
+            for (const Piece &piece : pieces) {
+                fn_npc_shop_action(piece.slot, piece.itemid, piece.sellable, false);
+            }
+        }
+    };
+
+    UI::get().emplace<UIYesNo>(question, ondecide);
 }
 }  // namespace ms

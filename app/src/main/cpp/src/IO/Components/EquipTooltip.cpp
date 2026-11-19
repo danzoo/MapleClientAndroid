@@ -36,6 +36,41 @@ constexpr int16_t SUMMARY_W = 11;
 // so reading either from STAT_X makes the word grow leftwards out of the frame.
 constexpr int16_t POTFLAG_X = 130;
 constexpr int16_t ATKINC_X = SUMMARY_X + SUMMARY_W - 2;
+
+// reqJob is a bit mask over the five branches - 1 warrior, 2 magician, 4 bowman, 8 thief, 16
+// pirate - and 0 means every job; combined masks like 13 are real archive values, so a switch over
+// single bits reads them as "no job at all". The wear path decodes the mask the same way, Aran
+// counting as a warrior. okjobs collects the branch indices whose bit is set, for the job icon row.
+void read_job_gate(int16_t reqjob,
+                   uint16_t branch,
+                   std::vector<uint8_t> &okjobs,
+                   bool &can) {
+    okjobs.clear();
+
+    if (reqjob == 0) {
+        for (uint8_t j = 0; j <= 5; j++) {
+            okjobs.push_back(j);
+        }
+        can = true;
+        return;
+    }
+
+    int16_t bit = 0;
+
+    if (branch == 1 || branch >= 20) {
+        bit = 1;
+    } else if (branch >= 2 && branch <= 5) {
+        bit = static_cast<int16_t>(1 << (branch - 1));
+    }
+
+    for (uint8_t j = 1; j <= 5; j++) {
+        if (reqjob & (1 << (j - 1))) {
+            okjobs.push_back(j);
+        }
+    }
+
+    can = (reqjob & bit) != 0;
+}
 }  // namespace
 
 // TODO: Add blue dot next to name
@@ -215,6 +250,8 @@ void EquipTooltip::set_panel(Tooltip::Parent parent) {
 
     const Player &player = Stage::get().get_player();
 
+    atk_delta_ = 0;
+
     InventoryType::Id invtype;
 
     switch (parent) {
@@ -244,12 +281,23 @@ void EquipTooltip::set_panel(Tooltip::Parent parent) {
         const EquipData &equipdata = EquipData::get(item_id);
         EquipSlot::Id eqslot = equipdata.get_eqslot();
 
+        // With nothing worn in the slot the whole attack of the piece is what equipping it adds.
+        const Equip &piece = oequip->get();
+        const int16_t attack = static_cast<int16_t>(
+            piece.get_stat(EquipStat::Id::WATK) + piece.get_stat(EquipStat::Id::MAGIC));
+        atk_delta_ = attack;
+
         if (inventory.has_equipped(eqslot)) {
             auto eequip =
                 inventory.get_equip(InventoryType::Id::EQUIPPED, eqslot);
 
             if (eequip) {
                 const Equip &equip = *eequip;
+
+                const int16_t worn = static_cast<int16_t>(
+                    equip.get_stat(EquipStat::Id::WATK)
+                    + equip.get_stat(EquipStat::Id::MAGIC));
+                atk_delta_ = attack - worn;
 
                 int32_t item_id = equip.get_item_id();
 
@@ -275,45 +323,16 @@ void EquipTooltip::set_panel(Tooltip::Parent parent) {
 
                 okjobs_preview_.clear();
 
-                switch (equipdata.get_reqstat(MapleStat::Id::JOB)) {
-                    case 0:
-                        okjobs_preview_.push_back(0);
-                        okjobs_preview_.push_back(1);
-                        okjobs_preview_.push_back(2);
-                        okjobs_preview_.push_back(3);
-                        okjobs_preview_.push_back(4);
-                        okjobs_preview_.push_back(5);
-                        can_equip_preview_[MapleStat::Id::JOB] = true;
-                        break;
-                    case 1:
-                        okjobs_preview_.push_back(1);
-                        can_equip_preview_[MapleStat::Id::JOB] =
-                            (stats.get_stat(MapleStat::Id::JOB) / 100 == 1)
-                            || (stats.get_stat(MapleStat::Id::JOB) / 100 >= 20);
-                        break;
-                    case 2:
-                        okjobs_preview_.push_back(2);
-                        can_equip_preview_[MapleStat::Id::JOB] =
-                            stats.get_stat(MapleStat::Id::JOB) / 100 == 2;
-                        break;
-                    case 4:
-                        okjobs_preview_.push_back(3);
-                        can_equip_preview_[MapleStat::Id::JOB] =
-                            stats.get_stat(MapleStat::Id::JOB) / 100 == 3;
-                        break;
-                    case 8:
-                        okjobs_preview_.push_back(4);
-                        can_equip_preview_[MapleStat::Id::JOB] =
-                            stats.get_stat(MapleStat::Id::JOB) / 100 == 4;
-                        break;
-                    case 16:
-                        okjobs_preview_.push_back(5);
-                        can_equip_preview_[MapleStat::Id::JOB] =
-                            stats.get_stat(MapleStat::Id::JOB) / 100 == 5;
-                        break;
-                    default:
-                        can_equip_preview_[MapleStat::Id::JOB] = false;
-                        break;
+                read_job_gate(equipdata.get_reqstat(MapleStat::Id::JOB),
+                              stats.get_stat(MapleStat::Id::JOB) / 100,
+                              okjobs_preview_,
+                              can_equip_preview_[MapleStat::Id::JOB]);
+
+                // The wear path lets GM and SuperGM wear anything; the panel must agree with it.
+                const std::string preview_jobname = stats.get_jobname();
+
+                if (preview_jobname == "GM" || preview_jobname == "SuperGM") {
+                    can_equip_preview_[MapleStat::Id::JOB] = true;
                 }
 
                 prank_preview_ = equip.get_potrank();
@@ -396,12 +415,6 @@ void EquipTooltip::set_panel(Tooltip::Parent parent) {
                                      namecolor,
                                      namestr,
                                      name_w);
-                atkinc_preview_ = Text(Text::Font::A11M,
-                                       Text::Alignment::RIGHT,
-                                       Color::Name::DUSTYGRAY,
-                                       "攻击提升",
-                                       atkinc_w);
-
                 std::string desctext = itemdata.get_desc();
                 has_desc_preview_ = !desctext.empty();
 
@@ -517,43 +530,16 @@ void EquipTooltip::set_panel(Tooltip::Parent parent) {
 
     okjobs_.clear();
 
-    switch (equipdata.get_reqstat(MapleStat::Id::JOB)) {
-        case 0:
-            okjobs_.push_back(0);
-            okjobs_.push_back(1);
-            okjobs_.push_back(2);
-            okjobs_.push_back(3);
-            okjobs_.push_back(4);
-            okjobs_.push_back(5);
-            can_equip_[MapleStat::Id::JOB] = true;
-            break;
-        case 1:
-            okjobs_.push_back(1);
-            can_equip_[MapleStat::Id::JOB] =
-                (stats.get_stat(MapleStat::Id::JOB) / 100 == 1)
-                || (stats.get_stat(MapleStat::Id::JOB) / 100 >= 20);
-            break;
-        case 2:
-            okjobs_.push_back(2);
-            can_equip_[MapleStat::Id::JOB] =
-                stats.get_stat(MapleStat::Id::JOB) / 100 == 2;
-            break;
-        case 4:
-            okjobs_.push_back(3);
-            can_equip_[MapleStat::Id::JOB] =
-                stats.get_stat(MapleStat::Id::JOB) / 100 == 3;
-            break;
-        case 8:
-            okjobs_.push_back(4);
-            can_equip_[MapleStat::Id::JOB] =
-                stats.get_stat(MapleStat::Id::JOB) / 100 == 4;
-            break;
-        case 16:
-            okjobs_.push_back(5);
-            can_equip_[MapleStat::Id::JOB] =
-                stats.get_stat(MapleStat::Id::JOB) / 100 == 5;
-            break;
-        default: can_equip_[MapleStat::Id::JOB] = false; break;
+    read_job_gate(equipdata.get_reqstat(MapleStat::Id::JOB),
+                  stats.get_stat(MapleStat::Id::JOB) / 100,
+                  okjobs_,
+                  can_equip_[MapleStat::Id::JOB]);
+
+    // The wear path lets GM and SuperGM wear anything; the panel must agree with it.
+    const std::string jobname = stats.get_jobname();
+
+    if (jobname == "GM" || jobname == "SuperGM") {
+        can_equip_[MapleStat::Id::JOB] = true;
     }
 
     prank_ = equip.get_potrank();
@@ -783,13 +769,16 @@ bool EquipTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
                  potential_names_[prank_]);
     list.picture(item_cover_, DrawArgument(pos + Point<int16_t>(12, 10)), "ItemIcon/cover");
 
-    int16_t atkincnum = 0;
+    int16_t atkincnum = atk_delta_;
     std::string atkincstr = std::to_string(atkincnum);
     bool atkinc_pos = true;
 
+    // A piece the job gate refuses shows a bare red minus instead of a reading: the comparison is
+    // meaningless for a piece that cannot be worn. Whether the gate passes is decided with the same
+    // GM bypass the wear path uses, so a GM reads real numbers on anything he can actually equip.
     if (can_equip_[MapleStat::Id::JOB]) {
         if (atkincnum < 0) {
-            atkincstr = "m" + atkincstr;
+            atkincstr = "m" + std::to_string(-atkincnum);
             atkinc_pos = false;
         } else if (atkincnum > 0) {
             atkincstr = "p" + atkincstr;
@@ -804,8 +793,7 @@ bool EquipTooltip::build(NativeTooltip::List &list, Point<int16_t> pos) const {
 
     atkincset_[atkinc_pos].build(list,
                              atkincstr,
-                             SUMMARY_W,
-                             pos + Point<int16_t>(SUMMARY_X, 26));
+                             pos + Point<int16_t>(ATKINC_X, 26));
 
     pos.shift_y(12);
 
@@ -938,7 +926,6 @@ void EquipTooltip::build_preview(NativeTooltip::List &list, Point<int16_t> pos) 
 
     list.picture(line_, DrawArgument(pos), "Frame/dotline");
 
-    list.text(atkinc_preview_, pos + Point<int16_t>(ATKINC_X, 4));
     list.picture(base_, DrawArgument(pos + Point<int16_t>(12, 10)), "ItemIcon/base");
     list.picture(type_[false], DrawArgument(pos + Point<int16_t>(12, 10)), "ItemIcon/old");
     list.icon(item_icon_preview_,
@@ -947,30 +934,6 @@ void EquipTooltip::build_preview(NativeTooltip::List &list, Point<int16_t> pos) 
                  DrawArgument(pos + Point<int16_t>(12, 10)),
                  potential_names_[prank_preview_]);
     list.picture(item_cover_, DrawArgument(pos + Point<int16_t>(12, 10)), "ItemIcon/cover");
-
-    int16_t atkincnum = 0;
-    std::string atkincstr = std::to_string(atkincnum);
-    bool atkinc_pos = true;
-
-    if (can_equip_preview_[MapleStat::Id::JOB]) {
-        if (atkincnum < 0) {
-            atkincstr = "m" + atkincstr;
-            atkinc_pos = false;
-        } else if (atkincnum > 0) {
-            atkincstr = "p" + atkincstr;
-            atkinc_pos = true;
-        } else {
-            atkinc_pos = true;
-        }
-    } else {
-        atkincstr = "m";
-        atkinc_pos = false;
-    }
-
-    atkincset_[atkinc_pos].build(list,
-                             atkincstr,
-                             SUMMARY_W,
-                             pos + Point<int16_t>(SUMMARY_X, 26));
 
     pos.shift_y(12);
 

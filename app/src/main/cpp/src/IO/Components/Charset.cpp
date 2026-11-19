@@ -105,6 +105,44 @@ int16_t Charset::build(NativeTooltip::List &list,
     return shift;
 }
 
+int16_t Charset::build(NativeTooltip::List &list,
+                       const std::string &text,
+                       const DrawArgument &args) const {
+    int16_t shift = 0;
+    int16_t total = 0;
+
+    switch (alignment_) {
+        case Charset::Alignment::CENTER:
+            for (char c : text) {
+                int16_t width = getw(c);
+                build_character(list, c, args + Point<int16_t>(shift, 0));
+                shift += width + 2;
+                total += width;
+            }
+
+            shift -= total / 2;
+            break;
+        case Charset::Alignment::LEFT:
+            for (char c : text) {
+                build_character(list, c, args + Point<int16_t>(shift, 0));
+                shift += getw(c) + 2;
+            }
+
+            break;
+        case Charset::Alignment::RIGHT:
+            for (auto iter = text.rbegin(); iter != text.rend(); ++iter) {
+                char c = *iter;
+                shift += getw(c);
+                build_character(list, c, args - Point<int16_t>(shift, 0));
+                shift += 2;
+            }
+
+            break;
+    }
+
+    return shift;
+}
+
 int16_t Charset::getw(int8_t c) const {
     auto iter = chars_.find(c);
 

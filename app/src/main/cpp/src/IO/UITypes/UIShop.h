@@ -15,6 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <set>
+
 #include "../Character/Look/CharLook.h"
 #include "../Components/Slider.h"
 #include "../Graphics/Animation.h"
@@ -110,6 +112,15 @@ private:
         BUY6,
         BUY7,
         BUY8,
+        CHECK0,
+        CHECK1,
+        CHECK2,
+        CHECK3,
+        CHECK4,
+        CHECK5,
+        CHECK6,
+        CHECK7,
+        CHECK8,
         SELL0,
         SELL1,
         SELL2,
@@ -131,6 +142,8 @@ private:
     Animation npc_;
     Texture buy_selection_;
     Texture sell_selection_;
+    Texture check_on_;
+    Texture check_off_;
     Texture meso_;
     Text meso_label_;
 
@@ -228,17 +241,31 @@ private:
         int16_t last_slot;
         int16_t selection;
 
+        // Bag slots ticked for the batch sale. Kept against the bag slot rather than the row so a
+        // scroll or a rebuild of the list does not move a tick onto another piece.
+        std::set<int16_t> checked_slots;
+
         void reset();
 
         void change_tab(const Inventory &inventory,
                         InventoryType::Id type,
                         Texture meso);
 
-        void draw(Point<int16_t> position, const Texture &selected) const;
+        void draw(Point<int16_t> position,
+                  const Texture &selected,
+                  const Texture &check_on,
+                  const Texture &check_off) const;
 
         void show_item(int16_t slot, Point<int16_t> anchor);
 
         void sell(bool skip_confirmation) const;
+
+        void toggle(int16_t row);
+
+        bool has_checked() const;
+
+        // One confirmation for the whole ticked set, each piece going out as its full stack.
+        void sell_checked() const;
 
         // Whether this click completed the sale rather than only marking the row. That takes the row
         // to have been looked at already, which is what previewed says: the preview the row was

@@ -77,7 +77,9 @@ private:
     Text hammers_;
     Text hammers_preview_;
     Text atkinc_;
-    Text atkinc_preview_;
+    // Attack (weapon + magic) the piece under the finger would add over the piece worn in its slot.
+    // The worn piece's own panel carries no such reading: the comparison belongs to the new piece.
+    int16_t atk_delta_ = 0;
     EnumMap<EquipStat::Id, Text> stat_labels_;
     EnumMap<EquipStat::Id, Text> stat_labels_preview_;
 
