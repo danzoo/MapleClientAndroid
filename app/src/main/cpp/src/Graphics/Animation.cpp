@@ -158,6 +158,10 @@ void Animation::stop() {
     frame_step_ = -1;
 }
 
+void Animation::set_zigzag(bool on) {
+    zigzag_ = on;
+}
+
 void Animation::draw(const DrawArgument &args, float alpha) const {
     int16_t interframe = frame_.get(alpha);
     float interopc = opacity_.get(alpha) / 255;

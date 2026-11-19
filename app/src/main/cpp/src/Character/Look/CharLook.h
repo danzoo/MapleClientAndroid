@@ -101,13 +101,16 @@ private:
 
     uint16_t get_delay(Stance::Id stance, uint8_t frame) const;
 
-    uint8_t getnextframe(Stance::Id stance, uint8_t frame) const;
+    uint8_t getnextframe(Stance::Id stance, uint8_t frame);
 
     Stance::Id getattackstance(uint8_t attack, bool degenerate) const;
 
     Nominal<Stance::Id> stance_;
     Nominal<uint8_t> st_frame_;
     uint16_t st_elapsed_;
+    // Direction the idle stand walks its frames in: it breathes back and forth (0,1,2,1,0,…)
+    // rather than wrapping, so the step flips at each end of the run.
+    int8_t stand_step_ = 1;
 
     Nominal<Expression::Id> expression_;
     Nominal<uint8_t> exp_frame_;

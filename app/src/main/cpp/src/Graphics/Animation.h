@@ -73,6 +73,10 @@ public:
 
     void stop();
 
+    // Play the run back and forth (0,1,2,1,0,…) instead of wrapping. The archive flags this per
+    // node, but idle stands are meant to breathe even where the flag is absent.
+    void set_zigzag(bool on);
+
     void draw(const DrawArgument &arguments, float alpha) const;
 
     uint16_t get_delay(int16_t frame) const;

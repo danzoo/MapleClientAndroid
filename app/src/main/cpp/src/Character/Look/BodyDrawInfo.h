@@ -85,6 +85,8 @@ public:
 
     uint8_t next_frame(Stance::Id stance, uint8_t frame) const;
 
+    uint8_t get_last_frame(Stance::Id stance) const;
+
     uint16_t get_delay(Stance::Id stance, uint8_t frame) const;
 
     uint16_t get_attack_delay(const std::string &action, size_t no) const;

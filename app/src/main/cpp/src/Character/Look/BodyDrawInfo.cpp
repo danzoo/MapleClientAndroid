@@ -181,6 +181,18 @@ uint8_t BodyDrawInfo::next_frame(Stance::Id stance, uint8_t frame) const {
     return 0;
 }
 
+uint8_t BodyDrawInfo::get_last_frame(Stance::Id stance) const {
+    uint8_t last = 0;
+
+    for (const auto &entry : stance_delays_[stance]) {
+        if (entry.first > last) {
+            last = entry.first;
+        }
+    }
+
+    return last;
+}
+
 uint16_t BodyDrawInfo::get_delay(Stance::Id stance, uint8_t frame) const {
     auto iter = stance_delays_[stance].find(frame);
 

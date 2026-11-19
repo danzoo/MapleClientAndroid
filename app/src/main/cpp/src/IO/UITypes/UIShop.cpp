@@ -479,6 +479,9 @@ void UIShop::reset(int32_t npcid) {
     // The whole stand action, not its first frame: the frames hang directly off the action node,
     // so reading stand/0 froze every NPC on frame 0. A stand with a single frame stays still.
     npc_ = img::wz::npc[strid + ".img"]["stand"];
+    // Idle stands breathe back and forth; only one NPC in the archive carries the zigzag flag,
+    // the rest would wrap 0,1,2,0,1,2 without this.
+    npc_.set_zigzag(true);
 
     // The player's portrait is a copy of the live look standing still, so it blinks and shifts
     // its weight on its own animation clock without touching the character in the world.

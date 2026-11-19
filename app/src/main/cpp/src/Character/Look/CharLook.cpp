@@ -54,6 +54,7 @@ namespace ms {
         set_stance(Stance::Id::STAND1);
         st_frame_.set(0);
         st_elapsed_ = 0;
+        stand_step_ = 1;
 
         set_expression(Expression::Id::DEFAULT);
         exp_frame_.set(0);
@@ -711,6 +712,7 @@ namespace ms {
             stance_.set(adjstance);
             st_frame_.set(0);
             st_elapsed_ = 0;
+            stand_step_ = 1;
             attack_sound_pending_ = false;
         }
     }
@@ -785,7 +787,21 @@ namespace ms {
         return draw_info_.get_delay(st, fr);
     }
 
-    uint8_t CharLook::getnextframe(Stance::Id st, uint8_t fr) const {
+    uint8_t CharLook::getnextframe(Stance::Id st, uint8_t fr) {
+        if (st == Stance::Id::STAND1 || st == Stance::Id::STAND2) {
+            const uint8_t last = draw_info_.get_last_frame(st);
+
+            if (last > 0) {
+                if (stand_step_ == 1 && fr >= last) {
+                    stand_step_ = -1;
+                } else if (stand_step_ == -1 && fr == 0) {
+                    stand_step_ = 1;
+                }
+
+                return static_cast<uint8_t>(fr + stand_step_);
+            }
+        }
+
         return draw_info_.next_frame(st, fr);
     }
 

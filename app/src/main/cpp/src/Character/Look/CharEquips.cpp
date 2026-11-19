@@ -94,15 +94,28 @@ bool CharEquips::is_twohanded() const {
 CharEquips::CapType CharEquips::getcaptype() const {
     if (const Clothing *cap = clothes_[EquipSlot::Id::HAT]) {
         const std::string &vslot = cap->get_vslot();
-        if (vslot == "CpH1H5") {
-            return CharEquips::CapType::HALF_COVER;
-        }
 
-        if (vslot == "CpH1H5AyAs") {
+        // vslot lists the visual regions the cap covers (H1..H6 hair, A* accessories). The old
+        // exact-string table knew three hats only; everything else - CpH1H4, the full helmets -
+        // fell through to NONE and the cap layer was never drawn at all. Classify by the hair
+        // regions instead: covering every main region hides the hair, covering the top (H1) puts
+        // the cap over the hair, and a band leaving the top free lets the hair fall over the cap.
+        const bool top = vslot.find("H1") != std::string::npos;
+        const bool full = top
+            && vslot.find("H2") != std::string::npos
+            && vslot.find("H3") != std::string::npos
+            && vslot.find("H4") != std::string::npos
+            && vslot.find("H5") != std::string::npos;
+
+        if (full) {
             return CharEquips::CapType::FULL_COVER;
         }
 
-        if (vslot == "CpH5") {
+        if (top) {
+            return CharEquips::CapType::HALF_COVER;
+        }
+
+        if (!vslot.empty()) {
             return CharEquips::CapType::HEADBAND;
         }
     }
