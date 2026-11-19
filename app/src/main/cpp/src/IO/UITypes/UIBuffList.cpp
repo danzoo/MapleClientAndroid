@@ -38,11 +38,29 @@ BuffIcon::BuffIcon(int32_t buff, int32_t dur) :
         icon_ = src["icon"];
     } else {
         icon_ = ItemData::get(-buffid_).get_icon(true);
+
+        // The bottle alone read as a missing frame: skill buffs carry their frame baked into the
+        // icon, item icons do not. Seat the bottle in the empty buff slot (BuffIcon.img's generic
+        // frame, cut from a skill icon's border) so both kinds read the same.
+        base_ = img::wz::ui["BuffIcon.img"]["united"]["buff"]["0"];
+        has_base_ = base_.is_valid();
+
+        if (has_base_) {
+            const Point<int16_t> bdim = base_.get_dimensions();
+            const Point<int16_t> idim = icon_.get_dimensions();
+            icon_offset_ = icon_.get_origin() - base_.get_origin()
+                + Point<int16_t>((bdim.x() - idim.x()) / 2, (bdim.y() - idim.y()) / 2);
+        }
     }
 }
 
 void BuffIcon::draw(Point<int16_t> position, float alpha) const {
-    icon_.draw(DrawArgument(position, opacity_.get(alpha)));
+    const float opacity = opacity_.get(alpha);
+
+    if (has_base_) {
+        base_.draw(DrawArgument(position, opacity));
+    }
+    icon_.draw(DrawArgument(position + icon_offset_, opacity));
     cover_.draw(position + Point<int16_t>(1, -31), alpha);
 }
 

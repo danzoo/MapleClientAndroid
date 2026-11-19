@@ -35,6 +35,11 @@ private:
     static const uint16_t FLASH_TIME_ = 3'000;
 
     Texture icon_;
+    // The generic buff frame under a piece that has no stat icon of its own, and the shift that
+    // seats the piece's bottle inside it.
+    Texture base_;
+    Point<int16_t> icon_offset_{ 0, 0 };
+    bool has_base_ = false;
     IconCover cover_;
     int32_t buffid_;
     int32_t duration_;
