@@ -61,13 +61,9 @@ constexpr double PHYSICS_REFERENCE_SECONDS = 0.014;
 constexpr double PHYSICS_FORCE_DIVISOR = 100.0;
 constexpr double ORIGINAL_TICK_SECONDS = 0.030;
 
-// Airborne input that OPPOSES the current horizontal motion drags the body toward
-// zero by exactly 6 px per original 30 ms tick (slope_runjump.csv: ten clean
-// flat-air samples, e.g. 124.67 -> 118.67 -> 112.67 px/s after dir +1 -> -1 at
-// t=57.043 s). No same-direction acceleration was measured: samples holding the
-// motion's own direction keep a constant vx. This is a MEASURED original value,
-// not a tuned coefficient, and it is clamped at zero like the ground friction.
-constexpr double ORIGINAL_AIR_OPPOSING_DRAG = 200.0;  // 6 px/tick / 0.030 s
+// Air steering is derived from the archive keys in PhysicsParams::air_steer_accel()
+// and PhysicsParams::air_steer_limit(); see REPORT.md 5.12. It is not a tuned
+// coefficient and no separate constant is kept here.
 
 // Fraction of real time the simulation advances at, so 1.0 is real time. Movement, jumps and
 // animations are all driven by the timestep, so scaling it slows them together and keeps every

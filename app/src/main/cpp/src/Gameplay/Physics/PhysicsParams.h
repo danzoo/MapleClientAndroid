@@ -95,6 +95,19 @@ public:
     // body displaced from the waterline, in 1/s^2.
     static double float_buoyancy();
 
+    // ---- Air steering (NORMAL / ICE) ---------------------------------------------
+    // Recovered from 0x9B2EA9 -> 0x9B2BCB in the original PC client. While a direction
+    // is held in the air the client calls its velocity integrator with
+    // force = +/- 2 * floatDrag2 * t2, mass = 100 and
+    // limit = walkSpeed / walkForce * floatDrag2 * t2. t2 is the runtime wrapper
+    // value measured as 1.0, so these are 200 px/s^2 and 8.928571 px/s.
+    // The integrator early-exits when the current speed is already beyond the
+    // limit in the force's direction, which is why a capped running jump is
+    // unchanged while an opposing steer loses 6 px/s per 30 ms tick.
+    static double air_steer_accel();
+
+    static double air_steer_limit();
+
     // ---- Flight --------------------------------------------------------------------
     // The force that drives flight, and the speed flight settles at.
     static double fly_accel();

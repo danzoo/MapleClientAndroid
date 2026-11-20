@@ -261,6 +261,21 @@ double PhysicsParams::float_buoyancy() {
     return params.float_coefficient * params.gravity;
 }
 
+double PhysicsParams::air_steer_accel() {
+    // 2 * floatDrag2 * t2 / mass. t2 = 1.0 and mass = 100 are both measured on the
+    // live PC client; PHYSICS_FORCE_DIVISOR is that same measured mass.
+    return 2.0 * params.float_drag2 / Constants::PHYSICS_FORCE_DIVISOR;
+}
+
+double PhysicsParams::air_steer_limit() {
+    if (params.walk_force <= 0.0) {
+        return 0.0;
+    }
+
+    // walkSpeed / walkForce * floatDrag2 * t2, with t2 = 1.0.
+    return params.walk_speed * params.float_drag2 / params.walk_force;
+}
+
 double PhysicsParams::fly_accel() {
     return accel(params.fly_force / FIXED_POINT);
 }

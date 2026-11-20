@@ -295,19 +295,26 @@ double Physics::move_normal(PhysicsObject &phobj) const {
         phobj.onground = false;
     }
 
-    // Airborne input that opposes the carried motion is the original's only
-    // measured air steering effect (5.10: 6 px per 30 ms tick toward zero).
-    // Holding the SAME direction has no effect - samples at the walk cap stay
-    // there - so this does not touch ordinary jump-move. The decel is clamped
-    // at zero, never reversing the body in mid-air.
-    if (airborne && phobj.hforce != 0.0 && phobj.hspeed != 0.0) {
+    // Original air steering (0x9B2EA9 -> 0x9B2BCB), recovered from the static
+    // disassembly and the existing read-only captures; see REPORT.md 5.12.
+    // Any held direction applies force = +/- 2 * floatDrag2 * t2 with a symmetric
+    // limit = walkSpeed / walkForce * floatDrag2 * t2. The client's integrator
+    // early-exits when the current speed is already beyond that limit in the
+    // force's direction, so an ordinary capped running jump is unchanged; an
+    // opposing steer loses 6 px/s per 30 ms tick; and a standing jump with a
+    // mid-air stick push drifts to the 8.928571 px/s limit. No tuned coefficient:
+    // both numbers come from the archive keys and the measured mass/t2 = 100/1.
+    if (airborne && phobj.hforce != 0.0) {
         const double steer = phobj.hforce > 0.0 ? 1.0 : -1.0;
-        const double motion = phobj.hspeed > 0.0 ? 1.0 : -1.0;
+        const double accel = steer * PhysicsParams::air_steer_accel();
+        const double limit = PhysicsParams::air_steer_limit();
 
-        if (steer != motion) {
-            const double slowed = phobj.hspeed
-                - motion * Constants::ORIGINAL_AIR_OPPOSING_DRAG * dt;
-            phobj.hspeed = slowed * motion < 0.0 ? 0.0 : slowed;
+        if (steer > 0.0) {
+            if (phobj.hspeed < limit) {
+                phobj.hspeed = std::min(phobj.hspeed + accel * dt, limit);
+            }
+        } else if (phobj.hspeed > -limit) {
+            phobj.hspeed = std::max(phobj.hspeed + accel * dt, -limit);
         }
     }
 
