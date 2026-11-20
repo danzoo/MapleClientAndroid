@@ -27,7 +27,8 @@ def client_readable(path):
         return True, 'skip-check:%s' % _IMPORT_ERR
     try:
         with open(path, 'rb') as f:
-            head = f.read(16)
+            # 宽形式头字符串（UTF-16 'Property'）占 24 字节，16 字节窗口会截断误判。
+            head = f.read(64)
     except Exception as e:
         return False, repr(e)
     try:

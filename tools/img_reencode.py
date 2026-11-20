@@ -29,7 +29,10 @@ ZERO_IV = bytes(4)
 
 
 def iv_of(head):
-    """判断一个 img 头部用的是哪套 IV：'std' / 'zero' / None。"""
+    """判断一个 img 头部用的是哪套 IV：'std' / 'zero' / None。
+
+    窗口要够宽：头字符串可能是 UTF-16 宽形式（'Property' 占 24 字节），16 字节会截断误判。
+    """
     for iv, tag in ((I.SRC_IV, 'std'), (ZERO_IV, 'zero')):
         try:
             r = I.Img(head, iv)
@@ -53,7 +56,7 @@ def reencode(path, dry):
     if not ap.endswith('.img') or not os.path.isfile(ap):
         return '跳过：不是 .img 或文件不存在'
     data = open(ap, 'rb').read()
-    tag = iv_of(data[:16])
+    tag = iv_of(data[:64])
     if tag is None:
         return '失败：两种 IV 都解不开头部，文件已损坏'
     if tag == 'std':
