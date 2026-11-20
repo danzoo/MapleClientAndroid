@@ -141,6 +141,8 @@ private:
 
     void update_pet_pickup();
 
+    void update_auto_pickup();
+
     enum State { INACTIVE, TRANSITION, ACTIVE };
 
     Camera camera_;
@@ -168,5 +170,6 @@ private:
     std::chrono::time_point<std::chrono::steady_clock> start_;
     uint16_t level_before_;
     int64_t exp_before_;
+    bool magnet_active_ = false;
 };
 }  // namespace ms

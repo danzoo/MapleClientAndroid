@@ -186,6 +186,7 @@ void Stage::update() {
     drops_.update(physics_);
     player_.update(physics_);
     update_pet_pickup();
+    update_auto_pickup();
 
     // A ladder has to be re-checked while the key is held rather than only on the edge of the press.
     // The edge arrives once - the stick reports a direction when the direction changes, not every
@@ -337,6 +338,28 @@ void Stage::update_pet_pickup() {
         if (oid) {
             PetLootPacket(pet.get_uniqueid(), oid, pet.get_position()).dispatch();
         }
+    }
+}
+
+void Stage::update_auto_pickup() {
+    const bool active = player_.has_buff(Buffstat::Id::MESO_MAGNET)
+        && player_.get_stats().get_stat(MapleStat::Id::HP) != 0;
+
+    // Each application of the buff only claims coins that pop out from now on; loot already lying
+    // around from earlier kills stays for manual or pet pickup.
+    if (active && !magnet_active_) {
+        drops_.note_magnet_start();
+    }
+    magnet_active_ = active;
+
+    if (!active) {
+        return;
+    }
+
+    auto [drop_oid, drop_pos] = drops_.find_auto_meso(player_.get_position());
+
+    if (drop_oid) {
+        fn_pickup_item(drop_oid, drop_pos);
     }
 }
 

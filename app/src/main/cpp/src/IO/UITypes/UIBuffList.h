@@ -20,6 +20,7 @@
 #include "../Components/IconCover.h"
 #include "../Constants.h"
 #include "../Graphics/Texture.h"
+#include "../Template/Rectangle.h"
 #include "../UIElement.h"
 
 namespace ms {
@@ -63,11 +64,17 @@ public:
 
     Cursor::State send_cursor(bool pressed, Point<int16_t> position) override;
 
+    bool is_in_range(Point<int16_t> cursorpos) const override;
+
     UIElement::Type get_type() const override;
 
     void add_buff(int32_t buffid, int32_t duration);
 
 private:
+    // The whole row of icons, which grows leftwards from the right-hand anchor as buffs arrive.
+    Rectangle<int16_t> row_bounds() const;
+
     std::unordered_map<int32_t, BuffIcon> icons_;
+    int32_t tooltip_buffid_ = 0;
 };
 }  // namespace ms

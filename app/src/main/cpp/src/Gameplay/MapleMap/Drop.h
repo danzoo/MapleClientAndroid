@@ -49,6 +49,11 @@ public:
     // The item type this drop belongs to for the shared rejection cooldown; mesos are one type (0).
     virtual int32_t itemid() const;
 
+    // Whether this meso came off a mob the player killed, so the meso-magnet buff may request its
+    // pickup without a manual grab. Set once at spawn; mesos the player threw down never carry it.
+    bool auto_collect() const;
+    void set_auto_collect(bool autocollect);
+
     using PickupClock = std::chrono::steady_clock;
     using PickupTime = PickupClock::time_point;
     bool can_request_pickup(PickupTime now = PickupClock::now()) const;
@@ -58,6 +63,10 @@ public:
     // rejection for the same request is ignored. The retry itself is served per item type by
     // MapDrops, not by this drop.
     bool consume_pickup_reply();
+
+    // When this drop popped out of its source, so the magnet can refuse coins that were already
+    // lying around when the buff was (re)applied.
+    PickupTime spawned_at() const;
 
 protected:
     Drop(int32_t oid,
@@ -90,10 +99,12 @@ private:
     // State dies with this drop. Generic inventory messages never update it.
     PickupTime pickup_retry_at_{};
     bool awaiting_pickup_reply_ = false;
+    const PickupTime spawned_at_ = PickupClock::now();
 
     int32_t owner_;
     int8_t pickup_type_;
     bool player_drop_;
+    bool auto_collect_ = false;
 
     const PhysicsObject *looter_;
     State state_;

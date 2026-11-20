@@ -339,8 +339,20 @@ int32_t Drop::itemid() const {
     return 0;
 }
 
+bool Drop::auto_collect() const {
+    return auto_collect_;
+}
+
+void Drop::set_auto_collect(bool autocollect) {
+    auto_collect_ = autocollect;
+}
+
 bool Drop::can_request_pickup(PickupTime now) const {
-    return is_active() && landed() && !claimed() && now >= pickup_retry_at_;
+    // Magnet mesos ask while the toss out of the corpse is still in the air: the server measures
+    // pickups at the stable destination, so the reply redirects the coin straight to the hand
+    // instead of letting it land and hop a second time.
+    return is_active() && (landed() || auto_collect_) && !claimed()
+           && now >= pickup_retry_at_;
 }
 
 void Drop::note_pickup_request(PickupTime now) {
@@ -356,6 +368,10 @@ bool Drop::consume_pickup_reply() {
     }
     awaiting_pickup_reply_ = false;
     return true;
+}
+
+Drop::PickupTime Drop::spawned_at() const {
+    return spawned_at_;
 }
 
 Point<int16_t> Drop::icon_shift(Point<int16_t> origin,

@@ -651,6 +651,15 @@ void DropLootHandler::handle(InPacket &recv) const {
                            static_cast<int32_t>(INT16_MAX - Constants::DROP_DELAY));
     }
 
+    // The meso-magnet buff collects a mob's mesos without a manual grab, but only the killer's:
+    // the server hands drops to the mob's highest damager, and in a party the owner field is the
+    // party id, so attribution falls back to the client's own damage ledger. Mesos the player
+    // threw down are never collected this way.
+    int32_t playercid = Stage::get().get_player().get_oid();
+    bool autocollect = meso && !playerdrop
+        && (owner == playercid
+            || Stage::get().get_mobs().is_top_damager(dropper, playercid));
+
     Stage::get().get_drops().spawn({ oid,
                                      itemid,
                                      meso,
@@ -661,7 +670,8 @@ void DropLootHandler::handle(InPacket &recv) const {
                                      mode,
                                      playerdrop,
                                      playsound,
-                                     delay });
+                                     delay,
+                                     autocollect });
 }
 
 void RemoveLootHandler::handle(InPacket &recv) const {

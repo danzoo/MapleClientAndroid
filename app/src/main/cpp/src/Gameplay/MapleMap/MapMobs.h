@@ -68,6 +68,14 @@ public:
                       const AttackUser &user,
                       const SpecialMove &move);
 
+    // Record damage a character dealt to a mob, mirroring the server's drop-ownership rule.
+    void note_damage(int32_t oid, int32_t cid, int32_t damage);
+
+    // Whether cid dealt strictly more cumulative damage to this mob than anyone else. The server
+    // hands a mob's drops to its highest damager, and in a party the drop packet's owner is the
+    // party id, so this is the only way to tell one's own kills from a party member's.
+    bool is_top_damager(int32_t oid, int32_t cid) const;
+
     // Note that a blow the client has queued locally is due to land on this mob in the specified
     // number of milliseconds.
     void expect_hit(int32_t oid, uint16_t delay);
@@ -100,5 +108,7 @@ private:
     MapObjects mobs_;
 
     std::queue<MobSpawn> spawns_;
+
+    std::unordered_map<int32_t, std::unordered_map<int32_t, int64_t>> damage_by_mob_;
 };
 }  // namespace ms

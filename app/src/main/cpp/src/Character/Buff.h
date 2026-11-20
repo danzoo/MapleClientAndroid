@@ -93,6 +93,7 @@ enum Id {
     CURSE,
     SEDUCE,
     SLOW,
+    MESO_MAGNET,
     LENGTH
 };
 

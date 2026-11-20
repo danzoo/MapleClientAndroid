@@ -59,6 +59,14 @@ public:
     // Same geometry and priority; radius applies only to mesos (normally Constants::PICKUP_RANGE).
     Loot find_loot_near(Point<int16_t> playerpos, int16_t radius);
 
+    // The next meso the meso-magnet buff may collect: one the player killed, popped out after the
+    // buff was (re)applied, and inside the server's pickup authority box. Shares the
+    // one-request-per-frame gate and the meso rejection cooldown with manual and pet pickup.
+    Loot find_auto_meso(Point<int16_t> playerpos);
+
+    // Marks the moment the buff became active; coins spawned before it are never magnet-collected.
+    void note_magnet_start();
+
     // Filter pet equipment and ignored types before registering a request. INT32_MAX means mesos.
     Loot find_pet_loot(Point<int16_t> petpos, bool can_meso, bool can_item,
                        const std::vector<int32_t> &excluded);
@@ -76,6 +84,9 @@ private:
     bool type_pickup_ready(int32_t itemid, PickupTime now) const;
 
     std::unordered_map<int32_t, PickupTime> pickup_reject_at_;
+
+    // Coins that appeared before this moment predate the current buff application.
+    PickupTime magnet_since_{};
 
     MapObjects drops_;
 

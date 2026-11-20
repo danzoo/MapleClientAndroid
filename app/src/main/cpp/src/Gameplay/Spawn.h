@@ -102,9 +102,12 @@ public:
               int8_t mode,
               bool playerdrop,
               bool playsound,
-              int16_t delay);
+              int16_t delay,
+              bool autocollect);
 
     bool is_meso() const;
+
+    bool auto_collect() const;
 
     int32_t get_itemid() const;
 
@@ -131,6 +134,7 @@ private:
     bool player_drop_;
     bool play_sound_;
     int16_t delay_;
+    bool auto_collect_;
 };
 
 struct PetSpawn {

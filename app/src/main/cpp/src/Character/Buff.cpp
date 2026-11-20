@@ -33,7 +33,8 @@ const std::unordered_map<Id, uint64_t> first_codes = {
     { Id::ENERGY_CHARGE, 0x4000000000000L },
     { Id::MONSTER_RIDING, 0x20000000000000L },
     { Id::HOMING_BEACON, 0x80000000000000L },
-    { Id::SPEED_INFUSION, 0x100000000000000L }
+    { Id::SPEED_INFUSION, 0x100000000000000L },
+    { Id::MESO_MAGNET, 0x200000000000000L }
 };
 
 const std::unordered_map<Id, uint64_t> second_codes = {

@@ -107,7 +107,8 @@ DropSpawn::DropSpawn(int32_t o,
                      int8_t m,
                      bool pd,
                      bool ps,
-                     int16_t dl) :
+                     int16_t dl,
+                     bool ac) :
     oid_(o),
     id_(i),
     meso_(ms),
@@ -118,10 +119,15 @@ DropSpawn::DropSpawn(int32_t o,
     mode_(m),
     player_drop_(pd),
     play_sound_(ps),
-    delay_(dl) {}
+    delay_(dl),
+    auto_collect_(ac) {}
 
 bool DropSpawn::is_meso() const {
     return meso_;
+}
+
+bool DropSpawn::auto_collect() const {
+    return auto_collect_;
 }
 
 int32_t DropSpawn::get_itemid() const {

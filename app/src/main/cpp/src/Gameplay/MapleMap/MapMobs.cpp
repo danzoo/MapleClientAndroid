@@ -62,10 +62,41 @@ void MapMobs::remove(int32_t oid, int8_t animation) {
     if (animation == 0) {
         mobs_.remove(oid);
     }
+
+    damage_by_mob_.erase(oid);
 }
 
 void MapMobs::clear() {
     mobs_.clear();
+    damage_by_mob_.clear();
+}
+
+void MapMobs::note_damage(int32_t oid, int32_t cid, int32_t damage) {
+    if (damage > 0) {
+        damage_by_mob_[oid][cid] += damage;
+    }
+}
+
+bool MapMobs::is_top_damager(int32_t oid, int32_t cid) const {
+    auto mob = damage_by_mob_.find(oid);
+
+    if (mob == damage_by_mob_.end()) {
+        return false;
+    }
+
+    auto mine = mob->second.find(cid);
+
+    if (mine == mob->second.end()) {
+        return false;
+    }
+
+    for (const auto &[attacker, total] : mob->second) {
+        if (attacker != cid && total >= mine->second) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void MapMobs::set_control(int32_t oid, bool control) {

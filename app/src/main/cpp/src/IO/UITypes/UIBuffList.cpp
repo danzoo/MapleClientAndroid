@@ -18,7 +18,9 @@
 #include <imgwz/node.hpp>
 #include <imgwz/wz.hpp>
 
+#include "../../Gameplay/Stage.h"
 #include "../Data/ItemData.h"
+#include "../UI.h"
 #include "StringHandling.h"
 
 namespace ms {
@@ -109,6 +111,11 @@ void UIBuffList::update() {
             iter++;
         }
     }
+
+    if (tooltip_buffid_ && icons_.find(tooltip_buffid_) == icons_.end()) {
+        UI::get().clear_tooltip(Tooltip::Parent::BUFF_LIST);
+        tooltip_buffid_ = 0;
+    }
 }
 
 void UIBuffList::update_screen(int16_t new_width, int16_t) {
@@ -116,9 +123,56 @@ void UIBuffList::update_screen(int16_t new_width, int16_t) {
     dimension_ = Point<int16_t>(position_.x(), 32);
 }
 
+Rectangle<int16_t> UIBuffList::row_bounds() const {
+    const int16_t count = static_cast<int16_t>(icons_.size());
+
+    return Rectangle<int16_t>(position_.x() - 32 * (count - 1), position_.x() + 32,
+                              position_.y() - 32, position_.y());
+}
+
+bool UIBuffList::is_in_range(Point<int16_t> cursorpos) const {
+    return row_bounds().contains(cursorpos);
+}
+
 Cursor::State UIBuffList::send_cursor(bool pressed,
                                       Point<int16_t> cursorposition) {
-    return UIElement::send_cursor(pressed, cursorposition);
+    if (!pressed) {
+        return UIElement::send_cursor(pressed, cursorposition);
+    }
+
+    // Same walk as draw(), so the cell that took the tap is the cell that was painted there.
+    Point<int16_t> icpos = position_;
+
+    for (const auto &icon : icons_) {
+        const Rectangle<int16_t> cell(icpos.x(), icpos.x() + 32,
+                                      icpos.y() - 32, icpos.y());
+
+        if (cell.contains(cursorposition)) {
+            const int32_t buffid = icon.first;
+            const Point<int16_t> anchor = icpos + Point<int16_t>(16, -16);
+
+            if (buffid >= 0) {
+                const SkillBook &book = Stage::get().get_player().get_skills();
+
+                UI::get().show_skill(Tooltip::Parent::BUFF_LIST,
+                                     buffid,
+                                     book.get_level(buffid),
+                                     book.get_masterlevel(buffid),
+                                     0,
+                                     anchor);
+            } else {
+                UI::get().show_item(Tooltip::Parent::BUFF_LIST, -buffid, anchor);
+            }
+
+            tooltip_buffid_ = buffid;
+
+            return Cursor::State::IDLE;
+        }
+
+        icpos.shift_x(-32);
+    }
+
+    return Cursor::State::IDLE;
 }
 
 UIElement::Type UIBuffList::get_type() const {
@@ -126,8 +180,8 @@ UIElement::Type UIBuffList::get_type() const {
 }
 
 void UIBuffList::add_buff(int32_t buffid, int32_t duration) {
-    icons_.emplace(std::piecewise_construct,
-                   std::forward_as_tuple(buffid),
-                   std::forward_as_tuple(buffid, duration));
+    // A refreshed buff (a second potion, a map change re-send) restarts the countdown instead of
+    // keeping the old icon's remaining time.
+    icons_.insert_or_assign(buffid, BuffIcon(buffid, duration));
 }
 }  // namespace ms

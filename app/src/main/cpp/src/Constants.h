@@ -285,6 +285,10 @@ constexpr Point<int16_t> to_view_space(const Point<int16_t> &uipos) {
 constexpr int16_t PICKUP_RANGE = 30;
 constexpr int16_t ITEM_PICKUP_RANGE_X = 12;
 constexpr int16_t ITEM_PICKUP_RANGE_Y = 10;
+// The server rejects pickup requests beyond this box around the character, so the meso-magnet
+// buff only asks inside it; a coin farther out is collected once the character walks close enough.
+constexpr int16_t AUTO_PICKUP_RANGE_X = 800;
+constexpr int16_t AUTO_PICKUP_RANGE_Y = 600;
 constexpr int16_t TALK_RANGE = 350;
 
 // How wide a band around a rope or ladder still counts as standing at it. The reference client's ten

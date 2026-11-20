@@ -16,6 +16,7 @@
 #include "MapDrops.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <limits>
 
 #include <imgwz/node.hpp>
@@ -93,7 +94,9 @@ void MapDrops::update(const Physics &physics) {
                                               : (itemid > 49) ? GOLD : BRONZE;
 
                 const Animation &icon = meso_icons_[mesotype];
-                drops_.add(spawn.instantiate(icon));
+                std::unique_ptr<MapObject> drop = spawn.instantiate(icon);
+                static_cast<Drop *>(drop.get())->set_auto_collect(spawn.auto_collect());
+                drops_.add(std::move(drop));
             } else if (const ItemData &itemdata = ItemData::get(itemid)) {
                 const Texture &icon = itemdata.get_icon(true);
                 drops_.add(spawn.instantiate(icon));
@@ -143,6 +146,10 @@ bool MapDrops::type_pickup_ready(int32_t itemid, PickupTime now) const {
     return retry == pickup_reject_at_.end() || now >= retry->second;
 }
 
+void MapDrops::note_magnet_start() {
+    magnet_since_ = PickupClock::now();
+}
+
 void MapDrops::note_pickup_failure(int32_t oid, int32_t retry_after_ms) {
     auto drop = drops_.get<Drop>(oid);
 
@@ -160,6 +167,48 @@ MapDrops::Loot MapDrops::find_loot_at(Point<int16_t> playerpos) {
 
 MapDrops::Loot MapDrops::find_loot_near(Point<int16_t> playerpos, int16_t radius) {
     return find_loot(playerpos, radius, true, true, {});
+}
+
+MapDrops::Loot MapDrops::find_auto_meso(Point<int16_t> playerpos) {
+    if (!loot_enabled_) {
+        return { 0, {} };
+    }
+
+    const PickupTime now = PickupClock::now();
+
+    for (auto oid : drops_.draw_order()) {
+        auto drop = drops_.get<const Drop>(oid);
+
+        if (!drop) {
+            continue;
+        }
+
+        const Drop &candidate = drop->get();
+
+        if (candidate.itemid() != 0 || !candidate.auto_collect()
+            || candidate.spawned_at() < magnet_since_
+            || !candidate.can_request_pickup(now) || !type_pickup_ready(0, now)) {
+            continue;
+        }
+
+        // Asking past the server's authority box only earns a rejection that holds back every
+        // meso pickup, so a coin out there waits until the character walks within reach.
+        const Point<int16_t> pos = candidate.get_pickup_position();
+        const int32_t deltax = static_cast<int32_t>(pos.x()) - playerpos.x();
+        const int32_t deltay = static_cast<int32_t>(pos.y()) - playerpos.y();
+
+        if (std::abs(deltax) > Constants::AUTO_PICKUP_RANGE_X
+            || std::abs(deltay) > Constants::AUTO_PICKUP_RANGE_Y) {
+            continue;
+        }
+
+        loot_enabled_ = false;
+        drops_.get<Drop>(oid)->get().note_pickup_request(now);
+
+        return { oid, pos };
+    }
+
+    return { 0, {} };
 }
 
 MapDrops::Loot MapDrops::find_pet_loot(Point<int16_t> petpos, bool can_meso, bool can_item,

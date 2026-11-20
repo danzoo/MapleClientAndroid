@@ -392,6 +392,12 @@ void Combat::extract_effects(const Char &user,
         if (mobs_.contains(oid)) {
             Point<int16_t> delta = mobs_.get_mob_position(oid) - from;
             ranges.emplace_back(oid, std::hypot(delta.x(), delta.y()));
+
+            int64_t total = 0;
+            for (const auto &[amount, critical] : vec) {
+                total += amount;
+            }
+            mobs_.note_damage(oid, result.attacker, static_cast<int32_t>(total));
         }
     }
 

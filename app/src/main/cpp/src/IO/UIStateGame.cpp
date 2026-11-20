@@ -75,6 +75,8 @@ namespace ms {
                     return UIElement::Type::WORLD_MAP;
                 case Tooltip::Parent::MINI_MAP:
                     return UIElement::Type::MINI_MAP;
+                case Tooltip::Parent::BUFF_LIST:
+                    return UIElement::Type::BUFF_LIST;
                 case Tooltip::Parent::NONE:
                 default:
                     return UIElement::Type::NONE;
