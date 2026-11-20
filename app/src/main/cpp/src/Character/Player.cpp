@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Player.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include "../Audio/Audio.h"
@@ -428,8 +429,12 @@ void Player::change_skill(int32_t skill_id,
     }
 }
 
-void Player::add_cooldown(int32_t skill_id, int32_t cooltime) {
-    cooldowns_[skill_id] = cooltime;
+void Player::add_cooldown(int32_t skill_id, int32_t seconds) {
+    if (seconds <= 0) {
+        cooldowns_.erase(skill_id);
+    } else {
+        cooldowns_[skill_id] = { seconds, CooldownClock::now() };
+    }
 }
 
 bool Player::has_cooldown(int32_t skill_id) const {
@@ -439,7 +444,33 @@ bool Player::has_cooldown(int32_t skill_id) const {
         return false;
     }
 
-    return iter->second > 0;
+    return iter->second.seconds > 0;
+}
+
+float Player::get_cooldown_scale(int32_t skill_id) const {
+    // This packet value is battleshipHp, not a duration; keep its server flag.
+    if (skill_id == 5221999) {
+        return 0.0f;
+    }
+
+    auto iter = cooldowns_.find(skill_id);
+
+    if (iter == cooldowns_.end()) {
+        return 0.0f;
+    }
+
+    const Cooldown &cooldown = iter->second;
+    const double elapsed =
+        std::chrono::duration<double>(CooldownClock::now() - cooldown.started)
+            .count();
+
+    // Local display expiry must not clear the server's skill-use flag.
+    return static_cast<float>(
+        std::clamp(1.0 - elapsed / cooldown.seconds, 0.0, 1.0));
+}
+
+void Player::clear_cooldowns() {
+    cooldowns_.clear();
 }
 
 void Player::change_level(uint16_t level) {

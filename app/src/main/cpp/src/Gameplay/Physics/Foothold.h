@@ -91,7 +91,8 @@ public:
     // Check whether this foothold blocks an object.
     bool is_blocking(const Range<int16_t> &vertical) const;
 
-    // The existing pixel-height window: [trunc(foot_y) - 50, trunc(foot_y) - 1].
+    // Pixel-aligned upper reach trunc(foot_y) - 50, with an open boundary at
+    // the actual foot_y so fractional wall-top overlap cannot be rounded away.
     // Compute it without narrowing so near-limit coordinates cannot wrap across the map.
     bool blocks_foot_height(double foot_y) const;
 

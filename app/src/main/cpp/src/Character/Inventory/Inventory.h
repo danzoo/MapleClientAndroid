@@ -50,6 +50,9 @@ public:
     // Recalculate sums of equip stats
     void recalc_stats(Weapon::Type weapontype);
 
+    // Return the projectile slot selected for the specified weapon.
+    int16_t find_bulletslot(Weapon::Type weapontype) const;
+
     // Set the meso amount.
     void set_meso(int64_t meso);
 

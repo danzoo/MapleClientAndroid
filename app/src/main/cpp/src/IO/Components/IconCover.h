@@ -19,7 +19,7 @@
 #include "../../Template/Interpolated.h"
 
 namespace ms {
-// A transparent rectangle with icon size (30x30)
+// A translucent 30x30 time fill clipped to the icon's fixed rounded outline.
 class IconCover {
 public:
     enum Type { BUFF, COOLDOWN };
@@ -28,9 +28,19 @@ public:
 
     void draw(Point<int16_t> position, float alpha) const;
 
+    // Draw shared cooldown state without starting a separate timer per icon.
+    // position is the cover's top-left; remaining_scale is the fraction left.
+    static void draw_cooldown(Point<int16_t> position,
+                              float remaining_scale,
+                              float opacity = 1.0f);
+
     void update();
 
 private:
+    static void draw_fill(const ColorBox &cover,
+                          Point<int16_t> position,
+                          float scale);
+
     ColorBox cover_;
     Linear<float> yscale_;
     float scale_step_;

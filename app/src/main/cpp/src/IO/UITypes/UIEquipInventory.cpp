@@ -77,11 +77,11 @@ UIEquipInventory::UIEquipInventory(const Inventory &invent) :
     icon_positions_[EquipSlot::Id::EMBLEM] = Point<int16_t>(178, 50);
     icon_positions_[EquipSlot::Id::BADGE] = Point<int16_t>(178, 91);
     icon_positions_[EquipSlot::Id::MEDAL] = Point<int16_t>(178, 132);
-    icon_positions_[EquipSlot::Id::SUBWEAPON] = Point<int16_t>(178, 173);
+    // This skin's SUB WEAPON box is the protocol's shield slot (10).
+    icon_positions_[EquipSlot::Id::SHIELD] = Point<int16_t>(178, 173);
     icon_positions_[EquipSlot::Id::CAPE] = Point<int16_t>(178, 214);
     icon_positions_[EquipSlot::Id::HEART] = Point<int16_t>(178, 255);
 
-    // icon_positions_[EquipSlot::Id::SHIELD] = Point<int16_t>(142, 124);
     // icon_positions_[EquipSlot::Id::TAMEDMOB] = Point<int16_t>(142, 91);
     // icon_positions_[EquipSlot::Id::SADDLE] = Point<int16_t>(76, 124);
 

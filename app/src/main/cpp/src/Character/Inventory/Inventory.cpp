@@ -49,6 +49,15 @@ void Inventory::recalc_stats(Weapon::Type type) {
         }
     }
 
+    bullet_slot_ = find_bulletslot(type);
+
+    if (int32_t bulletid = get_bulletid()) {
+        total_stats_[EquipStat::Id::WATK] +=
+            BulletData::get(bulletid).get_watk();
+    }
+}
+
+int16_t Inventory::find_bulletslot(Weapon::Type type) const {
     int32_t prefix = 0;
 
     switch (type) {
@@ -59,23 +68,16 @@ void Inventory::recalc_stats(Weapon::Type type) {
         default: prefix = 0; break;
     }
 
-    bullet_slot_ = 0;
-
     if (prefix) {
-        for (auto &iter : inventories_[InventoryType::Id::USE]) {
+        for (const auto &iter : inventories_[InventoryType::Id::USE]) {
             const Slot &slot = iter.second;
 
             if (slot.count && slot.item_id / 1000 == prefix) {
-                bullet_slot_ = iter.first;
-                break;
+                return iter.first;
             }
         }
     }
-
-    if (int32_t bulletid = get_bulletid()) {
-        total_stats_[EquipStat::Id::WATK] +=
-            BulletData::get(bulletid).get_watk();
-    }
+    return 0;
 }
 
 void Inventory::set_meso(int64_t m) {

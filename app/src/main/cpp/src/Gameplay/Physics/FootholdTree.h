@@ -80,14 +80,21 @@ private:
 
     // Follow the connected floor/wall chain. Airborne lookups have no horizontal bound;
     // grounded lookups stop once the current substep's destination is inside a floor span.
+    // A supplied settled body uses its actual connected support height at each wall.
     double get_air_wall(uint16_t fhid, bool left, double fy,
-                        double to_x = std::numeric_limits<double>::quiet_NaN()) const;
+                        double to_x = std::numeric_limits<double>::quiet_NaN(),
+                        const PhysicsObject *supporting = nullptr) const;
 
-    double get_wall(uint16_t fhid, bool left, double fy) const;
+    double get_wall(uint16_t fhid, bool left, double fy,
+                    const PhysicsObject *supporting = nullptr) const;
 
     double get_edge(uint16_t fhid, bool left) const;
 
     const Foothold &get_fh(uint16_t fhid) const;
+
+    // Resolve only the current support's same-layer, shared-endpoint floor chain.
+    // Wall checks and completed ground substeps must use the same surface at x.
+    const Foothold &connected_support(const PhysicsObject &object, double x) const;
 
     // With a displacement, reject one-way floors approached from below at the
     // same x on the path. A plain lookup uses NaN and does no path classification.

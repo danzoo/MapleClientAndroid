@@ -275,11 +275,17 @@ namespace ms {
 
                 if (!value) {
                     env->ExceptionClear();
-                    break;
+                    env->DeleteLocalRef(result);
+                    return nullptr;
                 }
 
                 env->SetObjectArrayElement(result, static_cast<jsize>(i), value);
                 env->DeleteLocalRef(value);
+                if (env->ExceptionCheck()) {
+                    env->ExceptionClear();
+                    env->DeleteLocalRef(result);
+                    return nullptr;
+                }
             }
 
             return result;
@@ -522,15 +528,15 @@ namespace ms {
         }
     }
 
-    void NativeTooltip::show(const List &list) {
+    bool NativeTooltip::show(const List &list) {
         if (!g_shown && !open()) {
-            return;
+            return false;
         }
 
         JNIEnv *env = current_env();
 
         if (!env) {
-            return;
+            return false;
         }
 
         jintArray ops = new_int_array(env, list.ops_);
@@ -557,7 +563,7 @@ namespace ms {
                 env->DeleteLocalRef(names);
             }
 
-            return;
+            return false;
         }
 
         env->CallStaticVoidMethod(g_class, g_display, ops, texts, names, pixels);
@@ -569,6 +575,9 @@ namespace ms {
 
         if (env->ExceptionCheck()) {
             env->ExceptionClear();
+            return false;
         }
+
+        return true;
     }
 }  // namespace ms

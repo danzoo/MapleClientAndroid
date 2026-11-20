@@ -95,7 +95,8 @@ namespace ms {
 
         // Puts a preview on the screen. An empty list takes it off. The caller is the one that knows
         // when either is a change, so this is asked for once per change rather than once per frame.
-        static void show(const List &list);
+        // Reports whether the update was successfully handed to the native window.
+        static bool show(const List &list);
 
     private:
         static bool prepare();

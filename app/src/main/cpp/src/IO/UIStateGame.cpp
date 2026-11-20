@@ -118,40 +118,22 @@ namespace ms {
     }
 
     void UIStateGame::draw(float inter, Point<int16_t> cursor) const {
-        for (const auto &type: element_order_) {
-            const auto &element = elements_[type];
+        const auto &notice = elements_[UIElement::Type::NOTICE];
+        const bool aside = notice && notice->is_active();
+        const Point<int16_t> position = tooltip_anchor_ + Point<int16_t>(0, 22);
 
-            if (element && element->is_active()) {
-                element->draw(inter);
-            }
-        }
-
-        // The item, equipment and skill previews are filled in by android's own views, so they are
-        // written out once per change rather than once per frame: nothing about a preview differs
-        // until the reader touches another icon or moves to another place. A preview that has not
-        // been converted - the plain text and map name ones - is still painted by this pass.
+        // Resolve this frame's native preview state before drawing its source selection.
+        // Item and equipment previews have no GL fallback, unlike text and map previews.
         if (tooltip_) {
             const Tooltip &tooltip = tooltip_->get();
-            // The preview stands where the piece that was touched stands, not under the finger: a
-            // tap that lands a few pixels off centre used to move the whole window of words, and
-            // the frame that carried it also made the piece being left behind arrive once more.
-            Point<int16_t> position = tooltip_anchor_ + Point<int16_t>(0, 22);
-
-            // A question the preview's own control raised is painted by the pass above, under the
-            // native window the preview lives in. So the preview steps aside while the question
-            // stands - aside, not down: the control is still there once the answer has been given.
-            const auto &notice = elements_[UIElement::Type::NOTICE];
-            const bool aside = notice && notice->is_active();
-
             if (aside != native_aside_ || tooltip_version_ != native_version_
                 || position != native_position_) {
                 NativeTooltip::List list;
-
                 native_shown_ = !aside && NativeTooltip::available()
-                                && tooltip.build(list, position);
+                                && tooltip.build(list, position) && !list.empty();
 
                 if (native_shown_) {
-                    NativeTooltip::show(list);
+                    native_shown_ = NativeTooltip::show(list);
                 }
                 else {
                     NativeTooltip::show(NativeTooltip::List());
@@ -161,14 +143,29 @@ namespace ms {
                 native_position_ = position;
                 native_aside_ = aside;
             }
-
-            if (!native_shown_ && !aside) {
-                tooltip.draw(position);
-            }
         }
         else if (native_shown_) {
             NativeTooltip::show(NativeTooltip::List());
             native_shown_ = false;
+        }
+
+        for (const auto &type: element_order_) {
+            const auto &element = elements_[type];
+
+            if (element && element->is_active()) {
+                element->draw(inter);
+
+                // Keep the frame in its owner's layer so later windows still occlude it.
+                if (type == UIElement::Type::ITEM_INVENTORY && tooltip_
+                    && tooltip_parent_ == Tooltip::Parent::ITEM_INVENTORY
+                    && native_shown_ && !aside && NativeTooltip::available()) {
+                    static_cast<const UIItemInventory &>(*element).draw_selection(tooltip_anchor_);
+                }
+            }
+        }
+
+        if (tooltip_ && !native_shown_ && !aside) {
+            tooltip_->get().draw(position);
         }
 
         if (dragged_icon_) {

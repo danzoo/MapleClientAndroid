@@ -59,7 +59,13 @@ void SortResultHandler::handle(InPacket &) const {
 void ModifyInventoryHandler::handle(InPacket &recv) const {
     recv.read_bool();  // 'updatetick'
 
-    Inventory &inventory = Stage::get().get_player().get_inventory();
+    Player &player = Stage::get().get_player();
+    Inventory &inventory = player.get_inventory();
+    const Weapon::Type weapon_type = player.get_weapontype();
+    const int16_t bullet_slot_before = inventory.get_bulletslot();
+    const int32_t bullet_id_before = inventory.get_bulletid();
+    bool equipment_changed = false;
+    bool use_changed = false;
 
     struct Mod {
         int8_t mode;
@@ -78,6 +84,9 @@ void ModifyInventoryHandler::handle(InPacket &recv) const {
         mod.type = InventoryType::by_value(recv.read_byte());
         mod.pos = recv.read_short();
 
+        equipment_changed = equipment_changed
+            || mod.type == InventoryType::Id::EQUIPPED || mod.pos < 0;
+        use_changed = use_changed || mod.type == InventoryType::Id::USE;
         mod.arg = 0;
 
         switch (mod.mode) {
@@ -132,7 +141,10 @@ void ModifyInventoryHandler::handle(InPacket &recv) const {
                             : Inventory::Movement::MOVE_INTERNAL;
 
     for (const Mod &mod : mods) {
-        if (mod.mode == 2) {
+        if (mod.mode == Inventory::Modification::SWAP) {
+            equipment_changed = equipment_changed
+                || move == Inventory::Movement::MOVE_EQUIP
+                || move == Inventory::Movement::MOVE_UNEQUIP;
             inventory.modify(mod.type, mod.pos, mod.mode, mod.arg, move);
         }
 
@@ -204,7 +216,18 @@ void ModifyInventoryHandler::handle(InPacket &recv) const {
         }
     }
 
-    Stage::get().get_player().recalc_stats(true);
+    bool projectile_changed = false;
+    if (use_changed && !equipment_changed) {
+        const int16_t bullet_slot_after = inventory.find_bulletslot(weapon_type);
+        const int32_t bullet_id_after = inventory.get_item_id(
+            InventoryType::Id::USE, bullet_slot_after);
+        projectile_changed = bullet_slot_after != bullet_slot_before
+            || bullet_id_after != bullet_id_before;
+    }
+
+    if (equipment_changed || projectile_changed) {
+        player.recalc_stats(true);
+    }
     UI::get().enable();
 }
 }  // namespace ms

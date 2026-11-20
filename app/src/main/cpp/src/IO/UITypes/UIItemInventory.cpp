@@ -233,6 +233,7 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
                              < inventory_.get_slotmax(tab_) + 1 + COLUMNS_;
 
                          if (above && below) {
+                             clear_tooltip();
                              slot_range_[tab_].first += shift;
                              slot_range_[tab_].second += shift;
                          }
@@ -310,6 +311,23 @@ void UIItemInventory::draw(float alpha) const {
     UIElement::draw_buttons(alpha);
 }
 
+void UIItemInventory::draw_selection(Point<int16_t> tooltip_anchor) const {
+    const auto icon = icons_.find(selected_slot_);
+    if (selected_slot_ <= 0 || icon == icons_.end() || !icon->second
+        || !is_visible(selected_slot_)) {
+        return;
+    }
+
+    const Point<int16_t> slotpos = position_
+        + (full_enabled_ ? get_full_slotpos(selected_slot_) : get_slotpos(selected_slot_));
+    if (tooltip_anchor != slotpos + Point<int16_t>(ICON_WIDTH_ / 2, ICON_HEIGHT_ / 2)) {
+        return;
+    }
+
+    // The existing activeIcon is a transparent-centred frame, also used for ammunition.
+    projectile_.draw(slotpos);
+}
+
 void UIItemInventory::update() {
     UIElement::update();
 
@@ -356,6 +374,9 @@ void UIItemInventory::update_slot(int16_t slot) {
 }
 
 void UIItemInventory::load_icons() {
+    if (selected_slot_ != 0) {
+        clear_tooltip();
+    }
     icons_.clear();
 
     uint8_t numslots = inventory_.get_slotmax(tab_);
@@ -517,6 +538,7 @@ Cursor::State UIItemInventory::send_cursor(bool pressed,
             return Cursor::State::IDLE;
         }
 
+        clear_tooltip();
         Point<int16_t> slotpos = get_slotpos(slot);
         icon->start_drag(cursor_relative - slotpos);
         UI::get().drag_icon(icon);
@@ -576,6 +598,21 @@ void UIItemInventory::modify(InventoryType::Id type,
     }
 
     if (type == tab_) {
+        // The preview describes a particular slot record, not whichever item later occupies it.
+        // Positive stack-count updates keep that record; replacement/removal/movement do not.
+        if (selected_slot_ != 0) {
+            const bool source_changed = slot == selected_slot_
+                && (mode == Inventory::Modification::ADD
+                    || mode == Inventory::Modification::REMOVE
+                    || ((mode == Inventory::Modification::CHANGE_COUNT
+                         || mode == Inventory::Modification::ADD_COUNT) && arg <= 0));
+            const bool source_moved = mode == Inventory::Modification::SWAP && arg != slot
+                && (slot == selected_slot_ || arg == selected_slot_);
+            if (source_changed || source_moved) {
+                clear_tooltip();
+            }
+        }
+
         switch (mode) {
             case Inventory::Modification::ADD:
                 update_slot(slot);
@@ -666,6 +703,13 @@ void UIItemInventory::toggle_active() {
 }
 
 void UIItemInventory::show_item(int16_t slot) {
+    const int32_t item_id = inventory_.get_item_id(tab_, slot);
+    if (!item_id) {
+        clear_tooltip();
+        return;
+    }
+    selected_slot_ = slot;
+
     // The preview stands in the middle of the slot that was touched rather than under the finger,
     // so that where inside the slot the finger happened to land says nothing about where the words
     // appear. The same choice of slot table the drawing makes, so the anchor and the art agree.
@@ -673,8 +717,6 @@ void UIItemInventory::show_item(int16_t slot) {
         position_
         + (full_enabled_ ? get_full_slotpos(slot) : get_slotpos(slot))
         + Point<int16_t>(ICON_WIDTH_ / 2, ICON_HEIGHT_ / 2);
-
-    const int32_t item_id = inventory_.get_item_id(tab_, slot);
 
     if (tab_ == InventoryType::Id::EQUIP) {
         UI::get().show_equip(Tooltip::Parent::ITEM_INVENTORY, slot, centre);
@@ -714,6 +756,7 @@ void UIItemInventory::show_item(int16_t slot) {
 }
 
 void UIItemInventory::clear_tooltip() {
+    selected_slot_ = 0;
     UI::get().clear_tooltip(Tooltip::Parent::ITEM_INVENTORY);
 }
 

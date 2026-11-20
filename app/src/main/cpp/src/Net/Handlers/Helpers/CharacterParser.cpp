@@ -75,10 +75,14 @@ void CharacterParser::parse_skillbook(InPacket &recv, SkillBook &skills) {
 void CharacterParser::parse_cooldowns(InPacket &recv, Player &player) {
     int16_t size = recv.read_short();
 
+    // Full snapshot: discard cooldowns missing from the new server records.
+    player.clear_cooldowns();
+
     for (int i = 0; i < size; i++) {
         int32_t skill_id = recv.read_int();
-        int32_t cooltime = recv.read_short();
-        player.add_cooldown(skill_id, cooltime);
+        // Remaining seconds, except 5221999 which carries battleshipHp.
+        int32_t seconds = recv.read_short();
+        player.add_cooldown(skill_id, seconds);
     }
 }
 

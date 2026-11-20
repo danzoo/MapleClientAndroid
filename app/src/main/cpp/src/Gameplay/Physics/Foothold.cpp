@@ -141,7 +141,10 @@ bool Foothold::blocks_foot_height(double foot_y) const {
         return false;
     }
     const double pixel_y = std::trunc(foot_y);
-    return is_wall() && t() <= pixel_y - 1.0 && pixel_y - 50.0 <= b();
+    // Feet exactly at a wall top may pass over it, but any positive overlap
+    // must block: truncating the lower end left a one-pixel corner gap.
+    // Retain the existing pixel-aligned 50-pixel upper reach.
+    return is_wall() && t() < foot_y && pixel_y - 50.0 <= b();
 }
 
 int32_t Foothold::hdelta() const {

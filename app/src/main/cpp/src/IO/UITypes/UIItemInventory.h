@@ -30,6 +30,9 @@ public:
 
     void draw(float inter) const override;
 
+    // Called in this window's draw layer only while its tooltip is visible.
+    void draw_selection(Point<int16_t> tooltip_anchor) const;
+
     void update() override;
 
     void doubleclick(Point<int16_t> position) override;
@@ -183,6 +186,7 @@ private:
     InventoryType::Id tab_;
     InventoryType::Id new_tab_;
     int16_t new_slot_;
+    int16_t selected_slot_ = 0;
 
     bool sort_enabled_;
     bool full_enabled_;

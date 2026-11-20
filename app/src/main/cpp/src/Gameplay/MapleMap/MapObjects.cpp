@@ -38,6 +38,7 @@ void MapObjects::draw(Layer::Id layer,
 }
 
 void MapObjects::update(const Physics &physics) {
+    bool removed = false;
     for (auto iter = objects_.begin(); iter != objects_.end();) {
         bool remove_mob = false;
 
@@ -58,8 +59,21 @@ void MapObjects::update(const Physics &physics) {
 
         if (remove_mob) {
             iter = objects_.erase(iter);
+            removed = true;
         } else {
             iter++;
+        }
+    }
+
+    if (removed) {
+        // Picked-up drops finish their animation through update(), not remove().
+        // Retire their draw-order entries too, or every later pickup copies and
+        // scans the map's entire history of expired drops. Prune once per layer
+        // after the batch so a pile disappearing together does not cost N erases.
+        for (auto &layer : layers_) {
+            layer.erase(std::remove_if(layer.begin(), layer.end(), [this](int32_t oid) {
+                return objects_.find(oid) == objects_.end();
+            }), layer.end());
         }
     }
 }

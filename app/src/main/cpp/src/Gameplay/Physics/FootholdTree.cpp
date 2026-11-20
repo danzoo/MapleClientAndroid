@@ -164,11 +164,19 @@ void FootholdTree::limit_movement(PhysicsObject &phobj, double hmove, double vmo
             } else {
                 // A single substep can cross several very short floors before their wall.
                 // Keep the nearby query first, then follow only as far as this movement needs.
-                wall = get_air_wall(wall_fhid, left, phobj.crnt_y() + vmove, next_x);
+                // Both queries must use the support's height at the wall, even when
+                // this tick first walks onto a later short floor in the same chain.
+                const PhysicsObject *supporting = phobj.is_ground_type() && phobj.onground
+                    && phobj.vspeed == 0.0 && vmove == 0.0 ? &phobj : nullptr;
+                wall = get_air_wall(wall_fhid, left, phobj.crnt_y() + vmove, next_x, supporting);
                 collision = left ? crnt_x >= wall && next_x <= wall
                                  : crnt_x <= wall && next_x >= wall;
             }
         }
+
+        // Side walls belong to the body's linked terrain, not every platform whose
+        // endpoint this sweep crosses. Globally adopting an overhead or unrelated
+        // platform's wall turns existing passages into solid barriers.
 
         // Releasing a floor is not permission to cross its associated wall.
         // Ground lookup may already refer to a lower floor, so check the original
@@ -526,38 +534,8 @@ void FootholdTree::update_fh(PhysicsObject &phobj, bool follow_ground) const {
                                && y == curfh.ground_below(x)));
 
     if (supported) {
-        // A settled body follows only its actual, end-to-end floor chain. Use the
-        // floating-point x, including the first fraction beyond an endpoint; never
-        // extrapolate the old slope through a wall, missing link or gap.
-        size_t remaining = footholds_.size();
-        while (x < support->l() || x > support->r()) {
-            if (remaining == 0) {
-                supported = false;
-                break;
-            }
-            --remaining;
-
-            const bool left = x < support->l();
-            const Foothold &next = get_fh(left ? support->prev() : support->next());
-            if (!next.id() || next.is_wall() || next.layer() != support->layer()
-                || phobj.ignores_drop_floor(next.id())) {
-                supported = false;
-                break;
-            }
-
-            const int16_t edge_x = left ? support->l() : support->r();
-            const int16_t edge_y = support->x1() == edge_x
-                ? support->y1() : support->y2();
-            const int16_t next_edge_x = left ? next.r() : next.l();
-            const int16_t next_edge_y = next.x1() == next_edge_x
-                ? next.y1() : next.y2();
-            if (next_edge_x != edge_x || next_edge_y != edge_y
-                || (left ? next.l() >= support->l() : next.r() <= support->r())) {
-                supported = false;
-                break;
-            }
-            support = &next;
-        }
+        support = &connected_support(phobj, x);
+        supported = support->id() != 0;
     }
 
     if (supported) {
@@ -641,6 +619,44 @@ void FootholdTree::update_fh(PhysicsObject &phobj, bool follow_ground) const {
     }
 }
 
+const Foothold &FootholdTree::connected_support(const PhysicsObject &object, double x) const {
+    const Foothold *support = &get_fh(object.fhid);
+    if (!std::isfinite(x) || !support->id() || support->is_wall()
+        || object.ignores_drop_floor(support->id())) {
+        return null_fh_;
+    }
+
+    // Do not replace this support with an unrelated floor below the destination.
+    // Follow exactly the chain that update_fh can seat after a checked substep.
+    size_t remaining = footholds_.size();
+    while (x < support->l() || x > support->r()) {
+        if (remaining == 0) {
+            return null_fh_;
+        }
+        --remaining;
+
+        const bool left = x < support->l();
+        const Foothold &next = get_fh(left ? support->prev() : support->next());
+        if (!next.id() || next.is_wall() || next.layer() != support->layer()
+            || object.ignores_drop_floor(next.id())) {
+            return null_fh_;
+        }
+
+        const int16_t edge_x = left ? support->l() : support->r();
+        const int16_t edge_y = support->x1() == edge_x
+            ? support->y1() : support->y2();
+        const int16_t next_edge_x = left ? next.r() : next.l();
+        const int16_t next_edge_y = next.x1() == next_edge_x
+            ? next.y1() : next.y2();
+        if (next_edge_x != edge_x || next_edge_y != edge_y
+            || (left ? next.l() >= support->l() : next.r() <= support->r())) {
+            return null_fh_;
+        }
+        support = &next;
+    }
+    return *support;
+}
+
 const Foothold &FootholdTree::get_fh(uint16_t fhid) const {
     auto iter = footholds_.find(fhid);
 
@@ -652,9 +668,9 @@ const Foothold &FootholdTree::get_fh(uint16_t fhid) const {
 }
 
 double FootholdTree::get_air_wall(uint16_t curid, bool left, double fy,
-                                  double to_x) const {
+                                  double to_x, const PhysicsObject *supporting) const {
     const double boundary = left ? walls_.first() : walls_.second();
-    const double nearby = get_wall(curid, left, fy);
+    const double nearby = get_wall(curid, left, fy, supporting);
 
     // Preserve every result of the existing two-neighbour query before filling its omissions.
     if (nearby != boundary) {
@@ -709,8 +725,13 @@ double FootholdTree::get_air_wall(uint16_t curid, bool left, double fy,
             break;
         }
 
-        if (wall_started && next.blocks_foot_height(fy)) {
-            return wall_x;
+        if (wall_started) {
+            const Foothold &support = supporting
+                ? connected_support(*supporting, wall_x) : null_fh_;
+            const double foot_y = support.id() ? support.ground_below(wall_x) : fy;
+            if (next.blocks_foot_height(foot_y)) {
+                return wall_x;
+            }
         }
         cur = &next;
     }
@@ -718,7 +739,8 @@ double FootholdTree::get_air_wall(uint16_t curid, bool left, double fy,
     return boundary;
 }
 
-double FootholdTree::get_wall(uint16_t curid, bool left, double fy) const {
+double FootholdTree::get_wall(uint16_t curid, bool left, double fy,
+                              const PhysicsObject *supporting) const {
     const double boundary = left ? walls_.first() : walls_.second();
     const Foothold *cur = &get_fh(curid);
     if (!cur->id() || cur->is_wall()) {
@@ -758,8 +780,13 @@ double FootholdTree::get_wall(uint16_t curid, bool left, double fy) const {
             break;
         }
 
-        if (wall_started && next.blocks_foot_height(fy)) {
-            return next.x1();
+        if (wall_started) {
+            const Foothold &support = supporting
+                ? connected_support(*supporting, wall_x) : null_fh_;
+            const double foot_y = support.id() ? support.ground_below(wall_x) : fy;
+            if (next.blocks_foot_height(foot_y)) {
+                return next.x1();
+            }
         }
         cur = &next;
     }

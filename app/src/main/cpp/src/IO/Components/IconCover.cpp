@@ -15,6 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "IconCover.h"
 
+#include <algorithm>
+
 namespace ms {
 IconCover::IconCover(Type t, int32_t duration) {
     cover_ = ColorBox(30, 30, Color::Name::BLACK, 0.6f);
@@ -34,15 +36,52 @@ IconCover::IconCover(Type t, int32_t duration) {
 }
 
 void IconCover::draw(Point<int16_t> position, float alpha) const {
-    float interyscale = yscale_.get(alpha);
-    auto interheight = static_cast<int16_t>(30 * interyscale);
+    draw_fill(cover_, position, yscale_.get(alpha));
+}
 
+void IconCover::draw_cooldown(Point<int16_t> position,
+                               float remaining_scale,
+                               float opacity) {
+    if (!(opacity > 0.0f)) {
+        return;
+    }
+
+    const ColorBox cover(30, 30, Color::Name::BLACK,
+                          0.6f * std::min(opacity, 1.0f));
+    draw_fill(cover, position, remaining_scale);
+}
+
+void IconCover::draw_fill(const ColorBox &cover,
+                          Point<int16_t> position,
+                          float scale) {
+    // Clamp the draw, not the clock: even short timers must stay in the icon.
+    // The comparison also rejects a non-finite NaN scale before integer conversion.
+    if (!(scale > 0.0f)) {
+        return;
+    }
+    const auto interheight = static_cast<int16_t>(30 * std::min(scale, 1.0f));
     if (interheight == 0) {
         return;
     }
 
-    cover_.draw(DrawArgument(position + Point<int16_t>(0, 30 - interheight),
-                             Point<int16_t>(30, interheight)));
+    // Clip to a fixed icon outline so the moving time edge stays flat.
+    // Two corner rows also keep the fill inside icons whose origin.y is 33
+    // instead of the usual 32, without moving the shared 30x30 cover area.
+    const auto inset_at = [](int16_t row) -> int16_t {
+        const int16_t edge = std::min<int16_t>(row, 29 - row);
+        return edge < 2 ? 2 - edge : 0;
+    };
+    int16_t row = 30 - interheight;
+    while (row < 30) {
+        const int16_t inset = inset_at(row);
+        const int16_t start = row;
+        do {
+            ++row;
+        } while (row < 30 && inset_at(row) == inset);
+
+        cover.draw(DrawArgument(position + Point<int16_t>(inset, start),
+                                Point<int16_t>(30 - 2 * inset, row - start)));
+    }
 }
 
 void IconCover::update() {

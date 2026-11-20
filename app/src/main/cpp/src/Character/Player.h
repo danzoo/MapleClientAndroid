@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
+#include <chrono>
 #include <optional>
 
 #include "../Gameplay/Combat/Skill.h"
@@ -106,11 +107,17 @@ public:
                       int32_t masterlevel,
                       int64_t expiration);
 
-    // Put a skill on cooldown.
-    void add_cooldown(int32_t skill_id, int32_t time);
+    // Apply server packet seconds; 5221999 carries battleshipHp instead.
+    void add_cooldown(int32_t skill_id, int32_t seconds);
 
-    // Check if a skill is on cooldown.
+    // Check the server flag, not local display expiry.
     bool has_cooldown(int32_t skill_id) const;
+
+    // Return the display-only remaining ratio [0, 1], or 0 for 5221999.
+    float get_cooldown_scale(int32_t skill_id) const;
+
+    // Clear all cooldowns before replacing them with a full server snapshot.
+    void clear_cooldowns();
 
     // Change the player's level, display the "level up" effect.
     void change_level(uint16_t level);
@@ -220,7 +227,13 @@ private:
     ActiveBuffs active_buffs_;
     PassiveBuffs passive_buffs_;
 
-    std::unordered_map<int32_t, int32_t> cooldowns_;
+    using CooldownClock = std::chrono::steady_clock;
+    struct Cooldown {
+        int32_t seconds;
+        CooldownClock::time_point started;
+    };
+
+    std::unordered_map<int32_t, Cooldown> cooldowns_;
 
     std::map<KeyAction::Id, bool> keys_down_;
 

@@ -18,8 +18,10 @@
 #include <imgwz/wz.hpp>
 
 #include "../../Audio/Audio.h"
+#include "../../Gameplay/Stage.h"
 #include "../QuickSlots.h"
 #include "Charset.h"
+#include "IconCover.h"
 
 namespace ms {
 // An icon picked up out of the persistent bar leaves that bar empty wherever it lands that isn't
@@ -60,7 +62,21 @@ Icon::Icon() : Icon(std::make_unique<NullType>(), {}, -1) {}
 
 void Icon::draw(Point<int16_t> position) const {
     float opacity = dragged_ ? 0.5f : 1.0f;
-    get_texture().draw(DrawArgument(position, opacity));
+    const Texture texture = get_texture();
+    texture.draw(DrawArgument(position, opacity));
+
+    // Skillbook, quick slots and controller bindings all draw through here.
+    // Query the binding, not IconType: a bound skill may be a KEY/GAMEPAD icon.
+    if (texture.is_valid()) {
+        const auto mapping = binding();
+        if (mapping && mapping->type == KeyType::Id::SKILL) {
+            const float remaining = Stage::get().get_player().get_cooldown_scale(
+                mapping->action);
+            IconCover::draw_cooldown(position + Point<int16_t>(1, 1),
+                                      remaining,
+                                      opacity);
+        }
+    }
 
     if (show_count_) {
         static const Charset countset =
