@@ -258,14 +258,6 @@ void Configuration::set_show_weekly(bool value) {
     show_weekly = value;
 }
 
-bool Configuration::get_start_shown() {
-    return start_shown;
-}
-
-void Configuration::set_start_shown(bool value) {
-    start_shown = value;
-}
-
 uint8_t Configuration::get_worldid() {
     return worldid;
 }

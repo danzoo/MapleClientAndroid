@@ -109,12 +109,6 @@ public:
     // Set whether to show the weekly maple star in Maple Chat
     void set_show_weekly(bool value);
 
-    // Whether to show the start screen
-    bool get_start_shown();
-
-    // Set whether to show the start screen
-    void set_start_shown(bool value);
-
     // Get the character's selected world
     uint8_t get_worldid();
 
@@ -255,7 +249,6 @@ private:
     const std::string auto_pic = "";
     const int32_t auto_cid = 0;
     bool show_weekly = true;
-    bool start_shown = false;
     std::string MACS;
     std::string HWID;
     std::string VolumeSerialNumber;

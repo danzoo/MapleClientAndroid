@@ -632,6 +632,18 @@ namespace ms {
         glScissor(offset_x_, offset_y_, box_width, box_height);
     }
 
+    double Window::get_scale() const {
+        return scale_;
+    }
+
+    int32_t Window::get_offset_x() const {
+        return offset_x_;
+    }
+
+    int32_t Window::get_offset_y() const {
+        return offset_y_;
+    }
+
     Point<double_t> Window::to_ui(double x, double y) const {
         // Touches arrive as surface pixels from the top left. The view box is centred, so the bar
         // trimmed off the top is the same height as the one at the bottom.

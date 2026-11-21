@@ -46,7 +46,7 @@ int fd() {
 
 namespace {
 struct Entry {
-    std::uint64_t offset;
+    std::uint64_t local_off;
     std::uint32_t size;
 };
 
@@ -162,17 +162,11 @@ bool open(std::string const& zip_path, std::string const& root_prefix) {
             fail("entry is not STORED");
             return false;
         }
-        unsigned char local[30];
-        if (!pread_all(g_fd, local, 30, loff) || u32(local) != 0x04034b50u) {
-            fail("bad local header");
-            return false;
-        }
-        // The local extra field can differ in length from the central one, so the payload
-        // offset is only knowable from the local header.
-        const std::uint64_t data_off =
-            loff + 30 + u16(local + 26) + u16(local + 28);
+        // Only the central directory is parsed here; the local header (whose extra field
+        // can differ in length from the central one) is read lazily in lookup(), once per
+        // opened file. Reading all 16k local headers up front costs seconds on FUSE.
         g_entries.emplace(std::string(reinterpret_cast<char const*>(cd.data() + p + 46), nlen),
-                          Entry{ data_off, uncomp });
+                          Entry{ loff, uncomp });
         p += 46 + nlen + elen + clen;
     }
     return true;
@@ -191,7 +185,11 @@ bool lookup(std::string const& path, std::uint64_t& offset, std::uint32_t& size)
     if (it == g_entries.end()) {
         return false;
     }
-    offset = it->second.offset;
+    unsigned char local[30];
+    if (!pread_all(g_fd, local, 30, it->second.local_off) || u32(local) != 0x04034b50u) {
+        return false;
+    }
+    offset = it->second.local_off + 30 + u16(local + 26) + u16(local + 28);
     size = it->second.size;
     return true;
 }

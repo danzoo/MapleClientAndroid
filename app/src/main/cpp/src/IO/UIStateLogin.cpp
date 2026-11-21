@@ -16,22 +16,16 @@
 #include "UIStateLogin.h"
 
 #include "../Configuration.h"
+#include "UI.h"
 #include "UITypes/Login/UICharSelect.h"
 #include "UITypes/Login/UILogin.h"
 #include "UITypes/Login/UILoginNotice.h"
-#include "UITypes/Login/UILogo.h"
 
 namespace ms {
 UIStateLogin::UIStateLogin() {
     focused_ = UIElement::Type::NONE;
 
-    bool start_shown = Configuration::get().get_start_shown();
-
-    if (!start_shown) {
-        emplace<UILogo>();
-    } else {
-        emplace<UILogin>();
-    }
+    emplace<UILogin>();
 }
 
 void UIStateLogin::draw(float inter, Point<int16_t> cursor) const {
@@ -118,11 +112,9 @@ void UIStateLogin::send_scroll(double yoffset) {
 }
 
 void UIStateLogin::send_close() {
-    auto logo = UI::get().get_element<UILogo>();
     auto login = UI::get().get_element<UILogin>();
 
-    if ((logo && logo->get().is_active())
-        || (login && login->get().is_active())) {
+    if (login && login->get().is_active()) {
         UI::get().quit();
     } else {
         UI::get().emplace<UIQuitConfirm>();

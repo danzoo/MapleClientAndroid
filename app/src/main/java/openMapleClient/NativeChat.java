@@ -256,6 +256,10 @@ public final class NativeChat {
     // Device pixels per interface unit, handed over by the game so this window sits at the same
     // apparent size as the art it replaces rather than at the system's own metrics.
     private static float unit = 1.0f;
+    // Letterbox origin of the view box in surface pixels; interface units reach the surface
+    // through unit *and* this offset, so the hit test has to undo both.
+    private static int originXpx;
+    private static int originYpx;
 
     private NativeChat() {
     }
@@ -270,13 +274,16 @@ public final class NativeChat {
      */
     public static void show(Object activityObject, final float unitPixels, final int x,
                             final int y, final int width, final int height, final int maxLines,
-                            final int screenWidth, final int screenHeight) {
+                            final int screenWidth, final int screenHeight,
+                            final int originX, final int originY) {
         if (!(activityObject instanceof Activity)) {
             return;
         }
 
         owner = (Activity) activityObject;
         unit = Math.max(0.1f, unitPixels);
+        originXpx = originX;
+        originYpx = originY;
         maxEntries = Math.max(32, maxLines);
         screen = new Rect(0, 0, screenWidth, screenHeight);
 
@@ -495,8 +502,8 @@ public final class NativeChat {
             return false;
         }
 
-        float x = uiX * unit - positionX;
-        float y = uiY * unit - positionY;
+        float x = uiX * unit + originXpx - positionX;
+        float y = uiY * unit + originYpx - positionY;
 
         return x >= 0 && x < params.width && y >= 0 && y < height;
     }

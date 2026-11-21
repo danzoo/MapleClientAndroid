@@ -17,6 +17,8 @@
 
 #include <jni.h>
 
+#include <android/log.h>
+
 #include <ctime>
 
 #include "../Audio/Audio.h"
@@ -161,7 +163,7 @@ namespace ms {
             env->DeleteLocalRef(local);
 
             g_show = env->GetStaticMethodID(g_class, "show",
-                                            "(Ljava/lang/Object;FIIIIIII)V");
+                                            "(Ljava/lang/Object;FIIIIIIIII)V");
             g_hide = env->GetStaticMethodID(g_class, "hide", "()V");
             g_append = env->GetStaticMethodID(g_class, "append",
                                               "(IILjava/lang/String;)V");
@@ -175,6 +177,8 @@ namespace ms {
             if (env->ExceptionCheck() || !g_show || !g_hide || !g_append
                 || !g_pending || !g_take || !g_take_click || !g_set_floating
                 || !g_set_faded || !g_touched) {
+                __android_log_print(ANDROID_LOG_ERROR, "NativeChat",
+                                    "JNI method lookup failed; chat window disabled");
                 env->ExceptionClear();
                 env->DeleteGlobalRef(g_class);
                 g_class = nullptr;
@@ -416,22 +420,26 @@ namespace ms {
             return false;
         }
 
-        // Interface units are what every window in the game is measured in, and the frame they reach
-        // is the surface, so one unit is this many device pixels - the same factor the interface
-        // projection uses. The native window has to be sized by it or its lettering would come out a
-        // different height than the rest of the interface it sits next to.
+        // Interface units are what every window in the game is measured in. The frame they reach
+        // is the letterboxed view box, not the whole surface: the scale and the centring offsets
+        // come from the same projection the interface is drawn with, or a surface wider than the
+        // view's aspect would size and place this window (and its hit test) off by the bar.
+        // Window::get_scale() is surface pixels per view unit; interface units are UI_SCALE
+        // smaller than view units, so one interface unit is this many surface pixels.
         const float px_per_unit =
-                static_cast<float>(surface_width)
-                / static_cast<float>(Constants::Constants::get().get_ui_viewwidth());
+                static_cast<float>(Window::get().get_scale() * Constants::UI_SCALE);
+        const int32_t origin_x = Window::get().get_offset_x();
+        const int32_t origin_y = Window::get().get_offset_y();
 
         const int16_t view_height = Constants::Constants::get().get_ui_viewheight();
         const int16_t window_height = Constants::NATIVE_CHAT_CHROME
                                       + Constants::NATIVE_CHAT_ROWS * Constants::NATIVE_CHAT_ROW_HEIGHT;
 
         // Anchored low and left, where the chat bar's scrollback used to be.
-        int32_t x = to_pixels(Constants::NATIVE_CHAT_MARGIN_X, px_per_unit);
-        int32_t y = to_pixels(view_height - window_height - Constants::NATIVE_CHAT_MARGIN_Y,
-                              px_per_unit);
+        int32_t x = origin_x + to_pixels(Constants::NATIVE_CHAT_MARGIN_X, px_per_unit);
+        int32_t y = origin_y
+                    + to_pixels(view_height - window_height - Constants::NATIVE_CHAT_MARGIN_Y,
+                                px_per_unit);
         int32_t width = to_pixels(Constants::NATIVE_CHAT_WIDTH, px_per_unit);
         int32_t rows = to_pixels(Constants::NATIVE_CHAT_ROWS * Constants::NATIVE_CHAT_ROW_HEIGHT,
                                  px_per_unit);
@@ -459,7 +467,7 @@ namespace ms {
         // rather than under it, and it is the game's own frame that says how far it may be dragged.
         env->CallStaticVoidMethod(g_class, g_show, activity->clazz, px_per_unit,
                                   x, y, width, rows, Constants::NATIVE_CHAT_MAX_LINES,
-                                  surface_width, surface_height);
+                                  surface_width, surface_height, origin_x, origin_y);
 
         if (env->ExceptionCheck()) {
             env->ExceptionClear();

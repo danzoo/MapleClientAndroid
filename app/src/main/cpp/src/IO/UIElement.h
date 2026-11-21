@@ -30,7 +30,6 @@ public:
 
     enum Type {
         NONE,
-        START,
         LOGIN,
         TOS,
         GENDER,

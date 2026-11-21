@@ -16,16 +16,21 @@ class MapleActivity : NativeActivity() {
         super.onCreate(savedInstanceState)
     }
 
-    // The release APK carries the Data tree as one STORE-only archive named "Data". Only the
-    // archive itself is released, into the internal files dir (the external one already holds
-    // the loose "Data" directory of debug installs); nothing is unpacked. The asset is stored
+    // The release APK carries the Data tree as one STORE-only archive named "Data", released
+    // as a file into the external files dir; nothing is unpacked. The asset is stored
     // uncompressed, so its file-descriptor length is the full size and serves as the version
     // stamp (available() is an int and would overflow past 2GB).
     private fun releaseDataZip() {
-        val target = File(filesDir, "Data")
+        val target = File(getExternalFilesDir(null), "Data")
+        // A debug install on the same device leaves the loose "Data" directory here; a file
+        // cannot replace it, so leave it alone and let the native side read the loose tree.
+        if (target.isDirectory) {
+            android.util.Log.w("MapleActivity", "loose Data directory present; skipping release")
+            return
+        }
         val want = assets.openFd("Data").use { it.length }
         if (target.exists() && target.length() == want) return
-        val tmp = File(filesDir, "Data.tmp")
+        val tmp = File(target.parentFile, "Data.tmp")
         val t0 = System.nanoTime()
         assets.open("Data").use { input ->
             FileOutputStream(tmp).use { out -> input.copyTo(out, 1 shl 20) }
@@ -33,7 +38,10 @@ class MapleActivity : NativeActivity() {
         check(tmp.renameTo(target)) { "Data release failed" }
         android.util.Log.i("MapleActivity",
             "Data released: $want bytes in ${(System.nanoTime() - t0) / 1_000_000} ms")
-        // Earlier releases kept the archive next to the loose tree under its old name.
+        // Earlier releases kept the archive in the internal files dir, or next to the loose
+        // tree under its old name.
+        File(filesDir, "Data").delete()
+        File(filesDir, "Data.tmp").delete()
         File(getExternalFilesDir(null), "data.zip").delete()
     }
 

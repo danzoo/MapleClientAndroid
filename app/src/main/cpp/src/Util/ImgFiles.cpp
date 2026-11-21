@@ -68,18 +68,15 @@ Error init(GLFMDisplay *pApp) {
     std::string data_root = is_directory(data) ? data : root;
 #ifdef IMG_FROM_ZIP
     // The release APK carries the whole Data tree as one STORE-only archive named "Data",
-    // released into the internal files dir (the external one holds the loose debug tree).
-    // When it indexes cleanly it replaces the tree; lookups keep their loose-style paths.
-    {
-        auto *activity =
-            reinterpret_cast<ANativeActivity *>(glfmGetAndroidActivity(pApp));
-        if (imgzip::open(std::string(activity->internalDataPath) + "/Data", data)) {
-            data_root = data;
+    // released as a file into the external files dir. When it indexes cleanly it replaces
+    // the loose tree; lookups keep their loose-style paths. If the path is still the loose
+    // directory (debug install on the same device), the open fails and the tree stays loose.
+    if (imgzip::open(root + "/Data", data)) {
+        data_root = data;
 #ifdef __ANDROID__
-            __android_log_print(ANDROID_LOG_INFO, "imgzip", "reading resources from %s/Data",
-                                activity->internalDataPath);
+        __android_log_print(ANDROID_LOG_INFO, "imgzip", "reading resources from %s/Data",
+                            root.c_str());
 #endif
-        }
     }
 #endif
     try {

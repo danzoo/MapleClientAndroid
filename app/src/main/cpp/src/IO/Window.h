@@ -81,6 +81,12 @@ namespace ms {
         // interface is laid out in, undoing the letterbox offset and the interface's own scale.
         Point<double_t> to_ui(double x, double y) const;
 
+        // Surface pixels per interface unit and the centring offsets of the view box, for
+        // overlays that place themselves in surface pixels (the native chat window).
+        double get_scale() const;
+        int32_t get_offset_x() const;
+        int32_t get_offset_y() const;
+
         GLFMDisplay* get_display();
 
     private:
