@@ -30,6 +30,13 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Sideloaded release: the debug keystore keeps adb install -r working.
+            signingConfig signingConfigs.debug
+            externalNativeBuild {
+                cmake {
+                    arguments "-DIMG_FROM_ZIP=1"
+                }
+            }
         }
     }
     externalNativeBuild {
@@ -62,4 +69,98 @@ dependencies {
     })
     implementation 'androidx.appcompat:appcompat:1.0.0'
     testImplementation 'junit:junit:4.12'
+}
+
+// The release APK carries the whole Data tree as one STORE-only zip: the native reader
+// mmaps entry payloads straight out of it, so compressing would only buy size the install
+// then has to undo. Debug never packages it and keeps reading the loose tree.
+tasks.register('zipReleaseData', Zip) {
+    entryCompression = ZipEntryCompression.STORED
+    from('../resources/Data')
+    includeEmptyDirs = false
+    archiveFileName = 'Data'
+    destinationDirectory = layout.buildDirectory.dir('dataZip')
+}
+
+tasks.whenTaskAdded { t ->
+    if (t.name == 'preReleaseBuild') {
+        t.dependsOn 'zipReleaseData'
+    }
+    if (t.name == 'assembleRelease') {
+        t.dependsOn 'injectReleaseZip'
+    }
+}
+
+// AGP's compressReleaseAssets buffers whole assets in memory and overflows on a ~2GB zip,
+// so the zip bypasses the asset pipeline: after packageRelease it is streamed into the APK
+// as one STORED entry, then realigned and re-signed with the debug key (sideload installs).
+tasks.register('injectReleaseZip') {
+    dependsOn 'packageRelease', 'zipReleaseData'
+    doLast {
+        def apk = file("$buildDir/outputs/apk/release/app-release.apk")
+        def dataZip = file("$buildDir/dataZip/Data")
+        def injected = file("$buildDir/outputs/apk/release/app-release-injected.apk")
+        def aligned = file("$buildDir/outputs/apk/release/app-release-aligned.apk")
+        def crc = new java.util.zip.CRC32()
+        dataZip.withInputStream { s ->
+            byte[] buf = new byte[1 << 20]
+            int n
+            while ((n = s.read(buf)) > 0) crc.update(buf, 0, n)
+        }
+        new java.util.zip.ZipFile(apk).withCloseable { src ->
+            new java.util.zip.ZipOutputStream(new java.io.BufferedOutputStream(
+                    new java.io.FileOutputStream(injected), 1 << 20)).withCloseable { out ->
+                def entries = src.entries()
+                while (entries.hasMoreElements()) {
+                    def e = entries.nextElement()
+                    // packageRelease may be up-to-date with an already-injected APK; the
+                    // fresh entry is appended below, so drop any stale one here.
+                    if (e.name == 'assets/Data' || e.name == 'assets/data.zip') {
+                        continue
+                    }
+                    def ne = new java.util.zip.ZipEntry(e.name)
+                    ne.setMethod(e.method)
+                    ne.setTime(e.time)
+                    if (e.method == java.util.zip.ZipEntry.STORED) {
+                        ne.setSize(e.size)
+                        ne.setCompressedSize(e.compressedSize)
+                        ne.setCrc(e.crc)
+                    }
+                    out.putNextEntry(ne)
+                    src.getInputStream(e).withCloseable { it.transferTo(out) }
+                    out.closeEntry()
+                }
+                def ze = new java.util.zip.ZipEntry('assets/Data')
+                ze.setMethod(java.util.zip.ZipEntry.STORED)
+                ze.setSize(dataZip.length())
+                ze.setCompressedSize(dataZip.length())
+                ze.setCrc(crc.value)
+                out.putNextEntry(ze)
+                dataZip.withInputStream { it.transferTo(out) }
+                out.closeEntry()
+            }
+        }
+        // zipalign 33 cannot open archives past 2GB; 36 handles the ~3GB data.zip APK.
+        def bt = new File(android.sdkDirectory, "build-tools/36.0.0")
+        exec {
+            commandLine new File(bt, 'zipalign.exe'), '-f', '-p', '4',
+                    injected.absolutePath, aligned.absolutePath
+        }
+        // AGP keeps the debug keystore in ANDROID_USER_HOME when set, else in the .android
+        // folder under ANDROID_SDK_HOME (or the user home).
+        def userHome = System.getenv('ANDROID_USER_HOME')
+        def ks = userHome ? new File(userHome, 'debug.keystore')
+                : new File(System.getenv('ANDROID_SDK_HOME')
+                        ?: System.getProperty('user.home'), '.android/debug.keystore')
+        exec {
+            commandLine new File(bt, 'apksigner.bat'), 'sign',
+                    '--ks', ks.absolutePath, '--ks-pass', 'pass:android',
+                    '--ks-key-alias', 'androiddebugkey', '--key-pass', 'pass:android',
+                    aligned.absolutePath
+        }
+        java.nio.file.Files.move(aligned.toPath(), apk.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        injected.delete()
+        logger.lifecycle("injectReleaseZip: Data (${dataZip.length()} bytes) stored into ${apk.name}")
+    }
 }

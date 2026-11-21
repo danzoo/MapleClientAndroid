@@ -220,6 +220,9 @@ void Game::start(GLFMDisplay *pApp) {
         auto message = error.get_message();
         auto details = error.get_details();
         bool can_retry = error.can_retry();
+        __android_log_print(ANDROID_LOG_ERROR, "Game", "init error: %.*s / %.*s",
+                            static_cast<int>(message.size()), message.data(),
+                            static_cast<int>(details.size()), details.data());
 
         std::cout << "Error: " << message << std::endl;
         std::cout << "Message: " << details << std::endl;

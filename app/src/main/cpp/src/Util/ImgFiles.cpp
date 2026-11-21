@@ -17,6 +17,7 @@
 
 #include <imgwz/node.hpp>
 #include <imgwz/wz.hpp>
+#include <img_zip.hpp>
 
 #include "../Gameplay/Physics/PhysicsParams.h"
 
@@ -26,6 +27,7 @@
 #include <string>
 
 #ifdef __ANDROID__
+#include <android/log.h>
 #include <android/native_activity.h>
 #endif
 
@@ -63,8 +65,25 @@ Error init(GLFMDisplay *pApp) {
     const std::string root = game_path(pApp);
     app_root = root;
     const std::string data = root + "/Data";
+    std::string data_root = is_directory(data) ? data : root;
+#ifdef IMG_FROM_ZIP
+    // The release APK carries the whole Data tree as one STORE-only archive named "Data",
+    // released into the internal files dir (the external one holds the loose debug tree).
+    // When it indexes cleanly it replaces the tree; lookups keep their loose-style paths.
+    {
+        auto *activity =
+            reinterpret_cast<ANativeActivity *>(glfmGetAndroidActivity(pApp));
+        if (imgzip::open(std::string(activity->internalDataPath) + "/Data", data)) {
+            data_root = data;
+#ifdef __ANDROID__
+            __android_log_print(ANDROID_LOG_INFO, "imgzip", "reading resources from %s/Data",
+                                activity->internalDataPath);
+#endif
+        }
+    }
+#endif
     try {
-        img::wz::load_all(is_directory(data) ? data : root);
+        img::wz::load_all(data_root);
         if (img::wz::ui.size() == 0) {
             throw std::runtime_error("No game files in " + data);
         }

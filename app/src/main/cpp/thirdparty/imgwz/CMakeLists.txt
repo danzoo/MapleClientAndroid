@@ -6,6 +6,7 @@ add_library(imgwz STATIC
     bitmap.cpp
     img_cipher.cpp
     img_file.cpp
+    img_zip.cpp
     node.cpp
     wz.cpp)
 target_include_directories(imgwz PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

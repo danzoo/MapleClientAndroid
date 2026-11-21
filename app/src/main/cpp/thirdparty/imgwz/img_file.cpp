@@ -6,6 +6,7 @@
 //  (0x73 + "Property" + u16 0 + one property list) and every name or extended-kind
 //  reference counts from the start of the file.
 #include "img_internal.hpp"
+#include "img_zip.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -109,30 +110,59 @@ void img_data::ensure() const
     }
     opened = true;
 #ifndef _WIN32
-    const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
-    if (fd < 0) {
-        broken = true;
-        img_report_error(path.c_str(), "open failed");
-        return;
-    }
-    struct stat st;
-    if (::fstat(fd, &st) != 0 || st.st_size <= 0) {
+#ifdef IMG_FROM_ZIP
+    // Release builds read the STORE-only data.zip: the entry payload is contiguous, so a
+    // page-aligned mmap of its span gives the same zero-copy buffer the loose file gets.
+    if (imgzip::active()) {
+        std::uint64_t off = 0;
+        std::uint32_t sz = 0;
+        if (!imgzip::lookup(path, off, sz)) {
+            broken = true;
+            img_report_error(path.c_str(), "not in data.zip");
+            return;
+        }
+        const std::uint64_t page = static_cast<std::uint64_t>(::sysconf(_SC_PAGESIZE));
+        const std::uint64_t aligned = off & ~(page - 1);
+        const std::size_t span = static_cast<std::size_t>(sz + (off - aligned));
+        void* addr = ::mmap(nullptr, span, PROT_READ, MAP_PRIVATE, imgzip::fd(),
+                            static_cast<off_t>(aligned));
+        if (addr == MAP_FAILED) {
+            broken = true;
+            img_report_error(path.c_str(), "zip mmap failed");
+            return;
+        }
+        base = static_cast<std::uint8_t const*>(addr) + (off - aligned);
+        size = sz;
+        ::madvise(addr, span, MADV_RANDOM);
+    } else {
+#else
+    {
+#endif
+        const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+        if (fd < 0) {
+            broken = true;
+            img_report_error(path.c_str(), "open failed");
+            return;
+        }
+        struct stat st;
+        if (::fstat(fd, &st) != 0 || st.st_size <= 0) {
+            ::close(fd);
+            broken = true;
+            img_report_error(path.c_str(), "stat failed");
+            return;
+        }
+        void* addr = ::mmap(nullptr, static_cast<std::size_t>(st.st_size), PROT_READ,
+                            MAP_PRIVATE, fd, 0);
         ::close(fd);
-        broken = true;
-        img_report_error(path.c_str(), "stat failed");
-        return;
+        if (addr == MAP_FAILED) {
+            broken = true;
+            img_report_error(path.c_str(), "mmap failed");
+            return;
+        }
+        base = static_cast<std::uint8_t const*>(addr);
+        size = static_cast<std::uint32_t>(st.st_size);
+        ::madvise(const_cast<std::uint8_t*>(base), size, MADV_RANDOM);
     }
-    void* addr = ::mmap(nullptr, static_cast<std::size_t>(st.st_size), PROT_READ,
-                        MAP_PRIVATE, fd, 0);
-    ::close(fd);
-    if (addr == MAP_FAILED) {
-        broken = true;
-        img_report_error(path.c_str(), "mmap failed");
-        return;
-    }
-    base = static_cast<std::uint8_t const*>(addr);
-    size = static_cast<std::uint32_t>(st.st_size);
-    ::madvise(const_cast<std::uint8_t*>(base), size, MADV_RANDOM);
 #else
     HANDLE handle = ::CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
                                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -875,6 +905,23 @@ void img_dir::ensure_listed() const
     }
     listed = true;
 #ifndef _WIN32
+#ifdef IMG_FROM_ZIP
+    if (imgzip::active()) {
+        std::vector<std::pair<std::string, bool>> kids;
+        if (!imgzip::list_children(path, kids)) {
+            img_report_error(path.c_str(), "directory not in data.zip");
+            return;
+        }
+        for (const auto& kid : kids) {
+            entries.push_back({kid.first, kid.second, nullptr, nullptr});
+        }
+        std::sort(entries.begin(), entries.end(),
+                  [](img_dir::entry const& a, img_dir::entry const& b) {
+                      return a.name < b.name;
+                  });
+        return;
+    }
+#endif
     DIR* dir = ::opendir(path.c_str());
     if (!dir) {
         img_report_error(path.c_str(), "directory not found");

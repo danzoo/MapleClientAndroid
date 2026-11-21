@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.4.1)
 add_compile_definitions(NDK_DEBUG=1)
 
+# Release builds read resources from the STORE-only data.zip inside the APK; debug keeps
+# the loose Data tree. The define reaches imgwz and the app alike.
+if(IMG_FROM_ZIP)
+    add_compile_definitions(IMG_FROM_ZIP)
+endif()
+
 add_subdirectory(thirdparty)
 
 set(${CMAKE_C_FLAGS}, "${CMAKE_C_FLAGS}")
