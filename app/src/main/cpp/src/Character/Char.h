@@ -16,6 +16,7 @@
 #pragma once
 
 #include <array>
+#include <optional>
 
 #include "../Gameplay/Combat/DamageNumber.h"
 #include "../Gameplay/MapleMap/MapObject.h"
@@ -112,6 +113,12 @@ public:
     // Remove a recurring animation.
     void remove_recurring_effect();
 
+    // Display the spinning coin while the meso magnet buff is active.
+    void show_magnet_effect();
+
+    // Remove the spinning coin.
+    void remove_magnet_effect();
+
     // Display the iron body skill animation.
     void show_iron_body();
 
@@ -201,6 +208,8 @@ private:
     ChatBalloon chat_balloon_;
     EffectLayer effects_;
     RecurringEffect recurring_effects_;
+    std::optional<Sprite> magnet_effect_;
+    PhysicsObject magnet_phobj_;
     Afterimage after_image_;
     TimedBool invincible_;
     TimedBool iron_body_;

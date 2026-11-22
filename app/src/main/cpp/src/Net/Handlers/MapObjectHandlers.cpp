@@ -360,6 +360,12 @@ void GiveForeignBuffHandler::handle_buff(InPacket &recv,
          }*/
 
         Stage::get().get_combat().give_foreign_buff(cid, skill_id, skill_level);
+    } else if (stat == Buffstat::Id::MESO_MAGNET) {
+        recv.read_short();  // value
+
+        if (auto character = Stage::get().get_character(cid)) {
+            character->get().show_magnet_effect();
+        }
     } else {
         int16_t value = recv.read_short();  // TODO
     }
@@ -373,7 +379,11 @@ void CancelForeignBuffHandler::handle_buff(InPacket &recv,
                                            int32_t cid,
                                            Buffstat::Id stat) const {
     if (auto chr = Stage::get().get_character(cid)) {
-        chr->get().remove_recurring_effect();
+        if (stat == Buffstat::Id::MESO_MAGNET) {
+            chr->get().remove_magnet_effect();
+        } else {
+            chr->get().remove_recurring_effect();
+        }
     }
 
     std::cerr << std::endl

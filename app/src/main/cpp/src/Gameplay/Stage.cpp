@@ -92,6 +92,10 @@ void Stage::load_player(const CharEntry &entry,
 
 void Stage::clear() {
     state_ = State::INACTIVE;
+    // The next field re-sends its buffs; let the magnet edge fire again so the coin effect and
+    // the pickup start time are both rebuilt on the new map.
+    magnet_active_ = false;
+    player_.remove_magnet_effect();
 
     chars_.clear();
     npcs_.clear();
@@ -349,6 +353,9 @@ void Stage::update_auto_pickup() {
     // around from earlier kills stays for manual or pet pickup.
     if (active && !magnet_active_) {
         drops_.note_magnet_start();
+        player_.show_magnet_effect();
+    } else if (!active && magnet_active_) {
+        player_.remove_magnet_effect();
     }
     magnet_active_ = active;
 
