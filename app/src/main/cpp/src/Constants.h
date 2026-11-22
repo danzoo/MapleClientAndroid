@@ -143,6 +143,9 @@ constexpr float MOB_FADE_MS = 320.0f;
 constexpr uint16_t MOB_WANDER_MS = 1600;
 // Remote mobs ease toward the controller's reported position instead of jumping to it.
 constexpr double MOB_REMOTE_TAU = 0.12;
+// How often the controller streams its current position so other clients can walk continuously
+// instead of sliding once per wander decision.
+constexpr uint16_t MOB_SYNC_MS = 120;
 constexpr uint16_t MOB_HIT_GRACE_MS = 240;
 
 // The targets of one area attack are struck nearest first, the farther ones waiting in proportion

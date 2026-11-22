@@ -149,6 +149,7 @@ Mob::Mob(int32_t oi,
     set_stance(st);
     fly_direction_ = STRAIGHT;
     counter_ = 0;
+    sync_counter_ = 0;
 
     name_label_ = Text(Text::Font::A13M,
                        Text::Alignment::CENTER,
@@ -436,6 +437,7 @@ int8_t Mob::update(const Physics &physics) {
 
         if (control_) {
             counter_ += Constants::TIMESTEP;
+            sync_counter_ += Constants::TIMESTEP;
 
             bool next = false;
 
@@ -449,6 +451,12 @@ int8_t Mob::update(const Physics &physics) {
                 next_move();
                 update_movement();
                 counter_ = 0;
+                sync_counter_ = 0;
+            } else if (sync_counter_ >= Constants::MOB_SYNC_MS) {
+                sync_counter_ = 0;
+                // One snapshot per wander makes remote mobs slide between points. Stream the
+                // walk; nibbles=1 marks these intermediate packets as non-skill-roll points.
+                update_movement(1, 1, 0, 0, 0, 0);
             }
         }
         }
@@ -639,6 +647,7 @@ void Mob::adopt_spawn_state(Point<int16_t> position,
     remote_y_ = phobj_.crnt_y();
     remote_position_ = false;
     counter_ = 0;
+    sync_counter_ = 0;
 
     if (control_ && stance_ == Stance::STAND) {
         next_move();

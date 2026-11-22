@@ -250,6 +250,8 @@ private:
     double remote_y_ = 0.0;
     // Milliseconds the current stance has been held for; a wander is picked when it runs out.
     uint16_t counter_;
+    // Milliseconds since the last position stream to the server/other players.
+    uint16_t sync_counter_;
 
     int32_t id_;
     int8_t effect_;
