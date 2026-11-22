@@ -67,6 +67,18 @@ class ShowForeignEffectHandler : public PacketHandler {
     void handle(InPacket &recv) const override;
 };
 
+// Apply another character's facial expression.
+// Opcode: FACIAL_EXPRESSION(193)
+class FacialExpressionHandler : public PacketHandler {
+    void handle(InPacket &recv) const override;
+};
+
+// Show damage numbers over another character.
+// Opcode: DAMAGE_PLAYER(192)
+class DamagePlayerHandler : public PacketHandler {
+    void handle(InPacket &recv) const override;
+};
+
 // Base class for packets which need to parse buff stats
 class ForeignBuffHandler : public PacketHandler {
 public:

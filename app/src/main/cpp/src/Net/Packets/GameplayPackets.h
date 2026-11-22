@@ -67,6 +67,15 @@ public:
     }
 };
 
+// Opcode: FACE_EXPRESSION(51)
+class FaceExpressionPacket : public OutPacket {
+public:
+    explicit FaceExpressionPacket(int32_t expression) :
+        OutPacket(OutPacket::Opcode::FACE_EXPRESSION) {
+        write_int(expression);
+    }
+};
+
 // Opcode: MOVE_PET(167)
 class MovePetPacket : public MovementPacket {
 public:

@@ -80,6 +80,11 @@ public:
     // 0 - no control, 1 - control, 2 - aggro
     void set_control(int8_t mode);
 
+    // Adopt the authoritative state carried by a control grant for an already spawned mob.
+    // Without this the new controller reports movement from its old position and every other
+    // client sees the mob jump when control changes hands.
+    void adopt_spawn_state(Point<int16_t> position, int8_t stance, uint16_t fhid);
+
     // Note whether the server still has this mob on the player's tail. Chasing only leans the
     // direction picked at the next wander roll; it does not change which platform the mob can leave.
     void set_aggro(bool aggro);
@@ -235,6 +240,10 @@ private:
     TimedBool show_hp_;
 
     std::vector<Movement> movements_;
+    // Set once the server relays the controller's movement: from then on this client follows the
+    // authoritative path instead of running its own wander physics, so players cannot disagree
+    // about where the mob is.
+    bool remote_position_ = false;
     // Milliseconds the current stance has been held for; a wander is picked when it runs out.
     uint16_t counter_;
 

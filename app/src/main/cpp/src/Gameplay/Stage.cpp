@@ -35,6 +35,9 @@ auto fn_take_damage = []<typename... T>(T && ...args) {
 auto fn_change_map = []<typename... T>(T && ...args) {
     ChangeMapPacket(std::forward<T>(args)...).dispatch();
 };
+auto fn_face_expression = []<typename... T>(T && ...args) {
+    FaceExpressionPacket(std::forward<T>(args)...).dispatch();
+};
 auto fn_pickup_item = []<typename... T>(T && ...args) {
     PickupItemPacket(std::forward<T>(args)...).dispatch();
 };
@@ -413,7 +416,9 @@ void Stage::send_key(KeyType::Id type, int32_t action, bool down) {
             break;
         case KeyType::Id::FACE:
             if (down) {
+                // Local key actions are 100..106; the wire emotes are 1..7 (1 = hit, 2 = smile...).
                 player_.set_expression(action);
+                fn_face_expression(action - 99);
             }
             break;
     }

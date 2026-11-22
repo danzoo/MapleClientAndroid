@@ -23,7 +23,6 @@
 #include "../../Constants.h"
 #include "../../Gameplay/Stage.h"
 #include "Helpers/LoginParser.h"
-#include "Helpers/MovementParser.h"
 
 namespace ms {
 namespace {
@@ -55,8 +54,8 @@ PetSpawn parse_pet_info(InPacket &recv) {
     return pet;
 }
 
-// Match the server's serialized fragments, not the incomplete character parser.
-std::vector<Movement> parse_pet_movements(InPacket &recv) {
+// Match the server's serialized fragments for every life-movement packet (characters, pets, mobs).
+std::vector<Movement> parse_movement_fragments(InPacket &recv) {
     require_pet_bytes(recv, 1);
     const uint8_t count = recv.read_ubyte();
     std::vector<Movement> movements;
@@ -119,6 +118,14 @@ std::vector<Movement> parse_pet_movements(InPacket &recv) {
             case 10:
                 require_pet_bytes(recv, 1);
                 recv.read_byte();  // ChangeEquip has no movement state.
+                break;
+            case 14:
+                require_pet_bytes(recv, 9);
+                recv.skip(9);  // Jump-down without a stance fragment.
+                break;
+            case 21:
+                require_pet_bytes(recv, 3);
+                recv.skip(3);  // Legacy Aran movement.
                 break;
             default:
                 throw PacketError("Unsupported pet movement command");
@@ -252,7 +259,7 @@ void MovePetHandler::handle(InPacket &recv) const {
     if (Stage::get().is_player(cid)) {
         return;
     }
-    const auto movements = parse_pet_movements(recv);
+    const auto movements = parse_movement_fragments(recv);
     Stage::get().get_chars().send_pet_movement(cid, slot, uniqueid, movements);
 }
 
@@ -279,7 +286,7 @@ void PetExceptionListHandler::handle(InPacket &recv) const {
 void CharMovedHandler::handle(InPacket &recv) const {
     int32_t cid = recv.read_int();
     recv.skip(4);
-    std::vector<Movement> movements = MovementParser::parse_movements(recv);
+    std::vector<Movement> movements = parse_movement_fragments(recv);
 
     Stage::get().get_chars().send_movement(cid, movements);
 }
@@ -296,7 +303,10 @@ void ShowForeignEffectHandler::handle(InPacket &recv) const {
     int32_t cid = recv.read_int();
     int8_t effect = recv.read_byte();
 
-    if (effect == 10)  // recovery
+    if (effect == 0)  // level up
+    {
+        Stage::get().show_character_effect(cid, CharEffect::LEVEL_UP);
+    } else if (effect == 10)  // recovery
     {
         recv.read_byte();     // 'amount'
     } else if (effect == 13)  // card effect
@@ -317,6 +327,62 @@ void ShowForeignEffectHandler::handle(InPacket &recv) const {
         }
     } else {
         // TODO: Blank
+    }
+}
+
+void FacialExpressionHandler::handle(InPacket &recv) const {
+    int32_t cid = recv.read_int();
+    int32_t expression = recv.read_int();
+
+    if (auto character = Stage::get().get_character(cid)) {
+        // Wire emotes are 1..7 (plus cash emotes above that). Local key actions are 100..106,
+        // and Expression::byaction subtracts 98, so +99 lands on the same expression the sender
+        // sees when it presses the corresponding face key.
+        character->get().set_expression(expression + 99);
+    }
+}
+
+void DamagePlayerHandler::handle(InPacket &recv) const {
+    int32_t cid = recv.read_int();
+    int8_t skill = recv.read_byte();
+
+    if (skill == -3) {
+        recv.read_int();
+    }
+
+    int32_t damage = recv.read_int();
+
+    if (skill != -4) {
+        recv.read_int();  // monster template id
+        recv.read_byte();  // direction
+
+        // The server omits the power-guard block as a single short zero. Anything longer than the
+        // trailing damage (and its optional miss value) is the expanded form.
+        const bool has_pgmr_fields = recv.length() >= 16;
+
+        if (has_pgmr_fields) {
+            recv.read_byte();  // pgmr_1
+            recv.read_byte();  // is_pg
+            recv.read_int();   // monster oid
+            recv.read_byte();  // fixed 6
+            recv.read_short(); // x
+            recv.read_short(); // y
+            recv.read_byte();  // fixed 0
+        } else {
+            recv.read_short();
+        }
+
+        damage = recv.read_int();
+
+        if (damage == -1 && recv.available()) {
+            recv.read_int();  // fake hit item id
+        }
+    } else {
+        damage = recv.read_int();  // skill == -4 repeats the damage
+    }
+
+    if (auto character = Stage::get().get_character(cid)) {
+        character->get().show_damage(damage);
     }
 }
 
@@ -486,7 +552,7 @@ void MobMovedHandler::handle(InPacket &recv) const {
     auto option = recv.read_short();          // option
 
     Point<int16_t> position = recv.read_point();
-    std::vector<Movement> movements = MovementParser::parse_movements(recv);
+    std::vector<Movement> movements = parse_movement_fragments(recv);
 
     Stage::get().get_mobs().send_movement(oid, position, std::move(movements));
     Stage::get().get_mob_combat().use_move(oid, action, skillid, skill_level);

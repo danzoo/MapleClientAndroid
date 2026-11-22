@@ -11,7 +11,10 @@ class MapleActivity : NativeActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Before super.onCreate(): that is where the native library is loaded and the render thread
         // that asks for glyphs begins. The release reader mmaps the zip, so it must be on disk first.
-        if (!BuildConfig.DEBUG) releaseDataZip()
+        if (!BuildConfig.DEBUG) {
+            releaseDataZip()
+            releaseHostIp()
+        }
         NativeText.init(assets)
         super.onCreate(savedInstanceState)
     }
@@ -43,6 +46,17 @@ class MapleActivity : NativeActivity() {
         File(filesDir, "Data").delete()
         File(filesDir, "Data.tmp").delete()
         File(getExternalFilesDir(null), "data.zip").delete()
+    }
+
+    // The native connection code always reads hostip.txt from the external files dir. Seed it from
+    // the APK on first release install, but never overwrite an address the user configured there.
+    private fun releaseHostIp() {
+        val target = File(getExternalFilesDir(null), "hostip.txt")
+        if (target.exists()) return
+        assets.open("hostip.txt").use { input ->
+            FileOutputStream(target).use { out -> input.copyTo(out) }
+        }
+        android.util.Log.i("MapleActivity", "hostip.txt released to ${target.absolutePath}")
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

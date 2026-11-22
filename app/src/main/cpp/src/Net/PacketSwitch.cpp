@@ -406,6 +406,9 @@ enum Opcode : uint16_t {
     ATTACKED_RANGED = 187,
     ATTACKED_MAGIC = 188,
 
+    DAMAGE_PLAYER = 192,
+    FACIAL_EXPRESSION = 193,
+
     UPDATE_CHARLOOK = 197,
     SHOW_FOREIGN_EFFECT = 198,
     GIVE_FOREIGN_BUFF = 199,
@@ -496,6 +499,8 @@ PacketSwitch::PacketSwitch() {
     emplace<SPAWN_CHAR, SpawnCharHandler>();
     emplace<CHAR_MOVED, CharMovedHandler>();
     emplace<UPDATE_CHARLOOK, UpdateCharLookHandler>();
+    emplace<DAMAGE_PLAYER, DamagePlayerHandler>();
+    emplace<FACIAL_EXPRESSION, FacialExpressionHandler>();
     emplace<SHOW_FOREIGN_EFFECT, ShowForeignEffectHandler>();
     emplace<GIVE_FOREIGN_BUFF, GiveForeignBuffHandler>();
     emplace<CANCEL_FOREIGN_BUFF, CancelForeignBuffHandler>();

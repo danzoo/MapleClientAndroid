@@ -59,6 +59,12 @@ public:
 
     int32_t get_oid() const;
 
+    Point<int16_t> get_position() const;
+
+    int8_t get_stance() const;
+
+    uint16_t get_fh() const;
+
     std::unique_ptr<MapObject> instantiate() const;
 
 private:

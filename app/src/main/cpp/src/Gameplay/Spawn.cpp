@@ -70,6 +70,18 @@ int32_t MobSpawn::get_oid() const {
     return oid_;
 }
 
+Point<int16_t> MobSpawn::get_position() const {
+    return position_;
+}
+
+int8_t MobSpawn::get_stance() const {
+    return stance_;
+}
+
+uint16_t MobSpawn::get_fh() const {
+    return fh_;
+}
+
 std::unique_ptr<MapObject> MobSpawn::instantiate() const {
     return std::make_unique<Mob>(oid_,
                                  id_,

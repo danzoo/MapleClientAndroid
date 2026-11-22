@@ -274,6 +274,17 @@ int8_t Mob::update(const Physics &physics) {
     }
 
     if (!dying_) {
+        if (!control_ && remote_position_) {
+            // The controller's relayed path is authoritative. Running the local wander on top of
+            // it made two clients integrate the same mob differently, so only keep foothold data
+            // in sync here; the next server movement advances the position again.
+            phobj_.hspeed = 0.0;
+            phobj_.vspeed = 0.0;
+            phobj_.hforce = 0.0;
+            phobj_.vforce = 0.0;
+            phobj_.normalize();
+            physics.get_fht().update_fh(phobj_);
+        } else {
         if (!can_fly_
             && phobj_.is_flag_not_set(PhysicsObject::Flag::TURN_AT_EDGES)) {
             // The flag is found down either because the physics layer stopped this mob at the end of
@@ -420,6 +431,7 @@ int8_t Mob::update(const Physics &physics) {
                 update_movement();
                 counter_ = 0;
             }
+        }
         }
     } else {
         phobj_.normalize();
@@ -589,7 +601,27 @@ void Mob::draw(double viewx, double viewy, float alpha) const {
 
 void Mob::set_control(int8_t mode) {
     control_ = mode > 0;
+    remote_position_ = false;
     set_aggro(mode == 2);
+}
+
+void Mob::adopt_spawn_state(Point<int16_t> position,
+                            int8_t stance,
+                            uint16_t fhid) {
+    set_position(position);
+    phobj_.fhid = fhid;
+    set_stance(static_cast<uint8_t>(stance));
+    phobj_.hspeed = 0.0;
+    phobj_.vspeed = 0.0;
+    phobj_.hforce = 0.0;
+    phobj_.vforce = 0.0;
+    phobj_.set_flag(PhysicsObject::Flag::TURN_AT_EDGES);
+    remote_position_ = false;
+    counter_ = 0;
+
+    if (control_ && stance_ == Stance::STAND) {
+        next_move();
+    }
 }
 
 void Mob::set_aggro(bool aggro) {
@@ -602,20 +634,43 @@ void Mob::send_movement(Point<int16_t> start,
         return;
     }
 
-    set_position(start);
-
     movements_ = std::forward<decltype(in_movements)>(in_movements);
 
-    if (movements_.empty()) {
-        return;
+    // Accumulate the controller's fragments into a final absolute position. Relative commands carry
+    // deltas; absolute/jump-down/chair commands carry world coordinates.
+    Point<int16_t> position = start;
+
+    for (const auto &movement : movements_) {
+        switch (movement.type) {
+            case Movement::ABSOLUTE:
+            case Movement::JUMPDOWN:
+            case Movement::CHAIR:
+                position = Point<int16_t>(movement.xpos, movement.ypos);
+                break;
+            case Movement::RELATIVE:
+                position.shift_x(movement.xpos);
+                position.shift_y(movement.ypos);
+                break;
+            default: break;
+        }
     }
 
-    const Movement &lastmove = movements_.front();
+    set_position(position);
 
-    uint8_t laststance = lastmove.newstate;
-    set_stance(laststance);
+    if (!movements_.empty()) {
+        const Movement &lastmove = movements_.back();
+        set_stance(lastmove.newstate);
 
-    phobj_.fhid = lastmove.fh;
+        if (lastmove.fh) {
+            phobj_.fhid = lastmove.fh;
+        }
+    }
+
+    phobj_.hspeed = 0.0;
+    phobj_.vspeed = 0.0;
+    phobj_.hforce = 0.0;
+    phobj_.vforce = 0.0;
+    remote_position_ = true;
 }
 
 Point<int16_t> Mob::get_head_position(Point<int16_t> position) const {

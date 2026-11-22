@@ -39,6 +39,12 @@ void MapMobs::update(const Physics &physics) {
 
             if (mode > 0) {
                 mob->get().set_control(mode);
+                // A control grant repeats the server's authoritative position. Adopt it before
+                // this client starts sending MOVE_LIFE, otherwise a handoff yanks the mob to a
+                // stale position on every other client in the map.
+                mob->get().adopt_spawn_state(spawn.get_position(),
+                                             spawn.get_stance(),
+                                             spawn.get_fh());
             }
 
             mob->get().makeactive();

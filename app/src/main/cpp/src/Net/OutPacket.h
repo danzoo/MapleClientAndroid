@@ -238,6 +238,7 @@ public:
         CHANGE_CHANNEL = 39,
         ENTER_CASHSHOP = 40,
         MOVE_PLAYER = 41,
+        FACE_EXPRESSION = 51,
         CLOSE_ATTACK = 44,
         RANGED_ATTACK = 45,
         MAGIC_ATTACK = 46,
