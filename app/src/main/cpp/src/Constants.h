@@ -141,6 +141,8 @@ constexpr float MOB_FADE_MS = 320.0f;
 // updates), and how much of that wait a blow spends off the end of it (thirty rather than two
 // hundred).
 constexpr uint16_t MOB_WANDER_MS = 1600;
+// Remote mobs ease toward the controller's reported position instead of jumping to it.
+constexpr double MOB_REMOTE_TAU = 0.12;
 constexpr uint16_t MOB_HIT_GRACE_MS = 240;
 
 // The targets of one area attack are struck nearest first, the farther ones waiting in proportion

@@ -244,6 +244,10 @@ private:
     // authoritative path instead of running its own wander physics, so players cannot disagree
     // about where the mob is.
     bool remote_position_ = false;
+    // Latest authoritative position from the controller; the drawn position eases toward it so a
+    // correction never appears as an instant teleport.
+    double remote_x_ = 0.0;
+    double remote_y_ = 0.0;
     // Milliseconds the current stance has been held for; a wander is picked when it runs out.
     uint16_t counter_;
 

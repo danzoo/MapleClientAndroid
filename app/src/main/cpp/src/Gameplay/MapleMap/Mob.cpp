@@ -15,6 +15,8 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Mob.h"
 
+#include <cmath>
+
 #include <imgwz/wz.hpp>
 
 #include "../../Constants.h"
@@ -128,6 +130,8 @@ Mob::Mob(int32_t oi,
     set_position(position);
     set_control(mode);
     phobj_.fhid = fh;
+    remote_x_ = phobj_.crnt_x();
+    remote_y_ = phobj_.crnt_y();
 
     // The one thing that holds a walking mob to the foothold under it. Left unarmed it walks over
     // the end and is handed to whatever is below. A mob with a jump animation can still leave by
@@ -275,9 +279,24 @@ int8_t Mob::update(const Physics &physics) {
 
     if (!dying_) {
         if (!control_ && remote_position_) {
-            // The controller's relayed path is authoritative. Running the local wander on top of
-            // it made two clients integrate the same mob differently, so only keep foothold data
-            // in sync here; the next server movement advances the position again.
+            // The controller's relayed path is authoritative. Ease toward the latest reported
+            // position: a hard set makes every correction (handoff, range re-entry, skill move)
+            // read as a teleport, while the local wander would integrate the same mob twice.
+            const double alpha =
+                1.0 - std::exp(-Constants::TIMESTEP / (1000.0 * Constants::MOB_REMOTE_TAU));
+            double x = phobj_.crnt_x() + (remote_x_ - phobj_.crnt_x()) * alpha;
+            double y = phobj_.crnt_y() + (remote_y_ - phobj_.crnt_y()) * alpha;
+
+            if (std::fabs(x - remote_x_) < 0.5) {
+                x = remote_x_;
+            }
+
+            if (std::fabs(y - remote_y_) < 0.5) {
+                y = remote_y_;
+            }
+
+            phobj_.x = x;
+            phobj_.y = y;
             phobj_.hspeed = 0.0;
             phobj_.vspeed = 0.0;
             phobj_.hforce = 0.0;
@@ -616,6 +635,8 @@ void Mob::adopt_spawn_state(Point<int16_t> position,
     phobj_.hforce = 0.0;
     phobj_.vforce = 0.0;
     phobj_.set_flag(PhysicsObject::Flag::TURN_AT_EDGES);
+    remote_x_ = phobj_.crnt_x();
+    remote_y_ = phobj_.crnt_y();
     remote_position_ = false;
     counter_ = 0;
 
@@ -655,7 +676,14 @@ void Mob::send_movement(Point<int16_t> start,
         }
     }
 
-    set_position(position);
+    // The first relay establishes the mob's remote position; later relays only move the target
+    // so the update loop can ease there instead of snapping on every packet.
+    if (!remote_position_) {
+        set_position(position);
+    }
+
+    remote_x_ = position.x();
+    remote_y_ = position.y();
 
     if (!movements_.empty()) {
         const Movement &lastmove = movements_.back();
