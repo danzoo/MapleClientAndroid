@@ -459,7 +459,13 @@ void CancelForeignBuffHandler::handle_buff(InPacket &recv,
 
 void SpawnMobHandler::handle(InPacket &recv) const {
     int32_t oid = recv.read_int();
-    int8_t mode = recv.read_byte();  // 5 if controller == null
+
+    // 5 = nobody controls this mob, 1 = some other client does. Either way this is a plain
+    // spawn broadcast: control is granted only by SPAWN_MONSTER_CONTROL. Treating this byte as
+    // a control mode made every client believe it owned every mob and ignore the controller's
+    // relayed movement.
+    recv.skip(1);
+
     int32_t id = recv.read_int();
 
     recv.skip(16);
@@ -486,7 +492,7 @@ void SpawnMobHandler::handle(InPacket &recv) const {
     recv.skip(4);  // item effect
 
     Stage::get().get_mobs().spawn(
-        { oid, id, mode, stance, fh, effect == -2, team, position });
+        { oid, id, 0, stance, fh, effect == -2, team, position });
 }
 
 void KillMobHandler::handle(InPacket &recv) const {

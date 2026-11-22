@@ -628,8 +628,24 @@ void Mob::draw(double viewx, double viewy, float alpha) const {
 
 void Mob::set_control(int8_t mode) {
     control_ = mode > 0;
-    remote_position_ = false;
     set_aggro(mode == 2);
+
+    if (control_) {
+        remote_position_ = false;
+        counter_ = 0;
+        sync_counter_ = 0;
+    } else {
+        // A plain spawn (or a stopControllingMonster handoff) leaves this client as an observer.
+        // Anchor the remote target at the position we currently show and clear local motion, so
+        // the mob neither wanders on its own nor snaps when the first relayed position arrives.
+        remote_x_ = phobj_.crnt_x();
+        remote_y_ = phobj_.crnt_y();
+        remote_position_ = true;
+        phobj_.hspeed = 0.0;
+        phobj_.vspeed = 0.0;
+        phobj_.hforce = 0.0;
+        phobj_.vforce = 0.0;
+    }
 }
 
 void Mob::adopt_spawn_state(Point<int16_t> position,
