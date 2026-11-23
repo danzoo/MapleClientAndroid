@@ -16,6 +16,7 @@
 #pragma once
 
 #include <queue>
+#include <variant>
 
 #include "../Combat/Attack.h"
 #include "../Combat/SpecialMove.h"
@@ -41,8 +42,8 @@ public:
     // Remove all mobs.
     void clear();
 
-    // Update who a mob is controlled by.
-    void set_control(int32_t oid, bool control);
+    // Queue a control revocation in the same order as spawns and full grants.
+    void revoke_control(int32_t oid);
 
     // Update whether the server has a mob chasing the player.
     void set_aggro(int32_t oid, bool aggro);
@@ -105,9 +106,15 @@ public:
     MapObjects *get_mobs();
 
 private:
-    MapObjects mobs_;
+    // Apply preceding spawns/control changes before later movement or removal packets.
+    void flush_spawn_events();
 
-    std::queue<MobSpawn> spawns_;
+    struct ControlRevocation {
+        int32_t oid;
+    };
+
+    MapObjects mobs_;
+    std::queue<std::variant<MobSpawn, ControlRevocation>> spawn_events_;
 
     std::unordered_map<int32_t, std::unordered_map<int32_t, int64_t>> damage_by_mob_;
 };

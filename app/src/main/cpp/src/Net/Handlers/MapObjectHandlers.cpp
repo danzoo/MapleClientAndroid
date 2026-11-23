@@ -26,6 +26,107 @@
 
 namespace ms {
 namespace {
+// Full control spawns may carry a parent OID or the fake-spawn short marker.
+int8_t read_mob_control_effect(InPacket &recv) {
+    if (recv.length() < 6) {
+        throw PacketError("Truncated monster control effect");
+    }
+    int8_t effect = recv.read_byte();
+    if (effect > 0) {
+        if (recv.length() < 9) {
+            throw PacketError("Truncated monster control effect data");
+        }
+        recv.skip(3);
+        if (effect == 15 && recv.length() == 7 && recv.inspect_byte() == 0) {
+            recv.skip(1);
+        }
+        effect = recv.read_byte();  // The server follows positive effects with the spawn marker.
+    }
+    if (effect == -3) {
+        recv.skip(4);  // parent mob OID
+    } else if (effect == -2 && recv.length() == 6) {
+        if (recv.read_byte() != -1) {
+            throw PacketError("Invalid fake monster marker");
+        }
+    } else if (effect != -1 && effect != -2) {
+        throw PacketError("Invalid monster control effect");
+    }
+    if (recv.length() != 5) {
+        throw PacketError("Invalid monster control suffix");
+    }
+    return effect;
+}
+
+// Control grants contain a variable temporary-stat block, not just its 16-byte mask.
+// This server writes each 32-bit mask twice (Java int shifts wrap at 32 bits), so
+// merge each pair before counting stats instead of counting duplicated bits twice.
+void skip_mob_temporary_stats(InPacket &recv) {
+    if (recv.length() < 16) {
+        throw PacketError("Truncated monster temporary mask");
+    }
+    const uint32_t first_low = recv.read_uint();
+    const uint32_t first_high = recv.read_uint();
+    const uint32_t second_low = recv.read_uint();
+    const uint32_t second_high = recv.read_uint();
+    const uint32_t first = first_low | first_high;
+    const uint32_t second = second_low | second_high;
+    size_t count = 0;
+    for (uint32_t mask : {first, second}) {
+        while (mask) {
+            mask &= mask - 1;
+            ++count;
+        }
+    }
+    recv.skip(count * 8);  // value short, skill int, duration short
+
+    const size_t reflects = ((first & 0x20000000u) != 0)
+        + static_cast<size_t>((first & 0x40000000u) != 0);
+    if (!reflects) {
+        return;
+    }
+
+    // Reflection counters are optional: the server emits them only for a MobSkill
+    // whose counter is not -1. Records are unordered, so mask bits alone cannot tell
+    // their presence. Match the optional tail against the complete spawn suffix.
+    size_t matches = 0;
+    size_t tail_length = 0;
+    for (size_t tail : {size_t{0}, size_t{8}, size_t{12}}) {
+        if ((tail == 12 && reflects != 2) || recv.length() < tail + 15) {
+            continue;
+        }
+        InPacket probe = recv;
+        try {
+            if (tail) {
+                bool valid_counters = true;
+                for (size_t i = 0; i < tail / 4 - 1; ++i) {
+                    valid_counters &= probe.read_int() != -1;
+                }
+                if (!valid_counters || probe.read_int() != 100) {
+                    continue;
+                }
+            }
+            probe.skip(5);  // position and stance
+            if (probe.read_ushort() != 0) {  // origin foothold
+                continue;
+            }
+            probe.skip(2);  // current foothold
+            read_mob_control_effect(probe);
+            probe.skip(1);  // team
+            if (probe.read_uint() != 0 || probe.available()) {  // item effect
+                continue;
+            }
+            tail_length = tail;
+            ++matches;
+        } catch (const PacketError &) {
+            // This tail length does not leave a valid complete spawn suffix.
+        }
+    }
+    if (matches != 1) {
+        throw PacketError("Invalid monster reflection tail");
+    }
+    recv.skip(tail_length);
+}
+
 void require_pet_bytes(const InPacket &recv, size_t count) {
     if (recv.length() < count) {
         throw PacketError("Truncated pet packet");
@@ -503,18 +604,30 @@ void KillMobHandler::handle(InPacket &recv) const {
 }
 
 void SpawnMobControllerHandler::handle(InPacket &recv) const {
+    if (recv.length() < 5) {
+        throw PacketError("Truncated monster control change");
+    }
     int8_t mode = recv.read_byte();
     int32_t oid = recv.read_int();
+    if (mode < 0 || mode > 2) {
+        throw PacketError("Invalid monster control mode");
+    }
 
     if (mode == 0) {
-        Stage::get().get_mobs().set_control(oid, false);
+        Stage::get().get_mobs().revoke_control(oid);
     } else {
         if (recv.available()) {
+            if (recv.length() < 5) {
+                throw PacketError("Truncated monster control identity");
+            }
             recv.skip(1);
 
             int32_t id = recv.read_int();
 
-            recv.skip(16);
+            skip_mob_temporary_stats(recv);
+            if (recv.length() < 15) {
+                throw PacketError("Truncated monster control spawn");
+            }
 
             Point<int16_t> position = recv.read_point();
             int8_t stance = recv.read_byte();
@@ -522,26 +635,17 @@ void SpawnMobControllerHandler::handle(InPacket &recv) const {
             recv.skip(2);  // origin fh
 
             uint16_t fh = recv.read_ushort();
-            int8_t effect = recv.read_byte();
-
-            if (effect > 0) {
-                recv.read_byte();
-                recv.read_short();
-
-                if (effect == 15) {
-                    recv.read_byte();
-                }
-            }
-
+            int8_t effect = read_mob_control_effect(recv);
             int8_t team = recv.read_byte();
-
-            recv.skip(4);
+            if (recv.read_uint() != 0 || recv.available()) {
+                throw PacketError("Invalid monster control item effect");
+            }
 
             Stage::get().get_mobs().spawn(
                 { oid, id, mode, stance, fh, effect == -2, team, position });
         } else {
-            // TODO: Remove monster invisibility, not used (maybe in an event
-            // script?), Check this!
+            // The server's short mode-1 packet removes monster invisibility; it is not
+            // a control grant. Visibility support is not implemented here yet.
         }
     }
 }

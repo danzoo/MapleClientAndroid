@@ -523,6 +523,9 @@ void Mob::next_move() {
 }
 
 void Mob::update_movement() {
+    if (!control_) {
+        return;
+    }
     fn_move_mob(oid_,
                 1,
                 0,
@@ -540,6 +543,9 @@ void Mob::update_movement(int16_t type,
                           int8_t skill,
                           int8_t skill_level,
                           int16_t option) {
+    if (!control_) {
+        return;
+    }
     fn_move_mob(oid_,
                 type,
                 nibbles,

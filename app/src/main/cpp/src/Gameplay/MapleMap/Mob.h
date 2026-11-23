@@ -260,7 +260,7 @@ private:
     bool dead_;
     bool control_;
     bool aggro_ = false;
-    Stance stance_;
+    Stance stance_ = Stance::STAND;
     bool flip_;
     FlyDirection fly_direction_;
     float walk_force_;

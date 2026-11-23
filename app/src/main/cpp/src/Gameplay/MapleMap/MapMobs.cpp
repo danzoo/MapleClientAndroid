@@ -31,36 +31,43 @@ void MapMobs::draw(Layer::Id layer,
 }
 
 void MapMobs::update(const Physics &physics) {
-    for (; !spawns_.empty(); spawns_.pop()) {
-        const MobSpawn &spawn = spawns_.front();
+    flush_spawn_events();
+    mobs_.update(physics);
+}
 
+void MapMobs::flush_spawn_events() {
+    for (; !spawn_events_.empty(); spawn_events_.pop()) {
+        const auto &event = spawn_events_.front();
+        if (const auto *revoke = std::get_if<ControlRevocation>(&event)) {
+            if (auto mob = mobs_.get<Mob>(revoke->oid)) {
+                mob->get().set_control(0);
+            }
+            continue;
+        }
+
+        const MobSpawn &spawn = std::get<MobSpawn>(event);
         if (auto mob = mobs_.get<Mob>(spawn.get_oid())) {
-            int8_t mode = spawn.get_mode();
-
+            const int8_t mode = spawn.get_mode();
             if (mode > 0) {
                 mob->get().set_control(mode);
-                // A control grant repeats the server's authoritative position. Adopt it before
-                // this client starts sending MOVE_LIFE, otherwise a handoff yanks the mob to a
-                // stale position on every other client in the map.
+                // Adopt the server's authoritative state before reporting local movement.
                 mob->get().adopt_spawn_state(spawn.get_position(),
                                              spawn.get_stance(),
                                              spawn.get_fh());
             }
-
             mob->get().makeactive();
         } else {
             mobs_.add(spawn.instantiate());
         }
     }
-
-    mobs_.update(physics);
 }
 
 void MapMobs::spawn(MobSpawn &&spawn) {
-    spawns_.emplace(spawn);
+    spawn_events_.emplace(std::move(spawn));
 }
 
 void MapMobs::remove(int32_t oid, int8_t animation) {
+    flush_spawn_events();
     if (auto mob = mobs_.get<Mob>(oid)) {
         mob->get().kill(animation);
     }
@@ -74,6 +81,7 @@ void MapMobs::remove(int32_t oid, int8_t animation) {
 
 void MapMobs::clear() {
     mobs_.clear();
+    spawn_events_ = {};
     damage_by_mob_.clear();
 }
 
@@ -105,15 +113,12 @@ bool MapMobs::is_top_damager(int32_t oid, int32_t cid) const {
     return true;
 }
 
-void MapMobs::set_control(int32_t oid, bool control) {
-    int8_t mode = control ? 1 : 0;
-
-    if (auto mob = mobs_.get<Mob>(oid)) {
-        mob->get().set_control(mode);
-    }
+void MapMobs::revoke_control(int32_t oid) {
+    spawn_events_.emplace(ControlRevocation{oid});
 }
 
 void MapMobs::set_aggro(int32_t oid, bool aggro) {
+    flush_spawn_events();
     if (auto mob = mobs_.get<Mob>(oid)) {
         mob->get().set_aggro(aggro);
     }
@@ -128,6 +133,7 @@ void MapMobs::send_mobhp(int32_t oid, int8_t percent, uint16_t playerlevel) {
 void MapMobs::send_movement(int32_t oid,
                             Point<int16_t> start,
                             std::vector<Movement> &&movements) {
+    flush_spawn_events();
     if (auto mob = mobs_.get<Mob>(oid)) {
         mob->get().send_movement(start, std::move(movements));
     }
@@ -137,6 +143,7 @@ void MapMobs::send_attack(AttackResult &result,
                           const Attack &attack,
                           const std::vector<int32_t> &targets,
                           uint8_t mobcount) {
+    flush_spawn_events();
     for (const auto &target : targets) {
         if (auto mob = mobs_.get<Mob>(target)) {
             result.damage_lines[target] = mob->get().calculate_damage(attack);
@@ -159,6 +166,7 @@ void MapMobs::apply_damage(int32_t oid,
                            bool toleft,
                            const AttackUser &user,
                            const SpecialMove &move) {
+    flush_spawn_events();
     if (auto mob = mobs_.get<Mob>(oid)) {
         mob->get().apply_damage(damage, toleft);
 
