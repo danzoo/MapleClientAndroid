@@ -52,12 +52,12 @@ public:
         bool intramap;
         bool valid;
 
-        WarpInfo(int32_t m, bool i, std::string tn, std::string n) :
+        WarpInfo(int32_t m, bool i, std::string tn, std::string n, bool scripted = false) :
             mapid(m),
             toname(std::move(tn)),
             name(std::move(n)),
             intramap(i),
-            valid(mapid < 999999999) {}
+            valid(mapid < 999999999 || scripted) {}
 
         WarpInfo() : WarpInfo(999999999, false, {}, {}) {}
     };
@@ -68,7 +68,8 @@ public:
            bool intramap,
            Point<int16_t> position,
            int32_t tomap,
-           std::string toname);
+           std::string toname,
+           bool scripted = false);
 
     Portal();
 

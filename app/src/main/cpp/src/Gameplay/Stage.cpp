@@ -212,6 +212,14 @@ void Stage::update() {
     }
 
     portals_.update(player_.get_position());
+
+    // A portal on a rope is reached by holding up, and the stick reports that hold as a single
+    // press, so the edge check in send_key only ever ran at the rope's foot. While climbing,
+    // check every frame; the portal cooldown keeps the warp from repeating.
+    if (player_.is_climbing()) {
+        check_portals();
+    }
+
     camera_.update(player_.get_position());
 
     if (player_.is_invincible()) {

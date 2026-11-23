@@ -36,6 +36,10 @@ MapPortals::MapPortals(const img::node &src, int32_t mapid) {
         int32_t target_id = sub["tm"];
         Point<int16_t> position = { sub["x"], sub["y"] };
 
+        // A scripted portal keeps its destination in the server's script, so its tm is the
+        // no-target sentinel; the warp packet still has to go out for the script to run.
+        bool scripted = !sub["script"].get_string().empty();
+
         const Animation *animation = &animations_[type];
         bool intramap = target_id == mapid;
 
@@ -47,7 +51,8 @@ MapPortals::MapPortals(const img::node &src, int32_t mapid) {
                                                      intramap,
                                                      position,
                                                      target_id,
-                                                     target_name));
+                                                     target_name,
+                                                     scripted));
 
         portal_ids_by_name_.emplace(name, portal_id);
     }

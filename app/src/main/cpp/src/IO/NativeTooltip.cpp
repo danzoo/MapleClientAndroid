@@ -36,6 +36,11 @@ namespace ms {
         bool g_ready = false;
         bool g_shown = false;
 
+        // The projection last handed to the window, so a change can be told from a repeat.
+        float g_px_per_unit = 0.0f;
+        int32_t g_origin_x = 0;
+        int32_t g_origin_y = 0;
+
         JNIEnv *current_env() {
             if (!g_vm) {
                 return nullptr;
@@ -290,6 +295,38 @@ namespace ms {
 
             return result;
         }
+
+        bool send_projection(float px_per_unit, int32_t origin_x, int32_t origin_y) {
+            GLFMDisplay *display = Window::get().get_display();
+            int surface_width = 0;
+            int surface_height = 0;
+            glfmGetDisplaySize(display, &surface_width, &surface_height);
+
+            if (surface_width <= 0 || surface_height <= 0) {
+                return false;
+            }
+
+            JNIEnv *env = current_env();
+
+            if (!env) {
+                return false;
+            }
+
+            auto *activity = static_cast<ANativeActivity *>(glfmGetAndroidActivity(display));
+
+            env->CallStaticVoidMethod(g_class, g_open, activity->clazz, px_per_unit,
+                                      surface_width, surface_height, origin_x, origin_y);
+
+            if (env->ExceptionCheck()) {
+                env->ExceptionClear();
+                return false;
+            }
+
+            g_px_per_unit = px_per_unit;
+            g_origin_x = origin_x;
+            g_origin_y = origin_y;
+            return true;
+        }
     }  // namespace
 
     void NativeTooltip::List::push(int32_t kind,
@@ -471,15 +508,6 @@ namespace ms {
             return false;
         }
 
-        GLFMDisplay *display = Window::get().get_display();
-        int surface_width = 0;
-        int surface_height = 0;
-        glfmGetDisplaySize(display, &surface_width, &surface_height);
-
-        if (surface_width <= 0 || surface_height <= 0) {
-            return false;
-        }
-
         // Interface units are what every window in the game is measured in. The frame they reach
         // is the letterboxed view box, not the whole surface: the scale and the centring offsets
         // come from the same projection the interface is drawn with. Window::get_scale() is
@@ -488,22 +516,9 @@ namespace ms {
         // factor or without the origin would sit away from the controls that answer for it.
         const float px_per_unit =
                 static_cast<float>(Window::get().get_scale() * Constants::UI_SCALE);
-        const int32_t origin_x = Window::get().get_offset_x();
-        const int32_t origin_y = Window::get().get_offset_y();
 
-        JNIEnv *env = current_env();
-
-        if (!env) {
-            return false;
-        }
-
-        auto *activity = static_cast<ANativeActivity *>(glfmGetAndroidActivity(display));
-
-        env->CallStaticVoidMethod(g_class, g_open, activity->clazz, px_per_unit,
-                                  surface_width, surface_height, origin_x, origin_y);
-
-        if (env->ExceptionCheck()) {
-            env->ExceptionClear();
+        if (!send_projection(px_per_unit, Window::get().get_offset_x(),
+                             Window::get().get_offset_y())) {
             return false;
         }
 
@@ -534,6 +549,19 @@ namespace ms {
     bool NativeTooltip::show(const List &list) {
         if (!g_shown && !open()) {
             return false;
+        }
+
+        // The window opens in the game state's constructor, while the renderer is still locked
+        // at the login screen's resolution, so the projection captured there can be the login
+        // letterbox rather than the game's. Re-hand it whenever it has changed.
+        const float px_per_unit =
+                static_cast<float>(Window::get().get_scale() * Constants::UI_SCALE);
+        const int32_t origin_x = Window::get().get_offset_x();
+        const int32_t origin_y = Window::get().get_offset_y();
+
+        if (px_per_unit != g_px_per_unit || origin_x != g_origin_x
+            || origin_y != g_origin_y) {
+            send_projection(px_per_unit, origin_x, origin_y);
         }
 
         JNIEnv *env = current_env();

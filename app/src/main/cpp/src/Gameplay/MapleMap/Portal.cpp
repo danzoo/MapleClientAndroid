@@ -24,12 +24,13 @@ Portal::Portal(const Animation *a,
                bool intramap,
                Point<int16_t> p,
                int32_t tid,
-               std::string tnm) :
+               std::string tnm,
+               bool scripted) :
     animation_(a),
     type_(t),
     name_(nm),
     position_(p),
-    warp_info_(tid, intramap, std::move(tnm), nm),
+    warp_info_(tid, intramap, std::move(tnm), nm, scripted),
     touched_(false) {}
 
 Portal::Portal() : Portal(nullptr, SPAWN, "", false, Point<int16_t>(), 0, "") {}
