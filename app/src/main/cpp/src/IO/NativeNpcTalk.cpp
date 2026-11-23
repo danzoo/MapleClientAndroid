@@ -141,7 +141,7 @@ namespace ms {
             g_class = static_cast<jclass>(env->NewGlobalRef(local));
             env->DeleteLocalRef(local);
 
-            g_open = env->GetStaticMethodID(g_class, "open", "(Landroid/app/Activity;FII)V");
+            g_open = env->GetStaticMethodID(g_class, "open", "(Landroid/app/Activity;FIIII)V");
             g_close = env->GetStaticMethodID(g_class, "close", "()V");
             g_display = env->GetStaticMethodID(g_class, "display",
                                                "([I[Ljava/lang/String;[Ljava/lang/String;[I)V");
@@ -472,13 +472,16 @@ namespace ms {
             return false;
         }
 
-        // Interface units are what every window in the game is measured in, and the frame they reach
-        // is the surface, so one unit is this many device pixels - the same factor the interface
-        // projection uses. A dialog that did not use it would come out a different height than the
-        // windows standing behind it.
+        // Interface units are what every window in the game is measured in. The frame they reach
+        // is the letterboxed view box, not the whole surface: the scale and the centring offsets
+        // come from the same projection the interface is drawn with. Window::get_scale() is
+        // surface pixels per view unit; interface units are UI_SCALE smaller than view units.
+        // The hit test stays on the game side in interface units, so art drawn with a different
+        // factor or without the origin would sit away from the buttons that answer for it.
         const float px_per_unit =
-                static_cast<float>(surface_width)
-                / static_cast<float>(Constants::Constants::get().get_ui_viewwidth());
+                static_cast<float>(Window::get().get_scale() * Constants::UI_SCALE);
+        const int32_t origin_x = Window::get().get_offset_x();
+        const int32_t origin_y = Window::get().get_offset_y();
 
         JNIEnv *env = current_env();
 
@@ -489,7 +492,7 @@ namespace ms {
         auto *activity = static_cast<ANativeActivity *>(glfmGetAndroidActivity(display));
 
         env->CallStaticVoidMethod(g_class, g_open, activity->clazz, px_per_unit,
-                                  surface_width, surface_height);
+                                  surface_width, surface_height, origin_x, origin_y);
 
         if (env->ExceptionCheck()) {
             env->ExceptionClear();

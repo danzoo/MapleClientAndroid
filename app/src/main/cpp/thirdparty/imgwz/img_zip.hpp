@@ -20,12 +20,12 @@
 #include <utility>
 #include <vector>
 
-// Random access to the release build's STORE-only data.zip. The loose Data tree and the
-// zip hold the same relative paths, so lookups keep their loose-style absolute path and
-// the prefix given at open() is stripped to reach the entry name.
+// Random access to a STORE-only resource archive (the app names it Data). The loose
+// Data tree and the zip hold the same relative paths, so lookups keep their loose-style
+// absolute path and the prefix given at open() is stripped to reach the entry name.
 namespace imgzip {
 // Indexes the central directory; every entry must be STORED. Returns false (and reports)
-// when the zip is absent or unusable, leaving the loose-tree path in charge.
+// when the zip is absent or unusable. The caller decides whether that is a fatal error.
 bool open(std::string const& zip_path, std::string const& root_prefix);
 
 bool active();

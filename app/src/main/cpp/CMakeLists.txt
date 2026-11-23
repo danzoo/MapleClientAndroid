@@ -1,9 +1,12 @@
 cmake_minimum_required(VERSION 3.4.1)
 add_compile_definitions(NDK_DEBUG=1)
 
-# Release builds read resources from the STORE-only data.zip inside the APK; debug keeps
-# the loose Data tree. The define reaches imgwz and the app alike.
-if(IMG_FROM_ZIP)
+# Debug accepts either a loose Data tree or a STORE-only archive named Data.
+# Release keeps the archive reader enabled by Gradle's IMG_FROM_ZIP argument,
+# but never receives the loose-tree permission. Both defines reach imgwz and the app.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_definitions(IMG_FROM_ZIP IMG_ALLOW_LOOSE_DATA)
+elseif(IMG_FROM_ZIP)
     add_compile_definitions(IMG_FROM_ZIP)
 endif()
 
@@ -177,6 +180,7 @@ add_library(OpenMapleClient SHARED
         src/Gameplay/Combat/SkillHitEffect.cpp
         src/Gameplay/Combat/SkillSound.cpp
         src/Gameplay/Combat/SkillUseEffect.cpp
+        src/Gameplay/Physics/CompanionFollow.cpp
         src/Gameplay/Physics/Foothold.cpp
         src/Gameplay/Physics/FootholdTree.cpp
         src/Gameplay/Physics/Physics.cpp

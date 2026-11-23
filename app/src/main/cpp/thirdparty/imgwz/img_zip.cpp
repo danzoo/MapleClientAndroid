@@ -48,9 +48,11 @@ namespace {
 struct Entry {
     std::uint64_t local_off;
     std::uint32_t size;
+    std::uint16_t name_length;
 };
 
 int g_fd = -1;
+std::uint64_t g_data_end = 0;
 std::string g_prefix;
 std::unordered_map<std::string, Entry> g_entries;
 
@@ -134,6 +136,12 @@ bool open(std::string const& zip_path, std::string const& root_prefix) {
         fail("zip64 not supported");
         return false;
     }
+    const std::uint64_t directory_end = static_cast<std::uint64_t>(end) - tail + eocd;
+    if (cd_off > directory_end || cd_size > directory_end - cd_off) {
+        fail("central directory outside archive");
+        return false;
+    }
+    g_data_end = cd_off;
     std::vector<unsigned char> cd(cd_size);
     if (!pread_all(g_fd, cd.data(), cd_size, cd_off)) {
         fail("central directory read failed");
@@ -152,9 +160,14 @@ bool open(std::string const& zip_path, std::string const& root_prefix) {
         const std::uint16_t elen = u16(cd.data() + p + 30);
         const std::uint16_t clen = u16(cd.data() + p + 32);
         const std::uint32_t loff = u32(cd.data() + p + 42);
+        const std::size_t entry_size = 46u + nlen + elen + clen;
+        if (nlen == 0 || entry_size > cd.size() - p) {
+            fail("truncated central directory entry");
+            return false;
+        }
         // Directory entries carry no payload; indexing them would let a directory probe
         // map padding bytes as if they were a file.
-        if (nlen > 0 && cd[p + 46 + nlen - 1] == '/') {
+        if (cd[p + 46 + nlen - 1] == '/') {
             p += 46 + nlen + elen + clen;
             continue;
         }
@@ -166,7 +179,7 @@ bool open(std::string const& zip_path, std::string const& root_prefix) {
         // can differ in length from the central one) is read lazily in lookup(), once per
         // opened file. Reading all 16k local headers up front costs seconds on FUSE.
         g_entries.emplace(std::string(reinterpret_cast<char const*>(cd.data() + p + 46), nlen),
-                          Entry{ loff, uncomp });
+                          Entry{ loff, uncomp, nlen });
         p += 46 + nlen + elen + clen;
     }
     return true;
@@ -185,12 +198,24 @@ bool lookup(std::string const& path, std::uint64_t& offset, std::uint32_t& size)
     if (it == g_entries.end()) {
         return false;
     }
+    const Entry& entry = it->second;
     unsigned char local[30];
-    if (!pread_all(g_fd, local, 30, it->second.local_off) || u32(local) != 0x04034b50u) {
+    if (entry.local_off > g_data_end || sizeof(local) > g_data_end - entry.local_off
+        || !pread_all(g_fd, local, sizeof(local), entry.local_off)
+        || u32(local) != 0x04034b50u || u16(local + 8) != 0
+        || (u16(local + 6) & 1u) != 0 || u16(local + 26) != entry.name_length) {
         return false;
     }
-    offset = it->second.local_off + 30 + u16(local + 26) + u16(local + 28);
-    size = it->second.size;
+    // Local extra fields can differ from the central directory. Validate their real
+    // span and the entire payload before img_data maps it, otherwise mmap can succeed
+    // beyond EOF and fault later when the image parser touches the mapped bytes.
+    const std::uint64_t payload = entry.local_off + sizeof(local)
+                                  + u16(local + 26) + u16(local + 28);
+    if (payload > g_data_end || entry.size == 0 || entry.size > g_data_end - payload) {
+        return false;
+    }
+    offset = payload;
+    size = entry.size;
     return true;
 }
 

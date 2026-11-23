@@ -111,7 +111,7 @@ void img_data::ensure() const
     opened = true;
 #ifndef _WIN32
 #ifdef IMG_FROM_ZIP
-    // Release builds read the STORE-only data.zip: the entry payload is contiguous, so a
+    // Packaged Data uses a STORE-only ZIP: the entry payload is contiguous, so a
     // page-aligned mmap of its span gives the same zero-copy buffer the loose file gets.
     if (imgzip::active()) {
         std::uint64_t off = 0;

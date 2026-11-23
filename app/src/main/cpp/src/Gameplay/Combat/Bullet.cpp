@@ -15,7 +15,6 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Bullet.h"
 
-#include <algorithm>
 #include <cmath>
 #include <utility>
 
@@ -57,17 +56,11 @@ bool Bullet::settarget(Point<int16_t> target) {
 
     flip_ = xdelta > 0.0;
 
-    // The whole distance is covered over the flight time, kept between the two speeds a projectile is
-    // allowed to go.
-    const double sign = xdelta > 0.0 ? 1.0 : -1.0;
-    const double speed = std::clamp(
-        std::abs(xdelta) * 1000.0 / Constants::BULLET_FLIGHT_MS,
-        Constants::BULLET_MIN_SPEED,
-        Constants::BULLET_MAX_SPEED);
-
-    move_obj_.hspeed = sign * speed;
-    // The fall is kept at the same angle as the flight, which is a ratio and so needs no units.
-    move_obj_.vspeed = move_obj_.hspeed * ydelta / xdelta;
+    // Normalize the firing direction so every shot travels at the same speed,
+    // regardless of target distance or height. Only the flight duration changes.
+    const double distance = std::hypot(xdelta, ydelta);
+    move_obj_.hspeed = Constants::BULLET_SPEED * xdelta / distance;
+    move_obj_.vspeed = Constants::BULLET_SPEED * ydelta / distance;
 
     return false;
 }

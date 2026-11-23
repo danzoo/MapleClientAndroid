@@ -161,13 +161,9 @@ constexpr uint16_t MOB_HIT_SPREAD_MS = 100;
 constexpr float MOB_CHASE_CHANCE = 0.75f;
 constexpr double MOB_CHASE_RANGE = 40.0;
 
-// A bullet is given this long to reach its target, so a fast shot over a short distance and a slow
-// one over a long distance both land on the same frame (thirty-two updates). Its speed is only the
-// distance divided by that, clamped between these two so that neither a point-blank hit nor a
-// cross-map shot reads wrong.
-constexpr double BULLET_FLIGHT_MS = 256.0;
-constexpr double BULLET_MIN_SPEED = 375.0;
-constexpr double BULLET_MAX_SPEED = 750.0;
+// Fixed projectile speed in pixels per second, including diagonal travel.
+// Target distance changes the flight duration, not the speed.
+constexpr double BULLET_SPEED = 750.0;
 
 // How long the character-info window plays its loading picture before showing what it fetched (255
 // updates), and how long the login wait holds before deciding the server is not going to answer.

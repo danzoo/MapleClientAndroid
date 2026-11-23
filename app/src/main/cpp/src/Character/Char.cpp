@@ -23,24 +23,15 @@
 
 namespace ms {
 namespace {
-// The magnet coin floats like a summoned companion: it has its own physics position and follows
-// the owner with a small dead zone instead of orbiting a hard-coded point on the body. This is the
-// same containment/follow pattern Char uses for pets, so other players' coins work through the
-// existing foreign-buff-to-owner routing without a separate object or opcode.
-constexpr double MAGNET_SPAWN_X = 40.0;   // initial position beside the body, clear of the sprite
-constexpr double MAGNET_FLOAT_Y = -32.0;  // upper body height
-constexpr double MAGNET_FOLLOW_DRIVE = Constants::PET_FLY_ACCEL;
-// Like PetLook: the coin ignores the owner until the gap passes this dead zone, so it stays put
-// until the character has moved past it and it is behind, then it starts following.
-constexpr double MAGNET_FOLLOW_DEADZONE = 50.0;
-// Hard leash: past this gap the coin is carried with the owner, so it never snaps or vanishes.
-constexpr double MAGNET_MAX_DISTANCE = 80.0;
-constexpr double MAGNET_ROPE_EASE = 0.25;  // per-tick approach while riding a rope/ladder
-// Exponential vertical follow: ~0.22s time constant at a fixed 60Hz simulation step. Keeping the
-// smoothed value in a double avoids integer stair-stepping in the rendered position.
-constexpr double MAGNET_HEIGHT_TAU = 0.22;
-const double MAGNET_HEIGHT_EASE =
-    1.0 - std::exp(-Constants::TIMESTEP / (1000.0 * MAGNET_HEIGHT_TAU));
+// Coin-specific tuning; the shared controller does not depend on its sprite or buff.
+constexpr CompanionFollow::Config MAGNET_FOLLOW_CONFIG {
+    40.0,                      // initial horizontal offset
+    -32.0,                     // floating height relative to the owner
+    Constants::PET_FLY_ACCEL,  // horizontal drive
+    50.0,                      // follow dead zone
+    80.0,                      // hard horizontal leash
+    0.22                       // vertical smoothing time constant, in seconds
+};
 }  // namespace
 
 Char::Char(int32_t o, const CharLook &lk, const std::string &name) :
@@ -51,7 +42,8 @@ Char::Char(int32_t o, const CharLook &lk, const std::string &name) :
                      Text::Alignment::CENTER,
                      Color::Name::WHITE,
                      Text::Background::NAMETAG,
-                     name)) {}
+                     name)),
+    magnet_follow_(MAGNET_FOLLOW_CONFIG) {}
 
 void Char::draw(double viewx, double viewy, float alpha) const {
     Point<int16_t> absp = phobj_.get_absolute(viewx, viewy, alpha);
@@ -61,7 +53,7 @@ void Char::draw(double viewx, double viewy, float alpha) const {
 
     // Draw before the body so the coin sits behind the character, like a far-side summon.
     if (magnet_effect_) {
-        magnet_effect_->draw(magnet_phobj_.get_absolute(viewx, viewy, alpha), alpha);
+        magnet_effect_->draw(magnet_follow_.get_absolute(viewx, viewy, alpha), alpha);
     }
 
     Color color;
@@ -122,53 +114,8 @@ bool Char::update(const Physics &physics, float speed) {
     recurring_effects_.update();
 
     if (magnet_effect_) {
-        Point<int16_t> owner = get_position();
-        // Smoothly approach a fixed height relative to the character: brief lag while jumping or
-        // climbing, but always converging to the same offset instead of drifting to head/foot level.
-        double target_y = owner.y() + MAGNET_FLOAT_Y;
-        double eased_y = magnet_phobj_.crnt_y()
-                         + (target_y - magnet_phobj_.crnt_y()) * MAGNET_HEIGHT_EASE;
-
-        if (state_ == State::LADDER || state_ == State::ROPE) {
-            // Rope/ladder motion is FIXATED: it skips foothold queries and collision substeps, so
-            // the coin cannot be caught on a platform while the character climbs through it.
-            magnet_phobj_.type = PhysicsObject::Type::FIXATED;
-            Point<int16_t> current = magnet_phobj_.get_position();
-            double target_x = owner.x() + MAGNET_SPAWN_X;
-            magnet_phobj_.set_x(current.x() + (target_x - current.x()) * MAGNET_ROPE_EASE);
-            magnet_phobj_.set_y(eased_y);
-            magnet_phobj_.hspeed = 0.0;
-            magnet_phobj_.vspeed = 0.0;
-        } else {
-            if (magnet_phobj_.type == PhysicsObject::Type::FIXATED) {
-                magnet_phobj_.type = PhysicsObject::Type::FLYING;
-            }
-
-            double target_x = owner.x();
-            double dx = target_x - magnet_phobj_.get_position().x();
-            magnet_phobj_.hforce = std::abs(dx) > MAGNET_FOLLOW_DEADZONE
-                                       ? (dx > 0.0 ? MAGNET_FOLLOW_DRIVE : -MAGNET_FOLLOW_DRIVE)
-                                       : 0.0;
-
-            magnet_phobj_.set_y(eased_y);
-            magnet_phobj_.vspeed = 0.0;
-            magnet_phobj_.vforce = 0.0;
-        }
-
-        physics.move_object(magnet_phobj_);
-        // Guard against any vertical correction from the collision pass.
-        magnet_phobj_.set_y(eased_y);
-
-        // Leash the horizontal gap. Once the player outruns the coin, this carries it at exactly
-        // the player's speed instead of teleporting it, so the effect never blinks out and back.
-        double gap = magnet_phobj_.get_position().x() - owner.x();
-        if (gap > MAGNET_MAX_DISTANCE) {
-            magnet_phobj_.set_x(owner.x() + MAGNET_MAX_DISTANCE);
-            magnet_phobj_.hspeed = 0.0;
-        } else if (gap < -MAGNET_MAX_DISTANCE) {
-            magnet_phobj_.set_x(owner.x() - MAGNET_MAX_DISTANCE);
-            magnet_phobj_.hspeed = 0.0;
-        }
+        magnet_follow_.update(physics, get_position(), is_climbing(),
+                              companion_layout_.offset(*magnet_slot_));
 
         if (magnet_effect_->update()) {
             magnet_effect_->reset();
@@ -295,18 +242,28 @@ void Char::show_magnet_effect() {
         return;
     }
 
-    Point<int16_t> owner = get_position();
-    magnet_phobj_.set_x(owner.x() + MAGNET_SPAWN_X);
-    magnet_phobj_.set_y(owner.y() + MAGNET_FLOAT_Y);
-    magnet_phobj_.hspeed = 0.0;
-    magnet_phobj_.vspeed = 0.0;
-    magnet_phobj_.type = PhysicsObject::Type::FLYING;
-    magnet_effect_.emplace(img::wz::effect["PixelfxEff.img"]["CoinSpin"],
-                           DrawArgument());
+    auto slot = companion_layout_.acquire();
+    try {
+        magnet_follow_.reset(get_position(), companion_layout_.offset(slot));
+        magnet_effect_.emplace(img::wz::effect["PixelfxEff.img"]["CoinSpin"],
+                               DrawArgument());
+        magnet_slot_ = slot;
+    } catch (...) {
+        companion_layout_.release(slot);
+        throw;
+    }
 }
 
 void Char::remove_magnet_effect() {
     magnet_effect_.reset();
+    if (magnet_slot_) {
+        companion_layout_.release(*magnet_slot_);
+        magnet_slot_.reset();
+    }
+}
+
+CompanionFollowLayout &Char::get_companion_layout() {
+    return companion_layout_;
 }
 
 void Char::show_iron_body() {

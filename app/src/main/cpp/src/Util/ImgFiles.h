@@ -21,8 +21,9 @@
 #include "glfm.h"
 
 namespace ms::ImgFiles {
-// Points the resource reader at the Data directory of loose .img files and checks
-// that it is a UI tree the rest of the client can use.
+// Debug accepts Data as a directory of loose .img files or a STORE-only ZIP file.
+// Release requires the ZIP file. The selected backend is fixed for this process;
+// init checks that its UI tree is usable by the rest of the client.
 Error init(GLFMDisplay *pApp);
 
 // Records the app's writable directory without loading any game files. Startup needs this path

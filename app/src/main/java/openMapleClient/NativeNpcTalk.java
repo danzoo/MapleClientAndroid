@@ -99,6 +99,12 @@ public final class NativeNpcTalk {
     // many pixels and every coordinate in a record has to be read through it.
     private static float unit = 1.0f;
 
+    // Letterbox origin of the view box in surface pixels. Records are in interface units relative
+    // to the view origin, so the whole display list is translated by it once per draw; the hit
+    // test on the game side already undoes the same offset.
+    private static int originXpx;
+    private static int originYpx;
+
     // The list last handed over. The window is built on the first dialog rather than at startup, so
     // a list that arrives before the window exists is kept and drawn once it does.
     private static int[] heldOps;
@@ -124,9 +130,12 @@ public final class NativeNpcTalk {
      * orientation with the system bars taken off, which is neither that nor stable.
      */
     public static void open(final Activity target, final float unitPixels,
-                            final int screenWidth, final int screenHeight) {
+                            final int screenWidth, final int screenHeight,
+                            final int originX, final int originY) {
         owner = target;
         unit = Math.max(0.1f, unitPixels);
+        originXpx = originX;
+        originYpx = originY;
 
         UI.post(() -> build(target, screenWidth, screenHeight));
     }
@@ -387,6 +396,7 @@ public final class NativeNpcTalk {
 
         @Override
         protected void onDraw(Canvas canvas) {
+            canvas.translate(originXpx, originYpx);
             // While the appearance plays, the whole dialog is grown about its centre and faded up
             // through a layer bounded to its own box. Settled (fraction 1) is full size and opaque,
             // so the common case - a sentence being read - paints straight through with no layer.
@@ -434,7 +444,7 @@ public final class NativeNpcTalk {
                         // is not shown. Only the vertical edges are the band - the layout already
                         // keeps the runs inside the frame horizontally.
                         canvas.save();
-                        canvas.clipRect(0, px(b), canvas.getWidth(), px(c));
+                        canvas.clipRect(-originXpx, px(b), canvas.getWidth() - originXpx, px(c));
                         canvas.drawText(texts[a], px(x1), px(y1), TEXT_PAINT);
                         canvas.restore();
                     }

@@ -20,6 +20,7 @@
 
 #include "../Gameplay/Combat/DamageNumber.h"
 #include "../Gameplay/MapleMap/MapObject.h"
+#include "../Gameplay/Physics/CompanionFollow.h"
 #include "../Graphics/EffectLayer.h"
 #include "../IO/Components/ChatBalloon.h"
 #include "CharEffect.h"
@@ -119,6 +120,10 @@ public:
     // Remove the spinning coin.
     void remove_magnet_effect();
 
+    // Floating companions belonging to this character must share this layout. Keep the acquired
+    // slot for their lifetime, pass its offset to reset/update, and release it on removal.
+    CompanionFollowLayout &get_companion_layout();
+
     // Display the iron body skill animation.
     void show_iron_body();
 
@@ -208,8 +213,10 @@ private:
     ChatBalloon chat_balloon_;
     EffectLayer effects_;
     RecurringEffect recurring_effects_;
+    CompanionFollowLayout companion_layout_;
+    std::optional<CompanionFollowLayout::Slot> magnet_slot_;
     std::optional<Sprite> magnet_effect_;
-    PhysicsObject magnet_phobj_;
+    CompanionFollow magnet_follow_;
     Afterimage after_image_;
     TimedBool invincible_;
     TimedBool iron_body_;

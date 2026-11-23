@@ -65,21 +65,31 @@ Error init(GLFMDisplay *pApp) {
     const std::string root = game_path(pApp);
     app_root = root;
     const std::string data = root + "/Data";
-    std::string data_root = is_directory(data) ? data : root;
-#ifdef IMG_FROM_ZIP
-    // The release APK carries the whole Data tree as one STORE-only archive named "Data",
-    // released as a file into the external files dir. When it indexes cleanly it replaces
-    // the loose tree; lookups keep their loose-style paths. If the path is still the loose
-    // directory (debug install on the same device), the open fails and the tree stays loose.
-    if (imgzip::open(root + "/Data", data)) {
-        data_root = data;
-#ifdef __ANDROID__
-        __android_log_print(ANDROID_LOG_INFO, "imgzip", "reading resources from %s/Data",
-                            root.c_str());
-#endif
-    }
-#endif
+    const bool loose_data = is_directory(data);
+    std::string data_root = loose_data ? data : root;
     try {
+#ifdef IMG_FROM_ZIP
+        // Select the backend before imgwz caches any directories or files. Debug uses
+        // an existing Data directory directly; a Data file must be a valid STORE-only ZIP.
+        // Release must not fall back to a loose tree if its archive is absent or invalid.
+#ifdef IMG_ALLOW_LOOSE_DATA
+        if (!loose_data) {
+#else
+        if (loose_data) {
+            throw std::runtime_error("Release requires packaged Data, not a directory: " + data);
+        }
+        {
+#endif
+            if (!imgzip::open(data, data)) {
+                throw std::runtime_error("Cannot open packaged Data (STORE-only ZIP required): " + data);
+            }
+            data_root = data;
+#ifdef __ANDROID__
+            __android_log_print(ANDROID_LOG_INFO, "imgzip", "reading packaged resources from %s",
+                                data.c_str());
+#endif
+        }
+#endif
         img::wz::load_all(data_root);
         if (img::wz::ui.size() == 0) {
             throw std::runtime_error("No game files in " + data);
