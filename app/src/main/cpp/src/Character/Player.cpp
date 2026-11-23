@@ -501,6 +501,7 @@ uint8_t Player::get_channel_id() const {
 }
 
 void Player::change_job(uint16_t jobid) {
+    Sound(Sound::Name::JOB_CHANGE).play(0.5f);
     show_effect_id(CharEffect::Id::JOB_CHANGE);
     stats_.change_job(jobid);
 }

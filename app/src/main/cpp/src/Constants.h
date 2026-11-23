@@ -153,6 +153,16 @@ constexpr uint16_t MOB_HIT_GRACE_MS = 240;
 // own frame and the farthest at most this much later.
 constexpr uint16_t MOB_HIT_SPREAD_MS = 100;
 
+// The successive blows of one multi-hit attack that rides the regular stance (no skill action of
+// its own, e.g. 二连射) land this far apart, so the two arrows read as a "da-da" double tap instead
+// of one merged hit. Attacks with their own action table already carry per-hit frame timing.
+constexpr uint16_t MULTI_HIT_SPREAD_MS = 100;
+
+// The arrows of one multi-hit shot are spread vertically around the aim line, this far between
+// neighbours, so they read as separate shafts (上下隔开) yet still overlap since an arrow is only
+// a few pixels tall. The front-back stagger comes from MULTI_HIT_SPREAD_MS.
+constexpr int16_t ARROW_SPREAD_Y = 2;
+
 // An angry mob is not handed a different movement loop; it only gets a say in the one the wander
 // already runs. This is how often its next stance is chosen to close on the player rather than
 // rolled as usual, and the horizontal distance under which it stops bothering to close - a mob's

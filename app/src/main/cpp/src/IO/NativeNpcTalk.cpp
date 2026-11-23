@@ -421,6 +421,12 @@ namespace ms {
 
                 texts_.push_back(std::move(run));
 
+                // Same drift compensation as the preview window: the run's own width in our
+                // advances rides in the high half of the size field.
+                const int32_t word_width =
+                    content.layout().advance(clipped ? clip.second() : word.last)
+                    - content.layout().advance(clipped ? clip.first() : word.first);
+
                 push(clipped ? TEXT_CLIPPED : TEXT,
                      static_cast<int32_t>(texts_.size()) - 1,
                      clipped ? clip.first() : 0,
@@ -428,7 +434,8 @@ namespace ms {
                      origin.x() + line.position.x() + content.layout().advance(word.first),
                      origin.y() + line.position.y(),
                      packed(color),
-                     (static_cast<int32_t>(std::lround(px)) << 1) | (bold ? 1 : 0));
+                     ((static_cast<int32_t>(std::lround(px)) << 1) | (bold ? 1 : 0))
+                         | (word_width << 16));
             }
         }
     }

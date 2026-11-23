@@ -238,6 +238,12 @@ public final class NativeTooltip {
         private final Rect source = new Rect();
         private final HashMap<Bitmap, Bitmap> tiles = new HashMap<>();
 
+        // The platform letters a run with its own metrics while the pen comes from the game's
+        // advance table; the difference accumulates across the run, so the next run is shifted by
+        // what the platform actually painted minus what the game measured. Reset per line.
+        private float textDrift;
+        private int textLineY = Integer.MIN_VALUE;
+
         Plate(Activity context) {
             super(context);
         }
@@ -354,6 +360,8 @@ public final class NativeTooltip {
         @Override
         protected void onDraw(Canvas canvas) {
             canvas.translate(originXpx, originYpx);
+            textDrift = 0.0f;
+            textLineY = Integer.MIN_VALUE;
             // Records are painted in the order the game emitted them, which is the order the GL pass
             // drew them in. That is not incidental: a frame writes some of its own pieces over
             // others, and a preview that tidied that up would put different art on top.
@@ -373,11 +381,18 @@ public final class NativeTooltip {
                 // negative int - and every word in the preview would go missing.
                 if (kind == OP_TEXT) {
                     if (a >= 0 && a < texts.length) {
+                        final int sizePack = y2 & 0xFFFF;
                         TEXT_PAINT.setColor(x2);
-                        TEXT_PAINT.setTextSize(px(y2 >> SIZE_SHIFT));
-                        TEXT_PAINT.setFakeBoldText((y2 & BOLD_BIT) != 0);
+                        TEXT_PAINT.setTextSize(px(sizePack >> SIZE_SHIFT));
+                        TEXT_PAINT.setFakeBoldText((sizePack & BOLD_BIT) != 0);
 
-                        canvas.drawText(texts[a], px(x1), px(y1), TEXT_PAINT);
+                        if (y1 != textLineY) {
+                            textLineY = y1;
+                            textDrift = 0.0f;
+                        }
+
+                        canvas.drawText(texts[a], px(x1) + textDrift, px(y1), TEXT_PAINT);
+                        textDrift += TEXT_PAINT.measureText(texts[a]) - (y2 >>> 16) * unit;
                     }
 
                     continue;

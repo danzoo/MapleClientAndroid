@@ -33,7 +33,7 @@ public:
 
     template<typename... Args>
     void emplace(int64_t delay, Args &&... args) {
-        queue_.emplace(time_ + delay, std::move(args)...);
+        queue_.emplace(time_ + delay, std::forward<Args>(args)...);
     }
 
     void update(int64_t timestep = Constants::TIMESTEP) {

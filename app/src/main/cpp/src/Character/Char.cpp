@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Char.h"
 
+#include <android/log.h>
 #include <cmath>
 #include <imgwz/wz.hpp>
 #include <utility>
@@ -224,7 +225,20 @@ void Char::show_attack_effect(const Animation &toshow, int8_t z) {
 }
 
 void Char::show_effect_id(CharEffect::Id toshow) {
-    effects_.add(char_effects_[toshow]);
+    Animation &effect = char_effects_[toshow];
+
+    // The table is filled once at first draw. An entry that came back empty there would make
+    // every show of it paint nothing for the whole session, so reload it at the moment it is
+    // asked for, when every provider and the atlas are certainly up.
+    if (effect.get_dimensions().x() <= 0) {
+        img::node src = img::wz::effect["BasicEff.img"];
+        effect = Animation(src.resolve(CharEffect::PATHS[toshow]));
+        __android_log_print(ANDROID_LOG_WARN, "CharEffect",
+                            "reloaded %s at show: %dx%d", CharEffect::PATHS[toshow],
+                            effect.get_dimensions().x(), effect.get_dimensions().y());
+    }
+
+    effects_.add(effect);
 }
 
 void Char::add_recurring_effect(int16_t effect_id,

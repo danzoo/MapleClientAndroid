@@ -459,11 +459,19 @@ namespace ms {
 
                 texts_.push_back(std::move(run));
 
+                // The platform letters the whole run with its own metrics while the pen comes from
+                // our advance table, so the two drift apart across a run and the next run's first
+                // glyph lands on top of this one's last. The run's own width rides in the high half
+                // of the size field so the window can compensate the accumulated difference.
+                const int32_t word_width =
+                    content.layout().advance(word.last) - content.layout().advance(word.first);
+
                 push(TEXT, static_cast<int32_t>(texts_.size()) - 1, 0, 0,
                      origin.x() + line.position.x() + content.layout().advance(word.first),
                      origin.y() + line.position.y(),
                      packed(color, 1.0f),
-                     (static_cast<int32_t>(std::lround(px)) << 1) | (bold ? 1 : 0));
+                     ((static_cast<int32_t>(std::lround(px)) << 1) | (bold ? 1 : 0))
+                         | (word_width << 16));
             }
         }
     }

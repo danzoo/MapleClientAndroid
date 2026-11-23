@@ -926,15 +926,16 @@ std::pair<int32_t, bool> Mob::next_damage(double mindamage,
 void Mob::apply_damage(int32_t damage, bool toleft) {
     if (death_pending_) {
         // This is the blow the server already reported the death of. It gets the flinch, and the
-        // death animation follows once the flinch has played out.
+        // death animation follows once the flinch has played out. Every arriving blow still sounds
+        // (a multi-hit shot reads as one hit per damage number) even once the flinch is already up.
         pending_hit_ = 0;
 
         if (stance_ != Stance::HIT) {
             flip_ = toleft;
             set_stance(Stance::HIT);
-            hit_sound_.play();
-            hit_played_ = true;
         }
+        hit_sound_.play();
+        hit_played_ = true;
 
         return;
     }

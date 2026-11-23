@@ -52,6 +52,7 @@ public:
         PICKUP,
         PORTAL,
         LEVEL_UP,
+        JOB_CHANGE,
         TOMBSTONE,
         LENGTH
     };

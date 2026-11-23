@@ -99,6 +99,7 @@ Error Sound::init() {
     add_sound(Sound::Name::PICKUP, gamesrc["PickUpItem"]);
     add_sound(Sound::Name::PORTAL, gamesrc["Portal"]);
     add_sound(Sound::Name::LEVEL_UP, gamesrc["LevelUp"]);
+    add_sound(Sound::Name::JOB_CHANGE, gamesrc["JobChanged"]);
     add_sound(Sound::Name::TOMBSTONE, gamesrc["Tombstone"]);
 
     img::node itemsrc = img::wz::sound["Item.img"];

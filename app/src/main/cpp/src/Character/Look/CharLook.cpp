@@ -15,6 +15,7 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "CharLook.h"
 
+#include "../../Constants.h"
 #include "../../Data/WeaponData.h"
 
 namespace ms {
@@ -870,7 +871,7 @@ namespace ms {
             delay += get_delay(stance_.get(), frame);
         }
 
-        return delay;
+        return delay + static_cast<uint16_t>(no) * Constants::MULTI_HIT_SPREAD_MS;
     }
 
     uint8_t CharLook::get_frame() const {

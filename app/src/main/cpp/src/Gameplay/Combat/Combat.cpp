@@ -419,16 +419,15 @@ void Combat::extract_effects(const Char &user,
     }
 
     if (result.bullet) {
-        Bullet bullet { move.get_bullet(user, result.bullet),
-                        user.get_position(),
-                        result.toleft,
-                        terrain_ };
+        Animation bullet_anim = move.get_bullet(user, result.bullet);
+        Point<int16_t> origin = user.get_position();
 
         for (const auto &[oid, wait] : order) {
             const auto &vec = result.damage_lines.at(oid);
             std::vector<DamageNumber> numbers = place_numbers(oid, vec);
             Point<int16_t> body = mobs_.get_mob_body_position(oid);
 
+            size_t n = numbers.size();
             size_t i = 0;
 
             for (auto &number : numbers) {
@@ -440,25 +439,34 @@ void Combat::extract_effects(const Char &user,
                 uint16_t hitdelay = user.get_attackdelay(i) + wait;
                 mobs_.expect_hit(oid, hitdelay);
 
+                int16_t yoff = static_cast<int16_t>(
+                    (static_cast<int32_t>(i) * 2 - static_cast<int32_t>(n) + 1)
+                    * Constants::ARROW_SPREAD_Y / 2);
+                Bullet hit_bullet { bullet_anim, origin + Point<int16_t>(0, yoff),
+                                    result.toleft, terrain_ };
+
                 bullet_effects_.emplace(hitdelay,
                                         std::move(effect),
-                                        bullet,
-                                        body);
+                                        hit_bullet,
+                                        body + Point<int16_t>(0, yoff));
                 i++;
             }
         }
 
         if (result.damage_lines.empty()) {
             int16_t xshift = result.toleft ? -400 : 400;
-            Point<int16_t> target =
-                user.get_position() + Point<int16_t>(xshift, -26);
+            Point<int16_t> target = origin + Point<int16_t>(xshift, -26);
 
             for (int i = 0; i < result.hitcount; i++) {
                 DamageEffect effect { attack_user, {}, 0, false, 0, 0 };
+                int16_t yoff = static_cast<int16_t>(
+                    (i * 2 - result.hitcount + 1) * Constants::ARROW_SPREAD_Y / 2);
+                Bullet hit_bullet { bullet_anim, origin + Point<int16_t>(0, yoff),
+                                    result.toleft, terrain_ };
                 bullet_effects_.emplace(user.get_attackdelay(i),
                                         std::move(effect),
-                                        bullet,
-                                        target);
+                                        hit_bullet,
+                                        target + Point<int16_t>(0, yoff));
             }
         }
     } else {

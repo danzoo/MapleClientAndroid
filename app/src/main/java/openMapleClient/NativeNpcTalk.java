@@ -270,6 +270,11 @@ public final class NativeNpcTalk {
         // Reused across records so painting a dialog allocates nothing.
         private final Rect destination = new Rect();
         private final Rect source = new Rect();
+
+        // Same drift compensation as the preview window: the platform's painted width of a run
+        // minus the game's measured width, carried to the next run's pen. Reset per line.
+        private float textDrift;
+        private int textLineY = Integer.MIN_VALUE;
         private final HashMap<Bitmap, Bitmap> tiles = new HashMap<>();
         private final HashMap<Bitmap, Bitmap> mirrored = new HashMap<>();
 
@@ -397,6 +402,8 @@ public final class NativeNpcTalk {
         @Override
         protected void onDraw(Canvas canvas) {
             canvas.translate(originXpx, originYpx);
+            textDrift = 0.0f;
+            textLineY = Integer.MIN_VALUE;
             // While the appearance plays, the whole dialog is grown about its centre and faded up
             // through a layer bounded to its own box. Settled (fraction 1) is full size and opaque,
             // so the common case - a sentence being read - paints straight through with no layer.
@@ -433,11 +440,19 @@ public final class NativeNpcTalk {
                     // through the rectangle below would call it an empty box - the colour of a lit
                     // pixel is a negative int - and everything the character says would go missing.
                     TEXT_PAINT.setColor(x2);
-                    TEXT_PAINT.setTextSize(px(y2 >> SIZE_SHIFT));
-                    TEXT_PAINT.setFakeBoldText((y2 & BOLD_BIT) != 0);
+                    final int sizePack = y2 & 0xFFFF;
+                    TEXT_PAINT.setTextSize(px(sizePack >> SIZE_SHIFT));
+                    TEXT_PAINT.setFakeBoldText((sizePack & BOLD_BIT) != 0);
+
+                    if (y1 != textLineY) {
+                        textLineY = y1;
+                        textDrift = 0.0f;
+                    }
+
+                    final float pen = px(x1) + textDrift;
 
                     if (kind == OP_TEXT) {
-                        canvas.drawText(texts[a], px(x1), px(y1), TEXT_PAINT);
+                        canvas.drawText(texts[a], pen, px(y1), TEXT_PAINT);
                     }
                     else {
                         // The band the pass clipped this line to, so what has scrolled past simply
@@ -445,9 +460,11 @@ public final class NativeNpcTalk {
                         // keeps the runs inside the frame horizontally.
                         canvas.save();
                         canvas.clipRect(-originXpx, px(b), canvas.getWidth() - originXpx, px(c));
-                        canvas.drawText(texts[a], px(x1), px(y1), TEXT_PAINT);
+                        canvas.drawText(texts[a], pen, px(y1), TEXT_PAINT);
                         canvas.restore();
                     }
+
+                    textDrift += TEXT_PAINT.measureText(texts[a]) - (y2 >>> 16) * unit;
 
                     continue;
                 }
