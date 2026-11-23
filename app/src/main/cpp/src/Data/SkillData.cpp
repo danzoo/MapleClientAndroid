@@ -143,19 +143,122 @@ int32_t SkillData::flags_of(int32_t id) const {
         // Mage
         { SkillId::ENERGY_BOLT, ATTACK | RANGED },
         { SkillId::MAGIC_CLAW, ATTACK | RANGED },
+        // Bowman
+        { SkillId::ARROW_BLOW, ATTACK | RANGED },
+        { SkillId::DOUBLE_SHOT, ATTACK | RANGED },
         // F/P Mage
         { SkillId::SLOW_FP, ATTACK },
         { SkillId::FIRE_ARROW, ATTACK | RANGED },
         { SkillId::POISON_BREATH, ATTACK | RANGED },
         // F/P ArchMage
         { SkillId::EXPLOSION, ATTACK },
-        { SkillId::POISON_BREATH, ATTACK },
+        { SkillId::POISON_MIST, ATTACK | RANGED },
         { SkillId::SEAL_FP, ATTACK },
         { SkillId::ELEMENT_COMPOSITION_FP, ATTACK | RANGED },
         //
         { SkillId::FIRE_DEMON, ATTACK },
         { SkillId::PARALYZE, ATTACK | RANGED },
-        { SkillId::METEOR_SHOWER, ATTACK }
+        { SkillId::METEOR_SHOWER, ATTACK },
+        // 其余职业的攻击技能按技能 id 直接列出（权威分类来自服务端 constants/skills）。
+        // 只收录真正走攻击结算的主动技；带 damage 节点的 buff（精神力、属性_charge_、
+        // 斗气集中、祝福）与召唤兽/变身/纯 debuff 一律不在此表，仍走 UseSkill 发包。
+        // Crusader
+        { 1111008, ATTACK },                  // 虎咆哮
+        // F/P Archmage
+        { 2121001, ATTACK | RANGED },         // 创世之破
+        // I/L Wizard
+        { 2201003, ATTACK },                  // 迟缓术
+        { 2201004, ATTACK | RANGED },         // 冰冻术
+        { 2201005, ATTACK | RANGED },         // 雷电术
+        // I/L Mage
+        { 2211002, ATTACK | RANGED },         // 冰咆哮
+        { 2211003, ATTACK | RANGED },         // 落雷枪
+        { 2211004, ATTACK },                  // 封印术
+        { 2211006, ATTACK | RANGED },         // 冰雷合击
+        // I/L Archmage
+        { 2221001, ATTACK | RANGED },         // 创世之破
+        { 2221003, ATTACK | RANGED },         // 冰凤球
+        { 2221006, ATTACK | RANGED },         // 链环闪电
+        { 2221007, ATTACK | RANGED },         // 落霜冰破
+        // Cleric
+        { 2301005, ATTACK | RANGED },         // 圣箭术
+        // Priest
+        { 2311004, ATTACK | RANGED },         // 圣光
+        // Bishop
+        { 2321001, ATTACK | RANGED },         // 创世之破
+        { 2321007, ATTACK | RANGED },         // 光芒飞箭
+        { 2321008, ATTACK | RANGED },         // 圣光普照
+        // Hunter
+        { 3101003, ATTACK | RANGED },         // 强弓
+        { 3101005, ATTACK | RANGED },         // 爆炸箭
+        // Ranger
+        { 3111003, ATTACK | RANGED },         // 烈火箭
+        { 3111004, ATTACK | RANGED },         // 箭雨
+        { 3111006, ATTACK | RANGED },         // 箭扫射
+        // Bowmaster
+        { 3121003, ATTACK | RANGED },         // 飞龙冲击波
+        { 3121004, ATTACK | RANGED },         // 暴风箭雨
+        // Crossbowman
+        { 3201003, ATTACK | RANGED },         // 强弩
+        { 3201005, ATTACK | RANGED },         // 穿透箭
+        // Sniper
+        { 3211003, ATTACK | RANGED },         // 寒冰箭
+        { 3211004, ATTACK | RANGED },         // 升龙弩
+        { 3211006, ATTACK | RANGED },         // 箭扫射
+        // Marksman
+        { 3221001, ATTACK | RANGED },         // 穿透箭
+        { 3221003, ATTACK | RANGED },         // 飞龙冲击波
+        { 3221007, ATTACK | RANGED },         // 一击要害
+        // Rogue
+        { 4001334, ATTACK },                  // 二连击
+        { 4001344, ATTACK | RANGED },         // 双飞斩
+        // Assassin
+        { 4101005, ATTACK | RANGED },         // 生命吸收
+        // Night Lord
+        { 4121004, ATTACK | RANGED },         // 忍者伏击
+        { 4121008, ATTACK | RANGED },         // 忍者冲击
+        // Bandit
+        { 4201004, ATTACK },                  // 神通术
+        { 4201005, ATTACK },                  // 回旋斩
+        // Chief Bandit
+        { 4211002, ATTACK },                  // 落叶斩
+        { 4211004, ATTACK },                  // 分身术
+        // Shadower
+        { 4221001, ATTACK },                  // 暗杀
+        { 4221004, ATTACK },                  // 忍者伏击
+        { 4221007, ATTACK },                  // 一出双击
+        // Pirate
+        { 5001001, ATTACK },                  // 百裂拳
+        { 5001002, ATTACK },                  // 半月踢
+        { 5001003, ATTACK | RANGED },         // 双弹射击
+        // Brawler
+        { 5101002, ATTACK },                  // 回马
+        { 5101003, ATTACK },                  // 升龙连击
+        { 5101004, ATTACK },                  // 贯骨击
+        // Marauder
+        { 5111002, ATTACK },                  // 能量爆破
+        { 5111004, ATTACK },                  // 能量耗转
+        { 5111006, ATTACK },                  // 碎石乱击
+        // Buccaneer
+        { 5121001, ATTACK },                  // 潜龙出渊
+        { 5121002, ATTACK },                  // 超能量
+        { 5121004, ATTACK },                  // 金手指
+        { 5121005, ATTACK },                  // 索命
+        { 5121007, ATTACK },                  // 光速拳
+        // Gunslinger
+        { 5201001, ATTACK | RANGED },         // 快枪手
+        { 5201002, ATTACK | RANGED },         // 投弹攻击
+        { 5201004, ATTACK | RANGED },         // 迷惑射击
+        { 5201006, ATTACK | RANGED },         // 激退射杀
+        // Outlaw
+        { 5211004, ATTACK | RANGED },         // 烈焰喷射
+        { 5211005, ATTACK | RANGED },         // 寒冰喷射
+        { 5211006, ATTACK | RANGED },         // 导航
+        // Corsair
+        { 5221003, ATTACK | RANGED },         // 地毯式空袭
+        { 5221004, ATTACK | RANGED },         // 金属风暴
+        { 5221007, ATTACK | RANGED },         // 急速射
+        { 5221008, ATTACK | RANGED }          // 重量炮击
     };
 
     auto iter = skill_flags.find(id);

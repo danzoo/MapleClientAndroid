@@ -53,7 +53,7 @@ enum Id : uint32_t {
     SWORD_PANIC = 1111003,
     AXE_PANIC = 1111004,
     SWORD_COMA = 1111005,
-    AXE_COMA = 1111005,
+    AXE_COMA = 1111006,
     SHOUT = 1111008,
 
     // Hero
@@ -146,6 +146,10 @@ enum Id : uint32_t {
 
     // Priest
     PRIEST_TELEPORT = 2301001,
+
+    // Bowman
+    ARROW_BLOW = 3001004,
+    DOUBLE_SHOT = 3001005,
 
     // Hermit
     AVENGER = 4111005,
