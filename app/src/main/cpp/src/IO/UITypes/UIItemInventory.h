@@ -81,13 +81,9 @@ private:
 
     Point<int16_t> get_slotpos(int16_t slot) const;
 
-    Point<int16_t> get_full_slotpos(int16_t slot) const;
-
     Point<int16_t> get_tabpos(InventoryType::Id tab) const;
 
     Icon *get_icon(int16_t slot);
-
-    void set_full(bool enabled);
 
     class ItemIcon : public Icon::Type {
     public:
@@ -129,10 +125,9 @@ private:
         const UIItemInventory &parent_;
     };
 
-    static constexpr uint16_t ROWS_ = 8;
-    static constexpr uint16_t COLUMNS_ = 4;
+    static constexpr uint16_t ROWS_ = 6;
+    static constexpr uint16_t COLUMNS_ = 7;
     static constexpr uint16_t MAX_SLOTS_ = ROWS_ * COLUMNS_;
-    static constexpr uint16_t MAX_FULL_SLOTS_ = COLUMNS_ * MAX_SLOTS_;
     static constexpr uint16_t ICON_WIDTH_ = 36;
     static constexpr uint16_t ICON_HEIGHT_ = 35;
 
@@ -147,26 +142,12 @@ private:
         BT_POINT,
         BT_GATHER,
         BT_SORT,
-        BT_FULL,
-        BT_SMALL,
         BT_POT,
         BT_UPGRADE,
         BT_APPRAISE,
         BT_EXTRACT,
         BT_DISASSEMBLE,
         BT_TOAD,
-        BT_COIN_SM,
-        BT_POINT_SM,
-        BT_GATHER_SM,
-        BT_SORT_SM,
-        BT_FULL_SM,
-        BT_SMALL_SM,
-        BT_POT_SM,
-        BT_UPGRADE_SM,
-        BT_APPRAISE_SM,
-        BT_EXTRACT_SM,
-        BT_DISASSEMBLE_SM,
-        BT_TOAD_SM,
         BT_CASHSHOP
     };
 
@@ -189,14 +170,9 @@ private:
     int16_t selected_slot_ = 0;
 
     bool sort_enabled_;
-    bool full_enabled_;
     Texture backgrnd_;
     Texture backgrnd2_;
     Texture backgrnd3_;
-    Texture full_backgrnd_;
-    Texture full_backgrnd2_;
-    Texture full_backgrnd3_;
     Point<int16_t> bg_dimensions_;
-    Point<int16_t> bg_full_dimensions_;
 };
 }  // namespace ms
