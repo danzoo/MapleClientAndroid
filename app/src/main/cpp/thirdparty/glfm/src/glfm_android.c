@@ -15,6 +15,11 @@
 #include <pthread.h>
 #include <unistd.h>
 
+// glfm.h defaults to GLES2 headers, but the negotiated context may support GLES3.
+#ifndef GL_DRAW_FRAMEBUFFER
+#  define GL_DRAW_FRAMEBUFFER 0x8CA9
+#endif
+
 #define GLFM_LOG_LIFECYCLE_ENABLE 0
 
 #ifdef NDEBUG
@@ -33,7 +38,6 @@
 #define GLFM_MAX_SIMULTANEOUS_TOUCHES 5
 // Same update interval as iOS
 #define GLFM_SENSOR_UPDATE_INTERVAL_MICROS ((int)(0.01 * 1000000))
-#define GLFM_RESIZE_EVENT_MAX_WAIT_FRAMES 5
 
 // If GLFM_HANDLE_BACK_BUTTON is 1, when the user presses the back button, the task is moved to the
 // back. Otherwise, when the user presses the back button, the activity is destroyed.
@@ -82,6 +86,7 @@ typedef struct {
     bool refreshRequested;
     bool swapCalled;
     bool surfaceCreatedNotified;
+    bool surfaceNeedsInitialFrame;
     double lastSwapTime;
     double nextDrawTime;
 
@@ -94,7 +99,6 @@ typedef struct {
     int32_t width;
     int32_t height;
     double scale;
-    int resizeEventWaitFrames;
 
     struct {
         int top, right, bottom, left;
@@ -127,7 +131,7 @@ static int glfm__looperCallback(int pipe, int events, void *userData);
 static void glfm__setAllRequestedSensorsEnabled(GLFMDisplay *display, bool enable);
 static void glfm__reportOrientationChangeIfNeeded(GLFMDisplay *display);
 static void glfm__reportInsetsChangedIfNeeded(GLFMDisplay *display);
-static bool glfm__updateSurfaceSizeIfNeeded(GLFMDisplay *display, bool force);
+static bool glfm__updateSurfaceSizeIfNeeded(GLFMDisplay *display);
 static float glfm__getRefreshRate(const GLFMDisplay *display);
 static void glfm__getDisplayChromeInsets(const GLFMDisplay *display, int *top, int *right,
                                          int *bottom, int *left);
@@ -223,6 +227,10 @@ static bool glfm__eglContextInit(GLFMPlatformData *platformData) {
     static const int EGL_CONTEXT_MINOR_VERSION_KHR = 0x30FB;
 
     if (!platformData || !platformData->display) {
+        return false;
+    }
+    if (platformData->eglSurface == EGL_NO_SURFACE) {
+        platformData->eglContextCurrent = false;
         return false;
     }
 
@@ -331,9 +339,27 @@ static void glfm__eglContextDisable(GLFMPlatformData *platformData) {
 
 static void glfm__eglSurfaceInit(GLFMPlatformData *platformData) {
     if (platformData->eglSurface == EGL_NO_SURFACE) {
+        // Set the native visual before EGL connects to the window, including surface recreation.
+        // Zero dimensions retain the actual window size rather than stretching a fixed-size buffer.
+        EGLint format = 0;
+        if (!platformData->window
+            || !eglGetConfigAttrib(platformData->eglDisplay, platformData->eglConfig,
+                                   EGL_NATIVE_VISUAL_ID, &format)
+            || ANativeWindow_setBuffersGeometry(platformData->window, 0, 0, format) != 0) {
+            GLFM_LOG("Unable to configure native window buffers");
+            return;
+        }
         platformData->eglSurface = eglCreateWindowSurface(platformData->eglDisplay,
                                                           platformData->eglConfig,
                                                           platformData->window, NULL);
+        if (platformData->eglSurface == EGL_NO_SURFACE) {
+            return;
+        }
+        platformData->surfaceNeedsInitialFrame = true;
+        eglQuerySurface(platformData->eglDisplay, platformData->eglSurface, EGL_WIDTH,
+                        &platformData->width);
+        eglQuerySurface(platformData->eglDisplay, platformData->eglSurface, EGL_HEIGHT,
+                        &platformData->height);
 
         switch (platformData->display->swapBehavior) {
         case GLFMSwapBehaviorPlatformDefault:
@@ -432,7 +458,6 @@ static bool glfm__eglInit(GLFMPlatformData *platformData) {
 
     EGLint majorVersion = 0;
     EGLint minorVersion = 0;
-    EGLint format = 0;
     EGLint numConfigs = 0;
 
     platformData->eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
@@ -494,16 +519,6 @@ static bool glfm__eglInit(GLFMPlatformData *platformData) {
     }
 
     glfm__eglSurfaceInit(platformData);
-
-    eglQuerySurface(platformData->eglDisplay, platformData->eglSurface, EGL_WIDTH,
-                    &platformData->width);
-    eglQuerySurface(platformData->eglDisplay, platformData->eglSurface, EGL_HEIGHT,
-                    &platformData->height);
-    eglGetConfigAttrib(platformData->eglDisplay, platformData->eglConfig, EGL_NATIVE_VISUAL_ID,
-                       &format);
-
-    ANativeWindow_setBuffersGeometry(platformData->window, 0, 0, format);
-
     return glfm__eglContextInit(platformData);
 }
 
@@ -544,6 +559,9 @@ static void glfm__eglCheckError(GLFMPlatformData *platformData) {
     if (err == EGL_BAD_SURFACE) {
         glfm__eglSurfaceDestroy(platformData);
         glfm__eglSurfaceInit(platformData);
+        // Surface destruction unbinds the retained context. Bind it to the replacement
+        // so the next draw can retry its initial frame without a new window event.
+        glfm__eglContextInit(platformData);
     } else if (err == EGL_CONTEXT_LOST || err == EGL_BAD_CONTEXT) {
         if (platformData->eglContext != EGL_NO_CONTEXT) {
             platformData->eglContext = EGL_NO_CONTEXT;
@@ -563,14 +581,75 @@ static void glfm__eglCheckError(GLFMPlatformData *platformData) {
     }
 }
 
+// Each new surface gets an opaque frame before application callbacks can spend time loading.
+// Preserve GL state because a replacement surface may reuse an already initialized context.
+static bool glfm__presentInitialFrame(GLFMPlatformData *platformData) {
+    if (!platformData->surfaceNeedsInitialFrame) {
+        return true;
+    }
+    if (!platformData->eglContextCurrent || platformData->eglSurface == EGL_NO_SURFACE) {
+        return false;
+    }
+    EGLint width = 0, height = 0;
+    if (!eglQuerySurface(platformData->eglDisplay, platformData->eglSurface, EGL_WIDTH, &width)
+        || !eglQuerySurface(platformData->eglDisplay, platformData->eglSurface, EGL_HEIGHT, &height)) {
+        glfm__eglCheckError(platformData);
+        return false;
+    }
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+
+    GLint framebuffer = 0, viewport[4];
+    GLfloat clearColor[4];
+    GLboolean colorMask[4];
+    // GLES3 has independent read/draw bindings. Only change the draw binding, leaving
+    // the read binding untouched. GL_FRAMEBUFFER_BINDING also names the draw binding.
+    const GLenum framebufferTarget = platformData->renderingAPI >= GLFMRenderingAPIOpenGLES3
+        ? GL_DRAW_FRAMEBUFFER : GL_FRAMEBUFFER;
+    const GLboolean scissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer);
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    glGetFloatv(GL_COLOR_CLEAR_VALUE, clearColor);
+    glGetBooleanv(GL_COLOR_WRITEMASK, colorMask);
+
+    glBindFramebuffer(framebufferTarget, 0);
+    glViewport(0, 0, width, height);
+    glDisable(GL_SCISSOR_TEST);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glBindFramebuffer(framebufferTarget, (GLuint)framebuffer);
+    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+    glColorMask(colorMask[0], colorMask[1], colorMask[2], colorMask[3]);
+    glClearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
+    if (scissorEnabled) {
+        glEnable(GL_SCISSOR_TEST);
+    }
+
+    if (!eglSwapBuffers(platformData->eglDisplay, platformData->eglSurface)) {
+        glfm__eglCheckError(platformData);
+        return false;
+    }
+    platformData->surfaceNeedsInitialFrame = false;
+    platformData->swapCalled = true;
+    platformData->lastSwapTime = glfmGetTime();
+    GLFM_LOG("Initial opaque frame: %i x %i", width, height);
+    return true;
+}
+
 static void glfm__drawFrame(GLFMPlatformData *platformData) {
     if (!platformData->eglContextCurrent) {
         // Probably a bad config (Happens on Android 2.3 emulator)
         return;
     }
+    if (!glfm__presentInitialFrame(platformData)) {
+        return;
+    }
 
-    // Check for resize (or rotate)
-    glfm__updateSurfaceSizeIfNeeded(platformData->display, false);
+    // Check for resize (or rotate); rendering must never use an intentionally stale surface size.
+    glfm__updateSurfaceSizeIfNeeded(platformData->display);
 
     // Tick and draw
     if (platformData->refreshRequested) {
@@ -936,6 +1015,8 @@ static void glfm__onAppCmd(GLFMPlatformData *platformData, GLFMActivityCommand c
         }
         case GLFMActivityCommandOnNativeWindowResized: {
             GLFM_LOG_LIFECYCLE("OnNativeWindowResized");
+            glfm__updateSurfaceSizeIfNeeded(platformData->display);
+            platformData->refreshRequested = true;
             break;
         }
         case GLFMActivityCommandOnNativeWindowDestroyed: {
@@ -978,7 +1059,7 @@ static void glfm__onAppCmd(GLFMPlatformData *platformData, GLFMActivityCommand c
 
             platformData->refreshRequested = true;
             if (platformData->window) {
-                bool sizedChanged = glfm__updateSurfaceSizeIfNeeded(platformData->display, true);
+                bool sizedChanged = glfm__updateSurfaceSizeIfNeeded(platformData->display);
                 if (!sizedChanged) {
                     glfm__reportOrientationChangeIfNeeded(platformData->display);
                     glfm__reportInsetsChangedIfNeeded(platformData->display);
@@ -1728,7 +1809,6 @@ static void *glfm__mainLoop(void *param) {
         platformData->display->platformData = platformData;
         platformData->display->supportedOrientations = GLFMInterfaceOrientationAll;
         platformData->display->swapBehavior = GLFMSwapBehaviorPlatformDefault;
-        platformData->resizeEventWaitFrames = GLFM_RESIZE_EVENT_MAX_WAIT_FRAMES;
         glfmMain(platformData->display);
     }
 
@@ -2251,30 +2331,34 @@ float glfmGetDisplayRefreshRate(const GLFMDisplay *display) {
     return refreshRate;
 }
 
-static bool glfm__updateSurfaceSizeIfNeeded(GLFMDisplay *display, bool force) {
+static bool glfm__updateSurfaceSizeIfNeeded(GLFMDisplay *display) {
+    if (!display) {
+        return false;
+    }
     GLFMPlatformData *platformData = (GLFMPlatformData *)display->platformData;
+    if (!platformData || platformData->eglSurface == EGL_NO_SURFACE) {
+        return false;
+    }
     int32_t width = 0;
     int32_t height = 0;
     EGLBoolean success = true;
     success &= eglQuerySurface(platformData->eglDisplay, platformData->eglSurface, EGL_WIDTH, &width);
     success &= eglQuerySurface(platformData->eglDisplay, platformData->eglSurface, EGL_HEIGHT, &height);
-    if (success && (width != platformData->width || height != platformData->height)) {
-        if (force || platformData->resizeEventWaitFrames <= 0) {
-            GLFM_LOG_LIFECYCLE("Resize: %i x %i", width, height);
-            platformData->resizeEventWaitFrames = GLFM_RESIZE_EVENT_MAX_WAIT_FRAMES;
-            platformData->refreshRequested = true;
-            platformData->width = width;
-            platformData->height = height;
-            if (platformData->display && platformData->display->surfaceResizedFunc) {
-                platformData->display->surfaceResizedFunc(platformData->display, width, height);
-            }
-            glfm__reportOrientationChangeIfNeeded(platformData->display);
-            glfm__reportInsetsChangedIfNeeded(platformData->display);
-            glfm__updateKeyboardVisibility(platformData);
-            return true;
+    if (success && width > 0 && height > 0
+        && (width != platformData->width || height != platformData->height)) {
+        // Insets/content-rect callbacks can arrive later than the actual EGL resize. Publish
+        // dimensions now so the next viewport and full-surface clear match the buffer submitted.
+        GLFM_LOG_LIFECYCLE("Resize: %i x %i", width, height);
+        platformData->refreshRequested = true;
+        platformData->width = width;
+        platformData->height = height;
+        if (display->surfaceResizedFunc) {
+            display->surfaceResizedFunc(display, width, height);
         }
-        // Prefer to wait until after content rect changed, if possible
-        platformData->resizeEventWaitFrames--;
+        glfm__reportOrientationChangeIfNeeded(display);
+        glfm__reportInsetsChangedIfNeeded(display);
+        glfm__updateKeyboardVisibility(platformData);
+        return true;
     }
     return false;
 }

@@ -77,11 +77,21 @@ public:
     // Return whether the player can attack or not.
     bool can_attack() const;
 
-    // Return whether the player can use a skill or not.
-    SpecialMove::ForbidReason can_use(const SpecialMove &move) const;
+    // Independent character unlocks; only waive the bow/crossbow ground and minimum-range rules.
+    // Future proficiency/level systems supply the complete snapshot; no unlock is granted by default.
+    struct BowAttackCapabilities {
+        bool airborne = false;
+        bool close_range = false;
+    };
+    void set_bow_attack_capabilities(BowAttackCapabilities capabilities);
+    bool can_shoot_bow_in_air() const;
+    bool can_shoot_bow_at_close_range() const;
 
-    // Create an attack struct using the player's stats.
-    Attack prepare_attack(bool skill) const;
+    // Validate the requested skill before choosing a prone/basic fallback when ignore_prone is set.
+    SpecialMove::ForbidReason can_use(const SpecialMove &move, bool ignore_prone = false) const;
+
+    // Create an attack struct; close selects a bow/crossbow swing before its action is chosen.
+    Attack prepare_attack(bool skill, bool close = false) const;
 
     // Execute a rush movement
     void rush(double targetx);
@@ -226,6 +236,9 @@ private:
     EnumMap<Buffstat::Id, Buff> buffs_;
     ActiveBuffs active_buffs_;
     PassiveBuffs passive_buffs_;
+
+    // Character-local state: retained on map respawn, reset by construction of a new character.
+    BowAttackCapabilities bow_attack_capabilities_ {};
 
     using CooldownClock = std::chrono::steady_clock;
     struct Cooldown {

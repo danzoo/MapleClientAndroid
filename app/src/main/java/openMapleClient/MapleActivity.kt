@@ -4,11 +4,16 @@ import OpenMapleClient.BuildConfig
 import android.app.NativeActivity
 import android.graphics.Rect
 import android.os.Bundle
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import java.io.File
 import java.io.FileOutputStream
 
 class MapleActivity : NativeActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // NativeActivity starts native initialization inside super.onCreate(). Request the same
+        // immersive state first, so the surface is not laid out with bars and resized immediately.
+        applyImmersiveWindow()
         // Before super.onCreate(): that is where the native library is loaded and the render thread
         // that asks for glyphs begins. The release reader mmaps the zip, so it must be on disk first.
         if (!BuildConfig.DEBUG) {
@@ -17,6 +22,15 @@ class MapleActivity : NativeActivity() {
         }
         NativeText.init(assets)
         super.onCreate(savedInstanceState)
+    }
+
+    private fun applyImmersiveWindow() {
+        // Ensure DecorView exists before obtaining the controller. Before attachment it records
+        // the request in its pending controller and applies it when the window becomes visible.
+        window.decorView.windowInsetsController?.apply {
+            systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsets.Type.systemBars())
+        }
     }
 
     // The release APK carries the Data tree as one STORE-only archive named "Data", released

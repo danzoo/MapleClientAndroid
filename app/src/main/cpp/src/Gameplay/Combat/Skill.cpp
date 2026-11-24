@@ -235,6 +235,12 @@ SpecialMove::ForbidReason Skill::can_use(int32_t level,
 
     const SkillData::Stats stats = SkillData::get(skill_id_).get_stats(level);
 
+    Weapon::Type reqweapon = SkillData::get(skill_id_).get_required_weapon();
+
+    if (weapon != reqweapon && reqweapon != Weapon::NONE) {
+        return FBR_WEAPONTYPE;
+    }
+
     if (hp <= stats.hpcost) {
         return FBR_HPCOST;
     }
@@ -243,10 +249,10 @@ SpecialMove::ForbidReason Skill::can_use(int32_t level,
         return FBR_MPCOST;
     }
 
-    Weapon::Type reqweapon = SkillData::get(skill_id_).get_required_weapon();
-
-    if (weapon != reqweapon && reqweapon != Weapon::NONE) {
-        return FBR_WEAPONTYPE;
+    // Power Knockback swings the weapon itself and does not need arrows.
+    if (skill_id_ == SkillId::POWER_KNOCKBACK_BOW
+        || skill_id_ == SkillId::POWER_KNOCKBACK_CROSSBOW) {
+        return FBR_NONE;
     }
 
     switch (weapon) {

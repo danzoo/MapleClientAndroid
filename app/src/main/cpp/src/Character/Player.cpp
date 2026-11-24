@@ -26,6 +26,7 @@
 #include "../Net/Packets/GameplayPackets.h"
 #include "../Net/Packets/InventoryPackets.h"
 #include "PlayerStates.h"
+#include "SkillId.h"
 
 namespace ms {
 namespace {
@@ -255,8 +256,31 @@ bool Player::can_attack() const {
            && look_.get_equips().has_weapon();
 }
 
-SpecialMove::ForbidReason Player::can_use(const SpecialMove &move) const {
-    if (move.is_skill() && state_ == Char::State::PRONE) {
+void Player::set_bow_attack_capabilities(BowAttackCapabilities capabilities) {
+    bow_attack_capabilities_ = capabilities;
+}
+
+bool Player::can_shoot_bow_in_air() const {
+    return bow_attack_capabilities_.airborne;
+}
+
+bool Player::can_shoot_bow_at_close_range() const {
+    return bow_attack_capabilities_.close_range;
+}
+
+SpecialMove::ForbidReason Player::can_use(const SpecialMove &move, bool ignore_prone) const {
+    const Weapon::Type weapon = get_weapontype();
+    if (move.is_attack()
+        && (weapon == Weapon::BOW || weapon == Weapon::CROSSBOW)
+        && SkillId::bow_requires_ground(move.get_id())
+        && !can_shoot_bow_in_air()
+        && (!phobj_.onground || phobj_.vforce < 0.0)) {
+        // A jump input sets its impulse before the next physics tick clears onground.
+        // Without the unlock, reject before MP fallback can produce an airborne basic shot.
+        return SpecialMove::ForbidReason::FBR_OTHER;
+    }
+
+    if (!ignore_prone && move.is_skill() && state_ == Char::State::PRONE) {
         return SpecialMove::ForbidReason::FBR_OTHER;
     }
 
@@ -270,7 +294,6 @@ SpecialMove::ForbidReason Player::can_use(const SpecialMove &move) const {
     }
 
     int32_t level = skill_book_.get_level(move.get_id());
-    Weapon::Type weapon = get_weapontype();
     const Job &job = stats_.get_job();
     uint16_t hp = stats_.get_stat(MapleStat::Id::HP);
     uint16_t mp = stats_.get_stat(MapleStat::Id::MP);
@@ -279,12 +302,13 @@ SpecialMove::ForbidReason Player::can_use(const SpecialMove &move) const {
     return move.can_use(level, weapon, job, hp, mp, bullets);
 }
 
-Attack Player::prepare_attack(bool skill) const {
+Attack Player::prepare_attack(bool skill, bool close) const {
     Attack::Type attacktype;
     bool degenerate;
 
-    if (state_ == Char::State::PRONE) {
-        degenerate = true;
+    if (state_ == Char::State::PRONE || close) {
+        // A basic bow swing is weak; Power Knockback is a real melee skill, not a degeneration.
+        degenerate = state_ == Char::State::PRONE || !skill;
         attacktype = Attack::Type::CLOSE;
     } else {
         Weapon::Type weapontype;
@@ -327,7 +351,7 @@ Attack Player::prepare_attack(bool skill) const {
     attack.accuracy = stats_.get_total(EquipStat::Id::ACC);
     attack.playerlevel = stats_.get_stat(MapleStat::Id::LEVEL);
     attack.range = stats_.get_range();
-    attack.bullet = inventory_.get_bulletid();
+    attack.bullet = attacktype == Attack::Type::RANGED ? inventory_.get_bulletid() : 0;
     attack.origin = get_position();
     attack.toleft = !facing_right_;
     attack.speed = get_integer_attackspeed();

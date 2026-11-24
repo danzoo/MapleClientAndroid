@@ -49,7 +49,11 @@ public:
             skip(1);
             write_byte(attack.toleft);
             skip(7);
-            // TODO: skip(4); If hurricane, piercing arrow or rapidfire
+            if (attack.skill == 3121004 || attack.skill == 3221001
+                || attack.skill == 13111002 || attack.skill == 5221004) {
+                // The server's ranged parser expects this extra field for held/charged shots.
+                skip(4);
+            }
         } else {
             skip(4);
         }

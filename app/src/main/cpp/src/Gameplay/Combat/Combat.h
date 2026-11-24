@@ -86,7 +86,10 @@ private:
 
     void apply_attack(const AttackResult &attack);
 
-    void apply_move(const SpecialMove &move);
+    void apply_move(const SpecialMove &move, bool close = false);
+
+    // Minimum shooting range is checked before choosing an action, only against live reachable mobs.
+    bool has_close_bow_target() const;
 
     // A shot only reaches what it has a clear line to, so the muzzle the line starts from and
     // whether this attack flies anything at all both come along; a swing needs neither.

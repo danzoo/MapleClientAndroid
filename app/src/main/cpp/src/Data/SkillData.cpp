@@ -189,7 +189,7 @@ int32_t SkillData::flags_of(int32_t id) const {
         { 2321007, ATTACK | RANGED },         // 光芒飞箭
         { 2321008, ATTACK | RANGED },         // 圣光普照
         // Hunter
-        { 3101003, ATTACK | RANGED },         // 强弓
+        { SkillId::POWER_KNOCKBACK_BOW, ATTACK }, // 强弓：近战击退，不是射箭
         { 3101005, ATTACK | RANGED },         // 爆炸箭
         // Ranger
         { 3111003, ATTACK | RANGED },         // 烈火箭
@@ -199,7 +199,7 @@ int32_t SkillData::flags_of(int32_t id) const {
         { 3121003, ATTACK | RANGED },         // 飞龙冲击波
         { 3121004, ATTACK | RANGED },         // 暴风箭雨
         // Crossbowman
-        { 3201003, ATTACK | RANGED },         // 强弩
+        { SkillId::POWER_KNOCKBACK_CROSSBOW, ATTACK }, // 强弩：近战击退
         { 3201005, ATTACK | RANGED },         // 穿透箭
         // Sniper
         { 3211003, ATTACK | RANGED },         // 寒冰箭

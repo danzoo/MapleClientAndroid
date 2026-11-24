@@ -150,6 +150,23 @@ enum Id : uint32_t {
     // Bowman
     ARROW_BLOW = 3001004,
     DOUBLE_SHOT = 3001005,
+    POWER_KNOCKBACK_BOW = 3101003,
+    ARROW_BOMB = 3101005,
+    MORTAL_BLOW_BOW = 3110001,
+    FIRE_SHOT = 3111003,
+    ARROW_RAIN = 3111004,
+    STRAFE_BOW = 3111006,
+    DRAGON_PULSE_BOW = 3121003,
+    HURRICANE = 3121004,
+    POWER_KNOCKBACK_CROSSBOW = 3201003,
+    IRON_ARROW = 3201005,
+    MORTAL_BLOW_CROSSBOW = 3210001,
+    ICE_SHOT = 3211003,
+    ARROW_ERUPTION = 3211004,
+    STRAFE_CROSSBOW = 3211006,
+    PIERCING_ARROW = 3221001,
+    DRAGON_PULSE_CROSSBOW = 3221003,
+    SNIPE = 3221007,
 
     // Hermit
     AVENGER = 4111005,
@@ -161,4 +178,53 @@ enum Id : uint32_t {
     // Bandit
     MESO_EXPLOSION = 4211006
 };
+
+// Legacy bow/crossbow action rules are not encoded in Skill.wz's jump stat (a buff bonus).
+constexpr bool bow_melee(int32_t id) {
+    return id == POWER_KNOCKBACK_BOW || id == POWER_KNOCKBACK_CROSSBOW;
+}
+
+constexpr bool bow_requires_ground(int32_t id) {
+    switch (id) {
+        case 0:
+        case ARROW_BLOW:
+        case DOUBLE_SHOT:
+        case ARROW_BOMB:
+        case FIRE_SHOT:
+        case ARROW_RAIN:
+        case STRAFE_BOW:
+        case DRAGON_PULSE_BOW:
+        case HURRICANE:
+        case IRON_ARROW:
+        case ICE_SHOT:
+        case ARROW_ERUPTION:
+        case STRAFE_CROSSBOW:
+        case PIERCING_ARROW:
+        case DRAGON_PULSE_CROSSBOW:
+        case SNIPE: return true;
+        // Period discussions distinguish jump-shot timing from starting an attack airborne;
+        // only Power Knockback is identified as an airborne exception, not Rain/Eruption.
+        // Buffs, summons and unrelated skills must not inherit the equipped bow's restriction.
+        default: return false;
+    }
+}
+
+constexpr bool bow_has_minimum_range(int32_t id) {
+    switch (id) {
+        case 0:
+        case ARROW_BLOW:
+        case DOUBLE_SHOT:
+        case ARROW_BOMB:
+        case FIRE_SHOT:
+        case STRAFE_BOW:
+        case HURRICANE:
+        case IRON_ARROW:
+        case ICE_SHOT:
+        case STRAFE_CROSSBOW:
+        case PIERCING_ARROW:
+        case SNIPE: return true;
+        // Knockback/area attacks and Dragon Pulse remain usable against nearby mobs.
+        default: return false;
+    }
+}
 }  // namespace ms::SkillId

@@ -136,6 +136,15 @@ void Combat::use_move(int32_t move_id) {
     }
 
     const SpecialMove *move = &get_move(move_id);
+    const auto requested_reason = player_.can_use(*move, true);
+    if (requested_reason != SpecialMove::FBR_NONE
+        && requested_reason != SpecialMove::FBR_MPCOST
+        && requested_reason != SpecialMove::FBR_BULLETCOST) {
+        // Only resource/posture failures can degenerate. Do not bypass skill ownership,
+        // weapon requirements, cooldowns or the ground requirement through a basic swing.
+        ForbidSkillMessage(requested_reason, player_.get_weapontype()).drop();
+        return;
+    }
 
     // An attack the character has not the MP for swings instead, so an attack key never dead-presses.
     // The red line still says why the skill did not go off.
@@ -154,18 +163,63 @@ void Combat::use_move(int32_t move_id) {
     }
 
     SpecialMove::ForbidReason reason = player_.can_use(*move);
-    Weapon::Type weapontype = player_.get_stats().get_weapontype();
+    const Weapon::Type weapontype = player_.get_weapontype();
+    const bool bow = weapontype == Weapon::BOW || weapontype == Weapon::CROSSBOW;
+    bool close = move->is_attack() && SkillId::bow_melee(move->get_id());
+
+    if (bow && move->is_attack() && SkillId::bow_has_minimum_range(move->get_id())
+        && !player_.can_shoot_bow_at_close_range()
+        && (reason == SpecialMove::FBR_NONE || reason == SpecialMove::FBR_BULLETCOST)
+        && has_close_bow_target()) {
+        // Without the close-range unlock, use the basic move in its entirety: no skill MP,
+        // multiplier, effect or projectile. With it, retain the shot and its resource checks.
+        // Invalid/unlearned/cooling skills and locked airborne shots cannot enter this fallback.
+        move = &get_move(0);
+        close = true;
+        reason = player_.can_use(*move);
+        if (reason == SpecialMove::FBR_BULLETCOST) {
+            reason = SpecialMove::FBR_NONE; // A weapon swing does not consume arrows.
+        }
+    }
 
     if (reason == SpecialMove::ForbidReason::FBR_NONE) {
-        apply_move(*move);
+        apply_move(*move, close);
     } else {
         ForbidSkillMessage(reason, weapontype).drop();
     }
 }
 
-void Combat::apply_move(const SpecialMove &move) {
+bool Combat::has_close_bow_target() const {
+    const Point<int16_t> origin = player_.get_position();
+    const bool toleft = !player_.getflip();
+    const int16_t left = static_cast<int16_t>(
+        origin.x() - (toleft ? Constants::BOW_MIN_RANGE : 0));
+    const int16_t right = static_cast<int16_t>(
+        origin.x() + (toleft ? 0 : Constants::BOW_MIN_RANGE));
+    const Rectangle<int16_t> range {
+        left, right,
+        static_cast<int16_t>(origin.y() + Constants::BOW_CLOSE_RANGE_TOP),
+        static_cast<int16_t>(origin.y() + Constants::BOW_CLOSE_RANGE_BOTTOM)
+    };
+    // Start at the body, not the muzzle 30px ahead: a wall between them must also block a swing.
+    const Point<int16_t> body { origin.x(), static_cast<int16_t>(origin.y() - 26) };
+
+    for (const auto &entry : *mobs_.get_mobs()) {
+        const auto *mob = static_cast<const Mob *>(entry.second.get());
+        Point<int16_t> wall;
+
+        if (mob && mob->is_alive() && mob->is_in_range(range)
+            && !terrain_.blocks_line(body, mob->get_body_position(), wall)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void Combat::apply_move(const SpecialMove &move, bool close) {
     if (move.is_attack()) {
-        Attack attack = player_.prepare_attack(move.is_skill());
+        Attack attack = player_.prepare_attack(move.is_skill(), close);
 
         move.apply_useeffects(player_);
         move.apply_actions(player_, attack.type);

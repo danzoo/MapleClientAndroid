@@ -175,6 +175,12 @@ constexpr double MOB_CHASE_RANGE = 40.0;
 // Target distance changes the flight duration, not the speed.
 constexpr double BULLET_SPEED = 750.0;
 
+// Port calibration for the bow/crossbow minimum shooting distance (not recovered from WZ).
+// Test live mob bounds in the facing direction, rather than a radius including other platforms.
+constexpr int16_t BOW_MIN_RANGE = 60;
+constexpr int16_t BOW_CLOSE_RANGE_TOP = -50;
+constexpr int16_t BOW_CLOSE_RANGE_BOTTOM = 0;
+
 // How long the character-info window plays its loading picture before showing what it fetched (255
 // updates), and how long the login wait holds before deciding the server is not going to answer.
 constexpr uint16_t CHAR_INFO_LOADING_MS = 2040;
