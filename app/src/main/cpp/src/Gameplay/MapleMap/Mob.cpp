@@ -923,7 +923,7 @@ std::pair<int32_t, bool> Mob::next_damage(double mindamage,
     return std::pair<int32_t, bool>(intdamage, iscritical);
 }
 
-void Mob::apply_damage(int32_t damage, bool toleft) {
+void Mob::apply_damage(int32_t damage, bool toleft, uint8_t knockback) {
     if (death_pending_) {
         // This is the blow the server already reported the death of. It gets the flinch, and the
         // death animation follows once the flinch has played out. Every arriving blow still sounds
@@ -949,6 +949,14 @@ void Mob::apply_damage(int32_t damage, bool toleft) {
         flip_ = toleft;
         counter_ = Constants::MOB_WANDER_MS - Constants::MOB_HIT_GRACE_MS;
         set_stance(Stance::HIT);
+
+        // The swung weapon's own push, from its img: only bow and crossbow files carry the key,
+        // and it rides on top of the flinch as a one-off shove, so their swings slide a mob
+        // further while every other weapon keeps the base flinch untouched.
+        if (knockback && can_move_) {
+            phobj_.hspeed += (toleft ? -1.0 : 1.0)
+                             * knockback * Constants::MOB_KNOCKBACK_SHOVE;
+        }
 
         update_movement();
     }

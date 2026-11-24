@@ -165,10 +165,11 @@ void MapMobs::apply_damage(int32_t oid,
                            int32_t damage,
                            bool toleft,
                            const AttackUser &user,
-                           const SpecialMove &move) {
+                           const SpecialMove &move,
+                           uint8_t knockback) {
     flush_spawn_events();
     if (auto mob = mobs_.get<Mob>(oid)) {
-        mob->get().apply_damage(damage, toleft);
+        mob->get().apply_damage(damage, toleft, knockback);
 
         // TODO: Maybe move this into the method above too?
         move.apply_hiteffects(user, *mob);

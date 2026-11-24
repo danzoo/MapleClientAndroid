@@ -30,6 +30,7 @@ WeaponData::WeaponData(int32_t equipid) : equip_data_(EquipData::get(equipid)) {
 
     attack_speed_ = static_cast<uint8_t>(src["attackSpeed"]);
     attack_ = static_cast<uint8_t>(src["attack"]);
+    knockback_ = static_cast<uint8_t>(src["knockback"]);
 
     img::node soundsrc = img::wz::sound["Weapon.img"][src["sfx"]];
 
@@ -60,6 +61,10 @@ bool WeaponData::is_twohanded() const {
 
 uint8_t WeaponData::get_speed() const {
     return attack_speed_;
+}
+
+uint8_t WeaponData::get_knockback() const {
+    return knockback_;
 }
 
 uint8_t WeaponData::get_attack() const {

@@ -4,7 +4,14 @@
 
 用法：
     to_device.py <设备ID>                         # 增量：按 md5 比对，改哪个/新增哪个就同步哪个
-    to_device.py <设备ID> <img路径> [<img路径>…]   # 只同步指定的资源文件（同样先比 md5，已一致则跳过）
+    to_device.py <设备ID> [--prune] <img路径>…    # 只同步指定的资源文件（同样先比 md5，已一致则跳过）
+
+指定的 img 路径可以在 resources/Data 下，也可以直接给基线路径（Assets/v209/img_develop
+或 Assets/v209/img 下的同名文件）：基线路径会映射回 resources/Data 的相对路径推送，
+Data 里没有对应文件就明确报错提示先做三份同步，不再静默跳过。
+
+--prune 仅在全量增量模式生效：设备上有、resources/Data 里已删的 .img 会一并从设备删除
+（镜像删除，用于删图后清掉设备残留），会先逐条打印再删；不加该参数则只报数量不动手。
 
 设备落点固定为 /sdcard/Android/data/com.OpenMapleClient/files/Data/<相对路径>，
 和 resources/Data 目录结构一一对应。推送一律走 /data/local/tmp 中转再 cp+chmod 666：
@@ -130,37 +137,57 @@ def push_one(dev, local, rel):
 
 
 def resolve_targets(paths):
-    """把命令行给出的 img 路径解析成 (rel, local_abs)，忽略不在 DATA 下或非 .img 的项。"""
+    """把命令行给出的 img 路径解析成 (rel, local_abs)。
+
+    resources/Data 下的路径直接用；两份基线目录下的路径按相对路径映射回 Data
+    （曾经直接喂 img_develop 路径会被静默跳过，这是要修的坑），Data 里没有同名
+    文件就明确提示先三份同步。其余项按原因逐条报跳过。"""
     jobs = []
     for t in paths:
         ap = os.path.abspath(t.replace("\\", "/"))
-        rel = os.path.relpath(ap, DATA)
-        if rel.startswith(".."):
-            print("  跳过（不在 resources/Data 下）: %s" % t)
-            continue
         if not ap.endswith(".img"):
             print("  跳过（不是 .img）: %s" % t)
             continue
         if not os.path.isfile(ap):
             print("  跳过（本地文件不存在）: %s" % t)
             continue
-        jobs.append((rel.replace(os.sep, "/"), ap))
+        rel = os.path.relpath(ap, DATA).replace(os.sep, "/")
+        if rel.startswith(".."):
+            rel = None
+            for base in BASELINES:
+                rb = os.path.relpath(ap, base).replace(os.sep, "/")
+                if rb.startswith(".."):
+                    continue
+                mapped = os.path.join(DATA, rb)
+                if not os.path.isfile(mapped):
+                    print("  跳过（基线有但 resources/Data 没有对应文件，先做三份同步）: %s" % t)
+                else:
+                    print("  基线路径映射到 Data：%s -> %s" % (t, mapped))
+                    ap = mapped
+                    rel = rb
+                break
+            if rel is None:
+                print("  跳过（不在 resources/Data 或基线下）: %s" % t)
+                continue
+        jobs.append((rel, ap))
     return jobs
 
 
 def delta_targets(dev):
-    """全树增量：本地 md5 与设备不一致或设备缺失的文件。"""
+    """全树增量：本地 md5 与设备不一致或设备缺失的文件。另回设备全表与本地全表供 --prune 用。"""
     dmap = device_md5_map(dev)
     jobs = []
+    local = set()
     for root, _, names in os.walk(DATA):
         for n in names:
             if not n.endswith(".img"):
                 continue
             lp = os.path.join(root, n)
             rel = os.path.relpath(lp, DATA).replace(os.sep, "/")
+            local.add(rel)
             if dmap.get(rel) != md5(lp):
                 jobs.append((rel, lp))
-    return jobs
+    return jobs, dmap, local
 
 
 def main():
@@ -168,7 +195,9 @@ def main():
         print(__doc__)
         sys.exit(2)
     dev = sys.argv[1]
-    explicit = sys.argv[2:]
+    args = sys.argv[2:]
+    prune = "--prune" in args
+    explicit = [a for a in args if a != "--prune"]
 
     if not os.path.exists(ADB):
         print("找不到 adb：%s" % ADB)
@@ -177,10 +206,11 @@ def main():
         print("设备 %s 不在线（adb devices 里没有该 ID 或状态不是 device）" % dev)
         sys.exit(1)
 
+    dmap = local = None
     if explicit:
         jobs = resolve_targets(explicit)
     else:
-        jobs = delta_targets(dev)
+        jobs, dmap, local = delta_targets(dev)
 
     # 指定文件模式也先比一次 md5，已一致的跳过，保持幂等
     kept = []
@@ -198,21 +228,39 @@ def main():
             print("  %s : %s" % (ap, why))
         sys.exit(1)
 
-    if not jobs:
+    extras = []
+    if dmap is not None:
+        extras = sorted(set(dmap) - local)
+        if extras and not prune:
+            print("设备上多出 %d 个 resources/Data 已没有的文件（镜像删除请加 --prune）：" % len(extras))
+            for rel in extras:
+                print("  %s" % rel)
+
+    if not jobs and not (prune and extras):
         print("设备 %s：没有需要同步的文件（已全部一致）" % dev)
         sys.exit(0)
 
-    print("设备 %s：待同步 %d 个文件" % (dev, len(jobs)))
+    if jobs:
+        print("设备 %s：待同步 %d 个文件" % (dev, len(jobs)))
     ok = fail = 0
-    for i, (rel, local) in enumerate(jobs, 1):
-        good, err = push_one(dev, local, rel)
+    for i, (rel, local_path) in enumerate(jobs, 1):
+        good, err = push_one(dev, local_path, rel)
         if good:
             ok += 1
             print("  [%d/%d] 同步 %s" % (i, len(jobs), rel))
         else:
             fail += 1
             print("  [%d/%d] 失败 %s : %s" % (i, len(jobs), rel, err))
-    print("完成：成功 %d，失败 %d" % (ok, fail))
+    pruned = 0
+    if prune:
+        for rel in extras:
+            r = adb(dev, "shell", "rm -f '%s/%s'" % (DEV_ROOT, rel))
+            if r.returncode == 0:
+                pruned += 1
+                print("  清理残留 %s" % rel)
+            else:
+                print("  清理失败 %s : %s" % (rel, (r.stderr or r.stdout).strip()))
+    print("完成：成功 %d，失败 %d，清理残留 %d" % (ok, fail, pruned))
     sys.exit(1 if fail else 0)
 
 

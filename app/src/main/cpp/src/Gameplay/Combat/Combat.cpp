@@ -192,15 +192,25 @@ void Combat::use_move(int32_t move_id) {
 bool Combat::has_close_bow_target() const {
     const Point<int16_t> origin = player_.get_position();
     const bool toleft = !player_.getflip();
-    const int16_t left = static_cast<int16_t>(
-        origin.x() - (toleft ? Constants::BOW_MIN_RANGE : 0));
-    const int16_t right = static_cast<int16_t>(
-        origin.x() + (toleft ? 0 : Constants::BOW_MIN_RANGE));
-    const Rectangle<int16_t> range {
-        left, right,
-        static_cast<int16_t>(origin.y() + Constants::BOW_CLOSE_RANGE_TOP),
-        static_cast<int16_t>(origin.y() + Constants::BOW_CLOSE_RANGE_BOTTOM)
-    };
+    // The trigger window is the swing's own hitbox (intersection over its possible stances),
+    // anchored and mirrored exactly like apply_move does, so a swing that starts never whiffs.
+    Rectangle<int16_t> range = player_.get_look().get_degenerate_range();
+
+    if (range.empty()) {
+        return false;
+    }
+
+    if (toleft) {
+        range = { static_cast<int16_t>(origin.x() + range.left()),
+                  static_cast<int16_t>(origin.x() + range.right()),
+                  static_cast<int16_t>(origin.y() + range.top()),
+                  static_cast<int16_t>(origin.y() + range.bottom()) };
+    } else {
+        range = { static_cast<int16_t>(origin.x() - range.right()),
+                  static_cast<int16_t>(origin.x() - range.left()),
+                  static_cast<int16_t>(origin.y() + range.top()),
+                  static_cast<int16_t>(origin.y() + range.bottom()) };
+    }
     // Start at the body, not the muzzle 30px ahead: a wall between them must also block a swing.
     const Point<int16_t> body { origin.x(), static_cast<int16_t>(origin.y() - 26) };
 
@@ -227,6 +237,16 @@ void Combat::apply_move(const SpecialMove &move, bool close) {
         player_.set_afterimage(move.get_id());
 
         move.apply_stats(player_, attack);
+
+        // A projectile with nothing to hit runs to the far edge of this attack's own hit strip,
+        // read after apply_stats: a skill's lt/rb from the img - 蜗牛投掷术 flies to its defined 464
+        // and never rides the bow's bonus - scaled by the range percentage the same node carries,
+        // or the weapon's straight-shot band for a plain shot, which 远程箭 lengthens.
+        if (attack.bullet != 0) {
+            attack.shootdistance = static_cast<int16_t>(
+                std::max<int32_t>(static_cast<int32_t>(-attack.range.left() * attack.hrange),
+                                  attack.range.right()));
+        }
 
         Point<int16_t> origin = attack.origin;
         Rectangle<int16_t> range = attack.range;
@@ -400,7 +420,8 @@ void Combat::apply_damage_effect(const DamageEffect &effect) {
                        effect.damage,
                        effect.toleft,
                        effect.user,
-                       move);
+                       move,
+                       effect.knockback);
 }
 
 void Combat::push_attack(const AttackResult &attack) {
@@ -508,7 +529,10 @@ void Combat::extract_effects(const Char &user,
         }
 
         if (result.damage_lines.empty()) {
-            int16_t xshift = result.toleft ? -400 : 400;
+            // An unaimed projectile flies to the far edge of its attack's strip, which apply_move
+            // worked out from the weapon band (carrying the 远程箭 bonus) or the skill's own lt/rb.
+            int16_t flight = result.shootdistance != 0 ? result.shootdistance : 400;
+            int16_t xshift = result.toleft ? -flight : flight;
             Point<int16_t> target = origin + Point<int16_t>(xshift, -26);
 
             for (int i = 0; i < result.hitcount; i++) {
@@ -540,7 +564,8 @@ void Combat::extract_effects(const Char &user,
                                         vec[i].first,
                                         result.toleft,
                                         oid,
-                                        move.get_id());
+                                        move.get_id(),
+                                        result.knockback);
 
                 i++;
             }

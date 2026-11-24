@@ -18,6 +18,7 @@
 #include "../../Audio/Audio.h"
 #include "../../Net/Login.h"
 #include "../../Template/Interpolated.h"
+#include "../../Template/Rectangle.h"
 #include "../../Util/Randomizer.h"
 #include "../../Util/TimedBool.h"
 #include "Body.h"
@@ -86,6 +87,10 @@ public:
     const Face *get_face() const;
 
     const CharEquips &get_equips() const;
+
+    // Intersection of the afterimage hitboxes of every degenerate swing stance of the equipped
+    // weapon, so whichever stance the random pick lands on still covers this whole box.
+    Rectangle<int16_t> get_degenerate_range() const;
 
     // Initialize drawinfo
     static void init();

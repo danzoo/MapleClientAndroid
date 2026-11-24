@@ -76,6 +76,9 @@ private:
         bool toleft;
         int32_t target_oid;
         int32_t move_id;
+        // Weapon img knockback points behind this blow; 0 for arrows and every weapon without
+        // the key.
+        uint8_t knockback = 0;
     };
 
     struct BulletEffect {

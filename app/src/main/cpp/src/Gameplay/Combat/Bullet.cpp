@@ -24,7 +24,8 @@
 namespace ms {
 
 Point<int16_t> Bullet::muzzle(Point<int16_t> origin, bool toleft) {
-    return Point<int16_t>(origin.x() + (toleft ? -30 : 30), origin.y() - 26);
+    return Point<int16_t>(origin.x() + (toleft ? -Constants::MUZZLE_X : Constants::MUZZLE_X),
+                          origin.y() + Constants::SHOOT_LINE_Y);
 }
 
 Bullet::Bullet(Animation a,

@@ -175,11 +175,14 @@ constexpr double MOB_CHASE_RANGE = 40.0;
 // Target distance changes the flight duration, not the speed.
 constexpr double BULLET_SPEED = 750.0;
 
-// Port calibration for the bow/crossbow minimum shooting distance (not recovered from WZ).
-// Test live mob bounds in the facing direction, rather than a radius including other platforms.
-constexpr int16_t BOW_MIN_RANGE = 60;
-constexpr int16_t BOW_CLOSE_RANGE_TOP = -50;
-constexpr int16_t BOW_CLOSE_RANGE_BOTTOM = 0;
+// A straight shot's default hit band (used when the skill carries no lt/rb of its own), shaped
+// like 蜗牛投掷术's (-464,-79)-(-32,39): a forward-only strip starting at the muzzle, so a mob is
+// reached above or below only on a diagonal and never directly underfoot. Area skills override
+// this with their lt/rb data.
+constexpr int16_t MUZZLE_X = 30;
+constexpr int16_t SHOOT_LINE_Y = -26;
+constexpr int16_t SHOOT_BAND_TOP = -79;
+constexpr int16_t SHOOT_BAND_BOTTOM = 39;
 
 // How long the character-info window plays its loading picture before showing what it fetched (255
 // updates), and how long the login wait holds before deciding the server is not going to answer.
@@ -230,6 +233,10 @@ constexpr double PLAYER_KNOCKBACK_HEIGHT = 10.0;
 constexpr double PLAYER_KNOCKBACK_DISTANCE = 40.0;
 constexpr double MOB_KNOCKBACK_ACCEL = 3125.0;
 constexpr double MOB_KNOCKBACK_ACCEL_AIR = 1562.5;
+// Pixels per second of shove per knockback point in the swung weapon's img (bows carry 26-36,
+// crossbows 28-35; the shove decays with the ground damping, so this is the unit that turns the
+// img's points into the extra slide).
+constexpr double MOB_KNOCKBACK_SHOVE = 25.0;
 constexpr double MOB_HOP_SPEED = 625.0;
 
 // Pixels per second per stat point. Mob movement retains its own (speed + 100) conversion;

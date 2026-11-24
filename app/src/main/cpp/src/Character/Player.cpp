@@ -19,6 +19,8 @@
 #include <cmath>
 
 #include "../Audio/Audio.h"
+#include "../Constants.h"
+#include "../Data/SkillData.h"
 #include "../Data/WeaponData.h"
 #include "../Gameplay/Physics/PhysicsParams.h"
 #include "../IO/UI.h"
@@ -351,7 +353,34 @@ Attack Player::prepare_attack(bool skill, bool close) const {
     attack.accuracy = stats_.get_total(EquipStat::Id::ACC);
     attack.playerlevel = stats_.get_stat(MapleStat::Id::LEVEL);
     attack.range = stats_.get_range();
+    if (attacktype == Attack::Type::RANGED) {
+        // The arrow leaves from the muzzle, so the strip starts there: a mob is reached above or
+        // below on a diagonal, never directly underfoot. A skill's own lt/rb (area shots) still
+        // overrides this in apply_stats.
+        int16_t extra = 0;
+        Weapon::Type rangedtype = get_weapontype();
+        if (rangedtype == Weapon::BOW || rangedtype == Weapon::CROSSBOW) {
+            // 远程箭 buys extra bow/crossbow flight distance per level; its range stat is the
+            // pixel gain straight out of Skill.wz.
+            float gain = SkillData::get(SkillId::EYE_OF_AMAZON)
+                             .get_stats(get_skilllevel(SkillId::EYE_OF_AMAZON)).hrange;
+            extra = static_cast<int16_t>(gain * 100.0f + 0.5f);
+        }
+        attack.range = Rectangle<int16_t>(static_cast<int16_t>(attack.range.left() - extra),
+                                          -Constants::MUZZLE_X,
+                                          Constants::SHOOT_BAND_TOP,
+                                          Constants::SHOOT_BAND_BOTTOM);
+    }
     attack.bullet = attacktype == Attack::Type::RANGED ? inventory_.get_bulletid() : 0;
+    if (attacktype == Attack::Type::CLOSE) {
+        // A swing pushes with the weapon's own strength: the key lives in the weapon's img, and
+        // only bow and crossbow files carry it, so every other weapon stays at the base flinch.
+        int32_t swung = look_.get_equips().get_weapon();
+
+        if (swung > 0) {
+            attack.knockback = WeaponData::get(swung).get_knockback();
+        }
+    }
     attack.origin = get_position();
     attack.toleft = !facing_right_;
     attack.speed = get_integer_attackspeed();

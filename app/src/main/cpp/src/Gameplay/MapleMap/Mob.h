@@ -110,8 +110,8 @@ public:
     std::vector<std::pair<int32_t, bool>> calculate_damage(
         const Attack &attack);
 
-    // Apply damage to the mob.
-    void apply_damage(int32_t damage, bool toleft);
+    // Apply damage to the mob. knockback is the swung weapon's img value (0 when it has none).
+    void apply_damage(int32_t damage, bool toleft, uint8_t knockback = 0);
 
     // Note that a blow the client has queued locally for this mob is due to land in the specified
     // number of milliseconds.

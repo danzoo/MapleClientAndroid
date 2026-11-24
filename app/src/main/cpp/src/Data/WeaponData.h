@@ -44,6 +44,10 @@ public:
     // Return the attack delay
     uint8_t get_attackdelay() const;
 
+    // Return the weapon's melee push, in the img's knockback points (0 when the file has no key,
+    // which is every weapon but bows and crossbows).
+    uint8_t get_knockback() const;
+
     // Return the weapon type
     Weapon::Type get_type() const;
 
@@ -69,6 +73,7 @@ private:
     bool two_handed_;
     uint8_t attack_speed_;
     uint8_t attack_;
+    uint8_t knockback_;
     BoolPair<Sound> use_sounds_;
     std::string after_image_;
 };

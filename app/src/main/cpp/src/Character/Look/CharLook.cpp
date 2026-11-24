@@ -15,8 +15,11 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "CharLook.h"
 
+#include <algorithm>
+
 #include "../../Constants.h"
 #include "../../Data/WeaponData.h"
+#include "Afterimage.h"
 
 namespace ms {
     CharLook::CharLook(const LookEntry &entry) {
@@ -718,6 +721,64 @@ namespace ms {
         }
     }
 
+    static const std::array<std::vector<Stance::Id>, 10> degen_stances = {
+        {{Stance::Id::NONE},
+         {Stance::Id::NONE},
+         {Stance::Id::NONE},
+         {Stance::Id::SWINGT1, Stance::Id::SWINGT3},
+         {Stance::Id::SWINGT1, Stance::Id::STABT1},
+         {Stance::Id::NONE},
+         {Stance::Id::NONE},
+         {Stance::Id::SWINGT1, Stance::Id::STABT1},
+         {Stance::Id::NONE},
+         {Stance::Id::SWINGP1, Stance::Id::STABT2}}};
+
+    Rectangle<int16_t> CharLook::get_degenerate_range() const {
+        int32_t weapon_id = equips_.get_weapon();
+
+        if (weapon_id <= 0) {
+            return Rectangle<int16_t>();
+        }
+
+        const WeaponData &weapon = WeaponData::get(weapon_id);
+        uint8_t attacktype = weapon.get_attack();
+
+        std::vector<Stance::Id> stances;
+        if (stance_ == Stance::Id::PRONE) {
+            stances.push_back(Stance::Id::PRONESTAB);
+        } else if (attacktype > 0 && attacktype < degen_stances.size()) {
+            stances = degen_stances[attacktype];
+        }
+
+        int16_t weapon_level =
+                weapon.get_equipdata().get_reqstat(MapleStat::Id::LEVEL);
+
+        Rectangle<int16_t> range;
+        bool have = false;
+
+        for (Stance::Id stance : stances) {
+            Afterimage afterimage(0, weapon.get_afterimage(),
+                                  Stance::names[stance], weapon_level);
+            Rectangle<int16_t> part = afterimage.get_range();
+
+            if (part.empty()) {
+                continue;
+            }
+
+            if (!have) {
+                range = part;
+                have = true;
+            } else {
+                range = Rectangle<int16_t>(std::max(range.left(), part.left()),
+                                           std::min(range.right(), part.right()),
+                                           std::max(range.top(), part.top()),
+                                           std::min(range.bottom(), part.bottom()));
+            }
+        }
+
+        return range;
+    }
+
     Stance::Id CharLook::getattackstance(uint8_t attack, bool degenerate) const {
         if (stance_ == Stance::Id::PRONE) {
             return Stance::Id::PRONESTAB;
@@ -735,18 +796,6 @@ namespace ms {
             GUN = 9,
             NUM_ATTACKS
         };
-
-        static const std::array<std::vector<Stance::Id>, Attack::NUM_ATTACKS>
-                degen_stances = {{{Stance::Id::NONE},
-                                  {Stance::Id::NONE},
-                                  {Stance::Id::NONE},
-                                  {Stance::Id::SWINGT1, Stance::Id::SWINGT3},
-                                  {Stance::Id::SWINGT1, Stance::Id::STABT1},
-                                  {Stance::Id::NONE},
-                                  {Stance::Id::NONE},
-                                  {Stance::Id::SWINGT1, Stance::Id::STABT1},
-                                  {Stance::Id::NONE},
-                                  {Stance::Id::SWINGP1, Stance::Id::STABT2}}};
 
         static const std::array<std::vector<Stance::Id>, NUM_ATTACKS>
                 attack_stances = {{{Stance::Id::NONE},

@@ -50,6 +50,13 @@ struct Attack {
     Rectangle<int16_t> range;
     float hrange = 1.0f;
     bool toleft = false;
+    // Where an unaimed projectile of this attack dies: the far edge of the hit strip the attack
+    // actually uses - a skill's own lt/rb from the img, or the straight-shot strip, which the
+    // 远程箭 bonus pushes out. 0 for attacks that fly nothing.
+    int16_t shootdistance = 0;
+    // The swung weapon's push, straight from its img (knockback points). 0 unless a bow or
+    // crossbow is the one swinging - those files carry the key and nothing else's do.
+    uint8_t knockback = 0;
 };
 
 // an attack coming from a mob
@@ -102,6 +109,8 @@ struct AttackResult {
         stance = attack.stance;
         bullet = attack.bullet;
         toleft = attack.toleft;
+        shootdistance = attack.shootdistance;
+        knockback = attack.knockback;
     }
 
     AttackResult() = default;
@@ -118,6 +127,8 @@ struct AttackResult {
     uint8_t stance = 0;
     uint8_t speed = 0;
     bool toleft = false;
+    int16_t shootdistance = 0;
+    uint8_t knockback = 0;
     std::unordered_map<int32_t, std::vector<std::pair<int32_t, bool>>>
         damage_lines;
     // Where each attacked mob actually stood when the blow was worked out. The server never

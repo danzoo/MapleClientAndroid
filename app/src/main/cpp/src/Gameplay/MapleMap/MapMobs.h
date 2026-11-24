@@ -67,7 +67,8 @@ public:
                       int32_t damage,
                       bool toleft,
                       const AttackUser &user,
-                      const SpecialMove &move);
+                      const SpecialMove &move,
+                      uint8_t knockback = 0);
 
     // Record damage a character dealt to a mob, mirroring the server's drop-ownership rule.
     void note_damage(int32_t oid, int32_t cid, int32_t damage);

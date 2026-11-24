@@ -11,6 +11,10 @@
 
 转换走项目既定链路：img2wz（loose img -> PKG1 wz，IV=ems/版本 83）-> wz2xml（wz -> XML 目录树，
 只导元数据）。可选 --to <目录> 把产物写到别处（干跑/校验用），默认写进仓库的 assets/wz。
+
+服务端排除清单（SERVER_SKIP，2026-11 按 server-core 全量静态引用分析定下）：
+这些 XML 服务端代码永远不会打开，转换时被跳过；全量同步还会把目标树里已存在的这些文件
+以及「本地 Data 已没有对应 img」的孤儿 XML 一并删掉，删图后不用再手工清服务端。
 """
 import os
 import shutil
@@ -30,6 +34,36 @@ JOBS = "6"
 
 sys.path.insert(0, HERE)
 from imgcheck import bad_paths, report
+
+# 服务端不读的 XML（2026-11 按 server-core 全部 getData/WZFiles 引用静态分析定下）。
+# rel 形如 <分类>.wz/<相对>/<名>.img.xml。
+SKIP_DIRS = ("Base.wz", "Effect.wz", "Morph.wz", "Sound.wz", "TamingMob.wz")   # 整归档零引用
+SKIP_SUBTREES = ("Map.wz/Back", "Map.wz/Tile", "Map.wz/WorldMap")  # 运行时零引用；Obj 启动全扫，保留
+KEEP_FILES = {  # 这几个分类只有列出的文件会被打开，其余一律不算在用
+    "UI.wz": {"UIWindow.img.xml", "UIWindow2.img.xml"},
+    "String.wz": {"Cash.img.xml", "Consume.img.xml", "Eqp.img.xml", "Etc.img.xml", "Ins.img.xml",
+                  "Map.img.xml", "Mob.img.xml", "Npc.img.xml", "Pet.img.xml", "Skill.img.xml"},
+    "Etc.wz": {"CashPackage.img.xml", "Commodity.img.xml", "ItemMake.img.xml",
+               "MakeCharInfo.img.xml", "MapNeighbors.img.xml", "OXQuiz.img.xml"},
+    "Quest.wz": {"Act.img.xml", "Check.img.xml", "QuestInfo.img.xml"},
+}
+
+
+def skipped(rel):
+    """rel 用正斜杠，形如 Map.wz/Back/xxx.img.xml。"""
+    top, _, rest = rel.partition("/")
+    if top in SKIP_DIRS:
+        return True
+    if any(rel.startswith(d + "/") for d in SKIP_SUBTREES):
+        return True
+    keep = KEEP_FILES.get(top)
+    return keep is not None and rest not in keep
+
+
+def xml_rel(data_rel):
+    """resources/Data 相对路径 -> assets/wz 相对路径（x.img -> x.img.xml）。"""
+    head, _, rest = data_rel.replace(os.sep, "/").partition("/")
+    return head + ".wz/" + rest + ".xml"
 
 
 def run(cmd):
@@ -77,11 +111,15 @@ def stage_selected(paths):
         if not os.path.isfile(ap):
             print("  跳过（本地文件不存在）: %s" % t)
             continue
+        rel = rel.replace(os.sep, "/")
+        if skipped(xml_rel(rel)):
+            print("  跳过（服务端排除清单里，本来就不转）: %s" % t)
+            continue
         dest = os.path.join(data_dir, rel)
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         shutil.copy2(ap, dest)
         staged.append(dest)
-        cats.add(rel.replace(os.sep, "/").split("/", 1)[0])
+        cats.add(rel.split("/", 1)[0])
     if not staged:
         shutil.rmtree(stage, ignore_errors=True)
         raise SystemExit("没有可转换的 .img")
@@ -99,18 +137,48 @@ def convert(data_dir, stage):
 
 
 def publish(xml_out, to_root):
-    n = 0
+    n = skip = 0
     for root, _, names in os.walk(xml_out):
         for fn in names:
             if not fn.endswith(".img.xml"):
                 continue
             src = os.path.join(root, fn)
-            rel = os.path.relpath(src, xml_out)
+            rel = os.path.relpath(src, xml_out).replace(os.sep, "/")
+            if skipped(rel):
+                skip += 1
+                continue
             dst = os.path.join(to_root, rel)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copy2(src, dst)
             n += 1
-    return n
+    return n, skip
+
+
+def sweep(to_root, expected):
+    """全量模式发布后的镜像清理：删掉排除清单残留 + Data 已无对应 img 的孤儿 XML，并收空目录。"""
+    removed = held = 0
+    dirs = set()
+    for root, _, names in os.walk(to_root):
+        for fn in names:
+            if not fn.endswith(".img.xml"):
+                continue
+            p = os.path.join(root, fn)
+            rel = os.path.relpath(p, to_root).replace(os.sep, "/")
+            dirs.add(root)
+            if rel in expected and not skipped(rel):
+                continue
+            try:
+                os.remove(p)
+                removed += 1
+            except OSError:
+                held += 1
+                print("  删不掉（可能正被运行中的服务端占用）: %s" % rel)
+    for d in sorted(dirs, key=lambda x: -x.count(os.sep)):
+        try:
+            os.rmdir(d)
+        except OSError:
+            pass
+    return removed, held
 
 
 def main():
@@ -122,6 +190,7 @@ def main():
     os.makedirs(to_root, exist_ok=True)
 
     cleanup = None
+    expected = None
     if files:
         stage, data_dir, cats, check = stage_selected(files)
         cleanup = stage
@@ -131,8 +200,15 @@ def main():
         cleanup = stage
         data_dir = DATA            # 全量：直接读 Data，img2wz 逐分类产 wz
         print("全量同步：整棵 resources/Data -> %s" % to_root)
-        check = [os.path.join(root, n)
-                 for root, _, names in os.walk(DATA) for n in names if n.endswith(".img")]
+        check = []
+        expected = set()
+        for root, _, names in os.walk(DATA):
+            for n in names:
+                if not n.endswith(".img"):
+                    continue
+                p = os.path.join(root, n)
+                check.append(p)
+                expected.add(xml_rel(os.path.relpath(p, DATA)))
 
     try:
         # 转换前先验 IV：外部编辑器导出的 IV=0 img 在 img2wz 那步会静默产出错树
@@ -141,8 +217,14 @@ def main():
             report(bad, '转换')
             sys.exit(1)
         xml_out = convert(data_dir, stage)
-        n = publish(xml_out, to_root)
-        print("完成：写入 %d 个 XML 到 %s，用时 %.1fs" % (n, to_root, time.time() - t0))
+        n, skip = publish(xml_out, to_root)
+        if expected is not None:
+            removed, held = sweep(to_root, expected)
+            print("完成：写入 %d 个 XML（排除清单跳过 %d），清理 %d 个残留/孤儿"
+                  "（删不掉 %d），用时 %.1fs" % (n, skip, removed, held, time.time() - t0))
+        else:
+            print("完成：写入 %d 个 XML 到 %s（排除清单跳过 %d），用时 %.1fs"
+                  % (n, to_root, skip, time.time() - t0))
     finally:
         if cleanup:
             shutil.rmtree(cleanup, ignore_errors=True)
