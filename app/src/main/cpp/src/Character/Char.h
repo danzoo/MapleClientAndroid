@@ -100,8 +100,8 @@ public:
     // Return the current afterimage.
     const Afterimage &get_afterimage() const;
 
-    // Attack hitboxes use the geometric center of the current body/head canvas bounds. Physics,
-    // movement packets and sprite/effect drawing continue to use get_position().
+    // Body/head center for hit ranges without a matching attack visual and the bow fallback
+    // trigger. Afterimage ranges and audited skill visuals use get_position(), like sprite drawing.
     Point<int16_t> get_attack_origin() const;
 
     // Display an animation as an effect with the character

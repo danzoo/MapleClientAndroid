@@ -242,9 +242,11 @@ void Combat::apply_move(const SpecialMove &move, bool close) {
 
         move.apply_stats(player_, attack);
 
-        // The action must be selected before measuring its body/head canvas bounds. Only the
-        // hitbox anchor changes: drawing, projectile launch and movement keep the feet position.
-        attack.origin = player_.get_attack_origin();
+        // Afterimage ranges and audited skill attack visuals share Char::draw's physical
+        // anchor, without action move. Other hit ranges keep the selected body's center.
+        attack.origin = (attack.uses_afterimage_range || attack.uses_skill_visual_origin)
+            ? player_.get_position()
+            : player_.get_attack_origin();
 
         // A projectile with nothing to hit runs to the far edge of this attack's own hit strip,
         // read after apply_stats: a skill's lt/rb from the img - 蜗牛投掷术 flies to its defined 464

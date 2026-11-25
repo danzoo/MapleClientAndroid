@@ -180,6 +180,27 @@ enum Id : uint32_t {
     MESO_EXPLOSION = 4211006
 };
 
+// Audited attack visuals in Skill.wz are drawn at Char::draw's physical anchor. This is not
+// inferred from effect size: decorative casts, target hit effects and projectiles are excluded.
+// These skills keep their existing hit range source, dimensions and level multipliers.
+constexpr bool has_physical_attack_visual(int32_t id) {
+    switch (id) {
+        case BRANDISH:       // 1121008: effect/0 and effect/1 sword sweeps.
+        case DRAGON_BUSTER:  // 1311001: effect1..3 forward thrusts (枪连击).
+        case DRAGON_FURY:    // 1311002: effect1..3 forward thrusts (矛连击).
+        case PA_BUSTER:      // 1311003: visible spear/swingP2 custom afterimage (无双枪).
+        case PA_FURY:        // 1311004: visible poleArm/swingP2 custom afterimage (无双矛).
+        case 4221001:        // 暗杀: forward slashes in effect, not the unplayed special.
+        case 4221007:        // 一出双击: forward slash wave.
+        case 5001002:        // 半月踢: CharLevel/effect kick arc.
+        case 5101004:        // 贯骨击: forward impact strip in effect, not prepare/keydown.
+        case 5111002:        // 能量爆破: forward energy burst.
+        case 5111006:        // 碎石乱击: effect and effect0..3 ground impacts.
+        case 5121005: return true; // 索命: forward reach in effect.
+        default: return false;
+    }
+}
+
 // Legacy bow/crossbow action rules are not encoded in Skill.wz's jump stat (a buff bonus).
 constexpr bool bow_melee(int32_t id) {
     return id == POWER_KNOCKBACK_BOW || id == POWER_KNOCKBACK_CROSSBOW;
