@@ -153,23 +153,6 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
     buttons_[Buttons::BT_GATHER] =
         std::make_unique<MapleButton>(Item["BtGather3"]);
     buttons_[Buttons::BT_SORT] = std::make_unique<MapleButton>(Item["BtSort3"]);
-    buttons_[Buttons::BT_POT] = std::make_unique<MapleButton>(Item["BtPot3"]);
-    buttons_[Buttons::BT_UPGRADE] =
-        std::make_unique<MapleButton>(Item["BtUpgrade3"]);
-    buttons_[Buttons::BT_APPRAISE] =
-        std::make_unique<MapleButton>(Item["BtAppraise3"]);
-    buttons_[Buttons::BT_EXTRACT] =
-        std::make_unique<MapleButton>(Item["BtExtract3"]);
-    buttons_[Buttons::BT_DISASSEMBLE] =
-        std::make_unique<MapleButton>(Item["BtDisassemble3"]);
-    buttons_[Buttons::BT_TOAD] = std::make_unique<MapleButton>(Item["BtToad3"]);
-
-    buttons_[Buttons::BT_CASHSHOP] =
-        std::make_unique<MapleButton>(Item["BtCashshop"]);
-
-    buttons_[Buttons::BT_POT]->set_state(Button::State::DISABLED);
-    buttons_[Buttons::BT_EXTRACT]->set_state(Button::State::DISABLED);
-    buttons_[Buttons::BT_DISASSEMBLE]->set_state(Button::State::DISABLED);
     buttons_[button_by_tab(tab_)]->set_state(Button::State::PRESSED);
 
     meso_label_ =
@@ -186,7 +169,7 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
     slot_range_[InventoryType::Id::CASH] = { 1, 24 };
 
     slider_ = Slider(Slider::Type::DEFAULT_SILVER,
-                     Range<int16_t>(50, 245),
+                     Range<int16_t>(60, 255),
                      260,
                      ROWS_,
                      1 + inventory_.get_slotmax(tab_) / COLUMNS_,
@@ -210,13 +193,7 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
 
     buttons_[Buttons::BT_COIN]->set_active(true);
     buttons_[Buttons::BT_POINT]->set_active(true);
-    buttons_[Buttons::BT_POT]->set_active(true);
-    buttons_[Buttons::BT_UPGRADE]->set_active(true);
-    buttons_[Buttons::BT_APPRAISE]->set_active(true);
-    buttons_[Buttons::BT_EXTRACT]->set_active(true);
-    buttons_[Buttons::BT_DISASSEMBLE]->set_active(true);
-    buttons_[Buttons::BT_TOAD]->set_active(true);
-    buttons_[Buttons::BT_CASHSHOP]->set_active(true);
+    buttons_[Buttons::BT_SORT]->set_active(true);
     set_sort(sort_enabled_);
 
     clear_new();
@@ -226,8 +203,8 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
 void UIItemInventory::draw(float alpha) const {
     UIElement::draw_sprites(alpha);
 
-    Point<int16_t> mesolabel_pos = position_ + Point<int16_t>(127, 262);
-    Point<int16_t> maplepointslabel_pos = position_ + Point<int16_t>(159, 279);
+    Point<int16_t> mesolabel_pos = position_ + Point<int16_t>(160, 262);
+    Point<int16_t> maplepointslabel_pos = position_ + Point<int16_t>(160, 278);
 
     backgrnd_.draw(position_);
     backgrnd2_.draw(position_);
@@ -372,14 +349,7 @@ Button::State UIItemInventory::button_pressed(uint16_t buttonid) {
 
             UI::get().emplace<UIEnterNumber>(question, onenter, 50000, 10);
         } break;
-        case Buttons::BT_POINT:
-        case Buttons::BT_POT:
-        case Buttons::BT_UPGRADE:
-        case Buttons::BT_APPRAISE:
-        case Buttons::BT_EXTRACT:
-        case Buttons::BT_DISASSEMBLE:
-        case Buttons::BT_TOAD:
-        case Buttons::BT_CASHSHOP: return Button::State::NORMAL;
+        case Buttons::BT_POINT: return Button::State::NORMAL;
     }
 
     if (tab_ != oldtab) {
@@ -566,6 +536,14 @@ void UIItemInventory::modify(InventoryType::Id type,
         switch (mode) {
             case Inventory::Modification::ADD:
                 update_slot(slot);
+
+                // A stack the server placed in a slot other than the one the packet named leaves
+                // the targeted refresh with nothing to show; rebuilding from the bag always agrees
+                // with the model, whichever slot it chose.
+                if (icons_.find(slot) == icons_.end()) {
+                    load_icons();
+                }
+
                 new_tab_ = type;
                 new_slot_ = slot;
                 break;
