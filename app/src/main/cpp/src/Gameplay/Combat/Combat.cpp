@@ -24,6 +24,7 @@
 #include "../../Net/Packets/AttackAndSkillPackets.h"
 #include "../../Net/Packets/GameplayPackets.h"
 #include "../Physics/FootholdTree.h"
+#include "AttackHitbox.h"
 
 namespace ms {
 namespace {
@@ -190,10 +191,10 @@ void Combat::use_move(int32_t move_id) {
 }
 
 bool Combat::has_close_bow_target() const {
-    const Point<int16_t> origin = player_.get_position();
+    const Point<int16_t> origin = player_.get_attack_origin();
     const bool toleft = !player_.getflip();
-    // The trigger window is the swing's own hitbox (intersection over its possible stances),
-    // anchored and mirrored exactly like apply_move does, so a swing that starts never whiffs.
+    // The switching box is centered vertically and extends forward from the current
+    // body/head origin. Candidate frame-0 offsets determine its size, not its position.
     Rectangle<int16_t> range = player_.get_look().get_degenerate_range();
 
     if (range.empty()) {
@@ -211,8 +212,11 @@ bool Combat::has_close_bow_target() const {
                   static_cast<int16_t>(origin.y() + range.top()),
                   static_cast<int16_t>(origin.y() + range.bottom()) };
     }
-    // Start at the body, not the muzzle 30px ahead: a wall between them must also block a swing.
-    const Point<int16_t> body { origin.x(), static_cast<int16_t>(origin.y() - 26) };
+    // Keep the existing physical body LOS anchor; do not apply the old -26 offset
+    // to the new attack origin or move this check to the projectile muzzle.
+    const Point<int16_t> physical_origin = player_.get_position();
+    const Point<int16_t> body { physical_origin.x(),
+                               static_cast<int16_t>(physical_origin.y() - 26) };
 
     for (const auto &entry : *mobs_.get_mobs()) {
         const auto *mob = static_cast<const Mob *>(entry.second.get());
@@ -237,6 +241,10 @@ void Combat::apply_move(const SpecialMove &move, bool close) {
         player_.set_afterimage(move.get_id());
 
         move.apply_stats(player_, attack);
+
+        // The action must be selected before measuring its body/head canvas bounds. Only the
+        // hitbox anchor changes: drawing, projectile launch and movement keep the feet position.
+        attack.origin = player_.get_attack_origin();
 
         // A projectile with nothing to hit runs to the far edge of this attack's own hit strip,
         // read after apply_stats: a skill's lt/rb from the img - 蜗牛投掷术 flies to its defined 464
@@ -270,16 +278,24 @@ void Combat::apply_move(const SpecialMove &move, bool close) {
 
         // The projectile leaves from the muzzle, so that is where the line to a target is
         // judged from, and only an attack that flies something can be stopped by a wall.
-        Point<int16_t> muzzle = Bullet::muzzle(origin, attack.toleft);
+        const Point<int16_t> physical_origin = player_.get_position();
+        Point<int16_t> muzzle = Bullet::muzzle(physical_origin, attack.toleft);
         const bool projectile = attack.bullet != 0;
+        // Only fallback projectiles use the short expanding segment plus a full-height tail.
+        // The resolved rectangle already includes range multipliers, facing and the body/head origin.
+        const AttackHitbox hitbox = projectile && !attack.preserve_rectangular_range
+            ? AttackHitbox::trapezoid_with_rectangular_tail(
+                  range, origin.y(), attack.toleft, Constants::PROJECTILE_NEAR_HALF_HEIGHT,
+                  Constants::PROJECTILE_TAPER_LENGTH)
+            : AttackHitbox(range);
 
         MapObjects *mob_objs = mobs_.get_mobs();
         MapObjects *reactor_objs = reactors_.get_reactors();
 
         std::vector<int32_t> mob_targets =
-            find_closest(mob_objs, range, origin, mobcount, true, muzzle, projectile);
+            find_closest(mob_objs, hitbox, physical_origin, mobcount, true, muzzle, projectile);
         std::vector<int32_t> reactor_targets =
-            find_closest(reactor_objs, range, origin, mobcount, false, muzzle, projectile);
+            find_closest(reactor_objs, hitbox, physical_origin, mobcount, false, muzzle, projectile);
 
         mobs_.send_attack(result, attack, mob_targets, mobcount);
         result.attacker = player_.get_oid();
@@ -312,7 +328,7 @@ void Combat::apply_move(const SpecialMove &move, bool close) {
 }
 
 std::vector<int32_t> Combat::find_closest(MapObjects *objs,
-                                          Rectangle<int16_t> range,
+                                          const AttackHitbox &range,
                                           Point<int16_t> origin,
                                           uint8_t objcount,
                                           bool use_mobs,

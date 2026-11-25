@@ -21,6 +21,7 @@
 
 #include "../../Constants.h"
 #include "../../Net/Packets/GameplayPackets.h"
+#include "../Combat/AttackHitbox.h"
 #include "../Physics/PhysicsParams.h"
 #include "../Stage.h"
 #include "StringHandling.h"
@@ -995,15 +996,18 @@ bool Mob::is_alive() const {
     return active_ && !dying_;
 }
 
-bool Mob::is_in_range(const Rectangle<int16_t> &range) const {
-    if (!active_) {
-        return false;
-    }
-
+Rectangle<int16_t> Mob::get_hit_bounds() const {
     Rectangle<int16_t> bounds = animations_.at(stance_).get_bounds();
     bounds.shift(get_position());
+    return bounds;
+}
 
-    return range.overlaps(bounds);
+bool Mob::is_in_range(const Rectangle<int16_t> &range) const {
+    return active_ && range.overlaps(get_hit_bounds());
+}
+
+bool Mob::is_in_range(const AttackHitbox &range) const {
+    return active_ && range.overlaps(get_hit_bounds());
 }
 
 Point<int16_t> Mob::get_head_position() const {

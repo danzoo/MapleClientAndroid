@@ -67,5 +67,6 @@ private:
     int32_t skill_id_;
     bool over_regular_;
     bool projectile_;
+    bool preserve_rectangular_range_;
 };
 }  // namespace ms

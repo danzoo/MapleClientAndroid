@@ -17,6 +17,7 @@
 
 #include <imgwz/wz.hpp>
 
+#include "../Combat/AttackHitbox.h"
 #include "StringHandling.h"
 
 namespace ms {
@@ -88,18 +89,21 @@ bool Reactor::is_hittable() const {
     return hit_table_;
 }
 
-bool Reactor::is_in_range(const Rectangle<int16_t> &range) const {
-    if (!active_) {
-        return false;
-    }
-
+Rectangle<int16_t> Reactor::get_hit_bounds() const {
     Rectangle<int16_t> bounds(
         Point<int16_t>(-30, -normal_.get_dimensions().y()),
         Point<int16_t>(
             normal_.get_dimensions().x() - 10,
             0));  // normal.get_bounds(); //animations.at(stance).get_bounds();
     bounds.shift(get_position());
+    return bounds;
+}
 
-    return range.overlaps(bounds);
+bool Reactor::is_in_range(const Rectangle<int16_t> &range) const {
+    return active_ && range.overlaps(get_hit_bounds());
+}
+
+bool Reactor::is_in_range(const AttackHitbox &range) const {
+    return active_ && range.overlaps(get_hit_bounds());
 }
 }  // namespace ms

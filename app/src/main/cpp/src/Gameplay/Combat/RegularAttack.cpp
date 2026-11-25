@@ -31,6 +31,7 @@ void RegularAttack::apply_stats(const Char &user, Attack &attack) const {
 
     if (attack.type == Attack::CLOSE) {
         attack.range = user.get_afterimage().get_range();
+        attack.preserve_rectangular_range = true;
     }
 }
 

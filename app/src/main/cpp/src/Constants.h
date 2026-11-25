@@ -175,14 +175,22 @@ constexpr double MOB_CHASE_RANGE = 40.0;
 // Target distance changes the flight duration, not the speed.
 constexpr double BULLET_SPEED = 750.0;
 
-// A straight shot's default hit band (used when the skill carries no lt/rb of its own), shaped
-// like 蜗牛投掷术's (-464,-79)-(-32,39): a forward-only strip starting at the muzzle, so a mob is
-// reached above or below only on a diagonal and never directly underfoot. Area skills override
-// this with their lt/rb data.
+// Default ranged hitbox relative to the geometric center of the body/head bounds, facing left.
+// Full height is 192px, extending 96px above and below the attack origin.
+// Mirror horizontally when facing right; skills with their own img lt/rb override this box.
+constexpr Point<int16_t> DEFAULT_RANGED_LT(-370, -96);
+constexpr Point<int16_t> DEFAULT_RANGED_RB(0, 96);
+
+// Only fallback projectile hitboxes taper; explicit img and afterimage ranges stay rectangular.
+// Expand from a 20px near edge to the resolved full height over the first 120px,
+// then retain a rectangular tail. Both segments keep the original total range.
+constexpr int16_t PROJECTILE_NEAR_HALF_HEIGHT = 10;
+constexpr int16_t PROJECTILE_TAPER_LENGTH = 300;
+
+// Projectile launch offsets relative to the physical feet position, also used for line of sight.
+// These do not shift the separate attack hitbox.
 constexpr int16_t MUZZLE_X = 30;
 constexpr int16_t SHOOT_LINE_Y = -26;
-constexpr int16_t SHOOT_BAND_TOP = -79;
-constexpr int16_t SHOOT_BAND_BOTTOM = 39;
 
 // How long the character-info window plays its loading picture before showing what it fetched (255
 // updates), and how long the login wait holds before deciding the server is not going to answer.

@@ -46,9 +46,13 @@ struct Attack {
     int32_t skill = 0;
     int32_t bullet = 0;
 
+    // Hitbox anchor at the geometric center of the character's body/head canvas bounds,
+    // separate from its physical position.
     Point<int16_t> origin;
     Rectangle<int16_t> range;
     float hrange = 1.0f;
+    // Keep explicit skill rectangles and afterimage hit ranges out of projectile trapezoids.
+    bool preserve_rectangular_range = false;
     bool toleft = false;
     // Where an unaimed projectile of this attack dies: the far edge of the hit strip the attack
     // actually uses - a skill's own lt/rb from the img, or the straight-shot strip, which the

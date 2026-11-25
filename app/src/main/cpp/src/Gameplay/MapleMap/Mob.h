@@ -31,6 +31,7 @@
 #include "MapObject.h"
 
 namespace ms {
+class AttackHitbox;
 
 class Mob : public MapObject {
 public:
@@ -126,6 +127,9 @@ public:
     // Check if this mob collides with the specified rectangle.
     bool is_in_range(const Rectangle<int16_t> &range) const;
 
+    // Use the same animation bounds for rectangular and tapered attacks.
+    bool is_in_range(const AttackHitbox &range) const;
+
     // Check if this mob is still alive.
     bool is_alive() const;
 
@@ -161,6 +165,8 @@ public:
     bool has_buff() const;
 
 private:
+    Rectangle<int16_t> get_hit_bounds() const;
+
     enum FlyDirection { STRAIGHT, UPWARDS, DOWNWARDS, NUM_DIRECTIONS };
 
     // Set the stance by byte value

@@ -721,6 +721,34 @@ namespace ms {
         }
     }
 
+    Point<int16_t> CharLook::get_attack_origin_offset() const {
+        const Point<int16_t> move = action_ ? action_->get_move() : Point<int16_t>();
+        return get_attack_origin_offset(stance_.get(), st_frame_.get(), move, flip_);
+    }
+
+    Point<int16_t> CharLook::get_attack_origin_offset(Stance::Id stance,
+                                                     uint8_t frame,
+                                                     Point<int16_t> move,
+                                                     bool facing_right) const {
+        if (!body_) {
+            return Point<int16_t>();
+        }
+
+        // Match draw()'s relative argument: the action move translates both position and
+        // mirror center, so facing does not reverse the action's own translation.
+        const DrawArgument args(move, facing_right);
+        const auto bounds = body_->get_bounds(stance, frame, args);
+        if (!bounds) {
+            return Point<int16_t>();
+        }
+
+        const int16_t middle_x = static_cast<int16_t>(
+                (static_cast<int32_t>(bounds->left()) + bounds->right()) / 2);
+        const int16_t middle_y = static_cast<int16_t>(
+                (static_cast<int32_t>(bounds->top()) + bounds->bottom()) / 2);
+        return Point<int16_t>(middle_x, middle_y);
+    }
+
     static const std::array<std::vector<Stance::Id>, 10> degen_stances = {
         {{Stance::Id::NONE},
          {Stance::Id::NONE},
@@ -765,6 +793,10 @@ namespace ms {
                 continue;
             }
 
+            // Measure the common candidate dimensions with each swing's frame-0 anchor.
+            // Only the dimensions are retained below; the switching box no longer inherits
+            // the IMG's vertical displacement on top of the new body/head-center origin.
+            part.shift(get_attack_origin_offset(stance, 0, Point<int16_t>(), false));
             if (!have) {
                 range = part;
                 have = true;
@@ -776,7 +808,21 @@ namespace ms {
             }
         }
 
-        return range;
+        if (!have || range.left() > range.right() || range.top() > range.bottom()) {
+            return Rectangle<int16_t>();
+        }
+
+        const int32_t width = static_cast<int32_t>(range.right()) - range.left();
+        const int32_t height = static_cast<int32_t>(range.bottom()) - range.top();
+        // These offsets use int16_t throughout combat. Reject unrepresentable dimensions
+        // rather than wrapping a forward edge behind the character.
+        if (width > 32767 || height > 65534) {
+            return Rectangle<int16_t>();
+        }
+        const int32_t top = -(height / 2);
+        return Rectangle<int16_t>(static_cast<int16_t>(-width), 0,
+                                  static_cast<int16_t>(top),
+                                  static_cast<int16_t>(top + height));
     }
 
     Stance::Id CharLook::getattackstance(uint8_t attack, bool degenerate) const {

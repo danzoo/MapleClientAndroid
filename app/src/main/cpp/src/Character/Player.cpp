@@ -354,9 +354,10 @@ Attack Player::prepare_attack(bool skill, bool close) const {
     attack.playerlevel = stats_.get_stat(MapleStat::Id::LEVEL);
     attack.range = stats_.get_range();
     if (attacktype == Attack::Type::RANGED) {
-        // The arrow leaves from the muzzle, so the strip starts there: a mob is reached above or
-        // below on a diagonal, never directly underfoot. A skill's own lt/rb (area shots) still
-        // overrides this in apply_stats.
+        // Default shots are defined relative to the body/head attack origin, not the muzzle.
+        // Skills with their own lt/rb still replace this rectangle in apply_stats.
+        const Rectangle<int16_t> ranged(Constants::DEFAULT_RANGED_LT,
+                                         Constants::DEFAULT_RANGED_RB);
         int16_t extra = 0;
         Weapon::Type rangedtype = get_weapontype();
         if (rangedtype == Weapon::BOW || rangedtype == Weapon::CROSSBOW) {
@@ -366,10 +367,10 @@ Attack Player::prepare_attack(bool skill, bool close) const {
                              .get_stats(get_skilllevel(SkillId::EYE_OF_AMAZON)).hrange;
             extra = static_cast<int16_t>(gain * 100.0f + 0.5f);
         }
-        attack.range = Rectangle<int16_t>(static_cast<int16_t>(attack.range.left() - extra),
-                                          -Constants::MUZZLE_X,
-                                          Constants::SHOOT_BAND_TOP,
-                                          Constants::SHOOT_BAND_BOTTOM);
+        attack.range = Rectangle<int16_t>(static_cast<int16_t>(ranged.left() - extra),
+                                          ranged.right(),
+                                          ranged.top(),
+                                          ranged.bottom());
     }
     attack.bullet = attacktype == Attack::Type::RANGED ? inventory_.get_bulletid() : 0;
     if (attacktype == Attack::Type::CLOSE) {
@@ -381,7 +382,7 @@ Attack Player::prepare_attack(bool skill, bool close) const {
             attack.knockback = WeaponData::get(swung).get_knockback();
         }
     }
-    attack.origin = get_position();
+    attack.origin = get_attack_origin();
     attack.toleft = !facing_right_;
     attack.speed = get_integer_attackspeed();
 

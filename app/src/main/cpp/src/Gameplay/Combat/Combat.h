@@ -27,6 +27,7 @@
 
 namespace ms {
 class FootholdTree;
+class AttackHitbox;
 
 class Combat {
 public:
@@ -97,7 +98,7 @@ private:
     // A shot only reaches what it has a clear line to, so the muzzle the line starts from and
     // whether this attack flies anything at all both come along; a swing needs neither.
     std::vector<int32_t> find_closest(MapObjects *objs,
-                                      Rectangle<int16_t> range,
+                                      const AttackHitbox &range,
                                       Point<int16_t> origin,
                                       uint8_t objcount,
                                       bool use_mobs,

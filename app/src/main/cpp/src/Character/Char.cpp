@@ -389,6 +389,10 @@ const Afterimage &Char::get_afterimage() const {
     return after_image_;
 }
 
+Point<int16_t> Char::get_attack_origin() const {
+    return get_position() + look_.get_attack_origin_offset();
+}
+
 void Char::set_direction(bool f) {
     facing_right_ = f;
     look_.set_direction(f);

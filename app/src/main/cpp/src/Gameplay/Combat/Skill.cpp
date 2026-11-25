@@ -15,6 +15,9 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Skill.h"
 
+#include <algorithm>
+#include <vector>
+
 #include <imgwz/wz.hpp>
 
 #include "../../Character/SkillId.h"
@@ -22,6 +25,30 @@
 #include "StringHandling.h"
 
 namespace ms {
+namespace {
+// Traverse only the custom afterimage subtree, not effect/hit animations.
+// UOL nodes can share an ancestor's child records; visit each node identity only once.
+bool has_rectangle(const img::node &node) {
+    std::vector<img::node> pending { node };
+    std::vector<img::node> visited;
+    while (!pending.empty()) {
+        const img::node current = pending.back();
+        pending.pop_back();
+        if (!current || std::find(visited.begin(), visited.end(), current) != visited.end()) {
+            continue;
+        }
+        visited.push_back(current);
+        if (static_cast<bool>(current["lt"]) || static_cast<bool>(current["rb"])) {
+            return true;
+        }
+        for (const img::node &child : current) {
+            pending.push_back(child);
+        }
+    }
+    return false;
+}
+}  // namespace
+
 Skill::Skill(int32_t id) : skill_id_(id) {
     const SkillData &data = SkillData::get(skill_id_);
 
@@ -34,6 +61,17 @@ Skill::Skill(int32_t id) : skill_id_(id) {
     }
 
     img::node src = img::wz::skill[strid.substr(0, 3) + ".img"]["skill"][strid];
+
+    // Node existence, not vector values or range emptiness, protects explicit rectangles.
+    preserve_rectangular_range_ = static_cast<bool>(src["lt"])
+                                  || static_cast<bool>(src["rb"])
+                                  || has_rectangle(src["afterimage"]);
+    for (const img::node &level : src["level"]) {
+        if (static_cast<bool>(level["lt"]) || static_cast<bool>(level["rb"])) {
+            preserve_rectangular_range_ = true;
+            break;
+        }
+    }
 
     projectile_ = true;
     over_regular_ = false;
@@ -141,6 +179,7 @@ void Skill::apply_actions(Char &user, Attack::Type type) const {
 
 void Skill::apply_stats(const Char &user, Attack &attack) const {
     attack.skill = skill_id_;
+    attack.preserve_rectangular_range = preserve_rectangular_range_;
 
     int32_t level = user.get_skilllevel(skill_id_);
     const SkillData::Stats stats = SkillData::get(skill_id_).get_stats(level);
@@ -189,6 +228,7 @@ void Skill::apply_stats(const Char &user, Attack &attack) const {
 
         if (attack.type == Attack::CLOSE && !projectile_) {
             attack.range = user.get_afterimage().get_range();
+            attack.preserve_rectangular_range = true;
         }
     }
 }
