@@ -43,7 +43,7 @@ Bullet::Bullet(Animation a,
 
 void Bullet::draw(double viewx, double viewy, float alpha) const {
     Point<int16_t> bulletpos = move_obj_.get_absolute(viewx, viewy, alpha);
-    DrawArgument args(bulletpos, flip_);
+    DrawArgument args(angle_, bulletpos, flip_, 1.0f);
     animation_.draw(args, alpha);
 }
 
@@ -62,6 +62,11 @@ bool Bullet::settarget(Point<int16_t> target) {
     const double distance = std::hypot(xdelta, ydelta);
     move_obj_.hspeed = Constants::BULLET_SPEED * xdelta / distance;
     move_obj_.vspeed = Constants::BULLET_SPEED * ydelta / distance;
+
+    // The unflipped sprite faces left. Rotate its horizontal facing to the actual
+    // velocity; screen Y points down, so leftward shots need the opposite angle.
+    angle_ = static_cast<float>(
+        std::atan2(move_obj_.vspeed, std::abs(move_obj_.hspeed)) * (flip_ ? 1.0 : -1.0));
 
     return false;
 }

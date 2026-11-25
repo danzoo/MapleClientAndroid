@@ -51,5 +51,6 @@ private:
     // then carried into a list, and they have to survive both moves.
     const FootholdTree *terrain_;
     bool flip_;
+    float angle_ = 0.0f;
 };
 }  // namespace ms
