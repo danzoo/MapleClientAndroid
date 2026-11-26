@@ -100,8 +100,7 @@ public:
     // Return the current afterimage.
     const Afterimage &get_afterimage() const;
 
-    // Body/head center for hit ranges without a matching attack visual and the bow fallback
-    // trigger. Afterimage ranges and audited skill visuals use get_position(), like sprite drawing.
+    // All attacks use the physical foot position, unaffected by stance, frame or action move.
     Point<int16_t> get_attack_origin() const;
 
     // Display an animation as an effect with the character

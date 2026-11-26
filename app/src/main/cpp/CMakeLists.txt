@@ -226,6 +226,9 @@ add_library(OpenMapleClient SHARED
         ${CMAKE_SOURCE_DIR}/thirdparty/stb/deprecated/stb_image.c
         )
 
+# Combat overlays are compiled into Debug only, independently of NDK_DEBUG.
+target_compile_definitions(OpenMapleClient PRIVATE $<$<CONFIG:Debug>:MS_DEBUG_HITBOXES>)
+
 target_include_directories(OpenMapleClient
         PRIVATE
         .

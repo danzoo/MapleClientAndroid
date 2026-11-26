@@ -22,21 +22,17 @@
 #include "../Template/Point.h"
 
 namespace ms {
-class FootholdTree;
-
 // Represents a projectile on a map.
 class Bullet {
 public:
-    enum class Flight { FLYING, ARRIVED, BLOCKED };
+    enum class Flight { FLYING, ARRIVED };
 
-    // Where a shot leaves the character. The flight starts here and a target is judged from
-    // here, so the line an obstacle is tested against is the line the projectile travels.
+    // Where a shot leaves the character.
     static Point<int16_t> muzzle(Point<int16_t> origin, bool toleft);
 
     Bullet(Animation animation,
            Point<int16_t> origin,
-           bool toleft,
-           const FootholdTree &terrain);
+           bool toleft);
 
     void draw(double viewx, double viewy, float alpha) const;
 
@@ -47,9 +43,6 @@ public:
 private:
     Animation animation_;
     MovingObject move_obj_;
-    // Held as a pointer so a bullet stays copyable: the effects it belongs to are queued and
-    // then carried into a list, and they have to survive both moves.
-    const FootholdTree *terrain_;
     bool flip_;
     float angle_ = 0.0f;
 };

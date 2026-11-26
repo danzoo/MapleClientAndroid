@@ -354,7 +354,7 @@ Attack Player::prepare_attack(bool skill, bool close) const {
     attack.playerlevel = stats_.get_stat(MapleStat::Id::LEVEL);
     attack.range = stats_.get_range();
     if (attacktype == Attack::Type::RANGED) {
-        // Default shots are defined relative to the body/head attack origin, not the muzzle.
+        // Default shots are defined relative to the physical feet, not the muzzle.
         // Skills with their own lt/rb still replace this rectangle in apply_stats.
         const Rectangle<int16_t> ranged(Constants::DEFAULT_RANGED_LT,
                                          Constants::DEFAULT_RANGED_RB);

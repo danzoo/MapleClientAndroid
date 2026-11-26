@@ -26,6 +26,10 @@
 #include "../Stage.h"
 #include "StringHandling.h"
 
+#ifdef MS_DEBUG_HITBOXES
+#include "../../Graphics/GraphicsGL.h"
+#endif
+
 namespace ms {
 namespace {
 auto fn_move_mob = []<typename... T>(T && ...args) {
@@ -223,27 +227,22 @@ int8_t Mob::update(const Physics &physics) {
     }
 
     if (death_pending_) {
-        if (stance_ == Stance::HIT) {
+        if (!pending_hits_.empty()) {
+            // An old HIT may finish while another arrow is queued or flying. Neither its
+            // animation end nor the flinch timeout may start DIE before those hits settle.
+            death_wait_ = 0;
+        } else if (stance_ == Stance::HIT) {
             if (aniend || (death_wait_ += Constants::TIMESTEP)
                 >= Constants::HIT_DEATH_WAIT) {
-                death_pending_ = false;
                 apply_death();
             }
-        } else if (pending_hit_ == 0) {
-            if (hit_played_) {
-                // The blow this died of has already been reacted to; the kill simply turned up after
-                // that flinch had played out. Reacting again would sound like two blows landing for
-                // one swing, so the death goes straight ahead.
-                death_pending_ = false;
-                apply_death();
-            } else {
-                // Nothing local is going to land on this mob, so there is no blow to line the
-                // flinch up with. Making one here keeps a death the client knows nothing about from
-                // looking like the mob simply vanished.
-                set_stance(Stance::HIT);
-                hit_sound_.play();
-                hit_played_ = true;
-            }
+        } else if (hit_played_ || !can_hit_) {
+            apply_death();
+        } else {
+            // No local attack is available to supply the final flinch.
+            set_stance(Stance::HIT);
+            hit_sound_.play();
+            hit_played_ = true;
         }
     }
 
@@ -563,6 +562,10 @@ void Mob::give_buff(const MobBuff &buff) {
 }
 
 void Mob::use_skill(const MobSkill &skill) {
+    if (!is_alive()) {
+        return;
+    }
+
     animations_[Stance::SKILL] = skill_stands_.at(skill.get_id());
     set_stance(Stance::SKILL);
 
@@ -572,12 +575,16 @@ void Mob::use_skill(const MobSkill &skill) {
 }
 
 void Mob::use_attack(const MobSpecialAttack &attack) {
+    if (!is_alive()) {
+        return;
+    }
+
     animations_[Stance::SKILL] = attack_stands_.at(attack.get_id());
     set_stance(Stance::SKILL);
 }
 
 void Mob::use_some_attack() {
-    if (stance_ == Stance::SKILL || attack_stands_.empty()) {
+    if (!is_alive() || stance_ == Stance::SKILL || attack_stands_.empty()) {
         return;
     }
 
@@ -658,6 +665,10 @@ void Mob::set_control(int8_t mode) {
 void Mob::adopt_spawn_state(Point<int16_t> position,
                             int8_t stance,
                             uint16_t fhid) {
+    if (!is_alive()) {
+        return;
+    }
+
     set_position(position);
     phobj_.fhid = fhid;
     set_stance(static_cast<uint8_t>(stance));
@@ -683,7 +694,7 @@ void Mob::set_aggro(bool aggro) {
 
 void Mob::send_movement(Point<int16_t> start,
                         std::vector<Movement> &&in_movements) {
-    if (control_) {
+    if (control_ || !is_alive()) {
         return;
     }
 
@@ -743,8 +754,17 @@ Point<int16_t> Mob::get_head_position(Point<int16_t> position) const {
 }
 
 void Mob::kill(int8_t animation) {
+    if (animation != 0 && (dying_ || !can_receive_hit())) {
+        return;
+    }
+
     switch (animation) {
-        case 0: deactivate(); break;
+        case 0:
+            pending_hits_.clear();
+            pending_hit_ = 0;
+            death_pending_ = false;
+            deactivate();
+            break;
         case 1:
             dying_ = true;
 
@@ -752,7 +772,7 @@ void Mob::kill(int8_t animation) {
             // that killed this mob is sitting in the local attack queue and lands a few hundred
             // milliseconds from now. Waiting for it is what keeps the flinch, the death and the
             // loot in step with the attack instead of running ahead of it.
-            if (can_hit_ && stance_ != Stance::DIE) {
+            if (can_hit_ || !pending_hits_.empty()) {
                 death_pending_ = true;
                 death_wait_ = 0;
 
@@ -766,6 +786,9 @@ void Mob::kill(int8_t animation) {
             }
             break;
         case 2:
+            pending_hits_.clear();
+            pending_hit_ = 0;
+            death_pending_ = false;
             fading_ = true;
             dying_ = true;
             break;
@@ -925,16 +948,19 @@ std::pair<int32_t, bool> Mob::next_damage(double mindamage,
 }
 
 void Mob::apply_damage(int32_t damage, bool toleft, uint8_t knockback) {
-    if (death_pending_) {
-        // This is the blow the server already reported the death of. It gets the flinch, and the
-        // death animation follows once the flinch has played out. Every arriving blow still sounds
-        // (a multi-hit shot reads as one hit per damage number) even once the flinch is already up.
-        pending_hit_ = 0;
+    if (!can_receive_hit()) {
+        return;
+    }
 
-        if (stance_ != Stance::HIT) {
+    if (death_pending_) {
+        // Each arriving damage line gets its sound. Do not clear another arrow's wait;
+        // Combat retires only this line's token. Restart an old HIT for the final blow.
+        if (can_hit_) {
             flip_ = toleft;
             set_stance(Stance::HIT);
+            animations_.at(Stance::HIT).reset();
         }
+        death_wait_ = 0;
         hit_sound_.play();
         hit_played_ = true;
 
@@ -963,10 +989,26 @@ void Mob::apply_damage(int32_t damage, bool toleft, uint8_t knockback) {
     }
 }
 
-void Mob::expect_hit(int32_t millis) {
-    if (millis > pending_hit_) {
-        pending_hit_ = millis;
+void Mob::queue_hit(uint64_t token, int32_t millis) {
+    if (token != 0 && can_receive_hit() && pending_hits_.insert(token).second) {
         hit_played_ = false;
+        expect_hit(millis);
+    }
+}
+
+bool Mob::has_pending_hit(uint64_t token) const {
+    return can_receive_hit() && pending_hits_.count(token) != 0;
+}
+
+void Mob::finish_hit(uint64_t token) {
+    if (pending_hits_.erase(token) != 0 && pending_hits_.empty()) {
+        pending_hit_ = 0;
+    }
+}
+
+void Mob::expect_hit(int32_t millis) {
+    if (can_receive_hit() && millis > pending_hit_) {
+        pending_hit_ = millis;
     }
 }
 
@@ -987,6 +1029,9 @@ MobAttack Mob::create_touch_attack() const {
 }
 
 void Mob::apply_death() {
+    death_pending_ = false;
+    pending_hits_.clear();
+    pending_hit_ = 0;
     set_stance(Stance::DIE);
     die_sound_.play();
     dying_ = true;
@@ -996,11 +1041,38 @@ bool Mob::is_alive() const {
     return active_ && !dying_;
 }
 
+bool Mob::can_receive_hit() const {
+    return active_ && !dead_ && !fading_ && stance_ != Stance::DIE
+           && (!dying_ || death_pending_);
+}
+
 Rectangle<int16_t> Mob::get_hit_bounds() const {
     Rectangle<int16_t> bounds = animations_.at(stance_).get_bounds();
     bounds.shift(get_position());
     return bounds;
 }
+
+#ifdef MS_DEBUG_HITBOXES
+void Mob::draw_debug_hitbox(double viewx, double viewy) const {
+    if (!can_receive_hit()) {
+        return;
+    }
+
+    // Reuse exactly the current WZ lt/rb + physical position used by is_in_range.
+    const auto bounds = get_hit_bounds();
+    const std::array<Point<double>, 4> corners {
+        Point<double>(bounds.left() + viewx, bounds.top() + viewy),
+        Point<double>(bounds.right() + viewx, bounds.top() + viewy),
+        Point<double>(bounds.right() + viewx, bounds.bottom() + viewy),
+        Point<double>(bounds.left() + viewx, bounds.bottom() + viewy)
+    };
+    const Color hit_color(0.15f, 1.0f, 0.25f, 0.9f);
+    for (size_t i = 0; i < corners.size(); ++i) {
+        GraphicsGL::get().draw_debug_line(
+            corners[i], corners[(i + 1) % corners.size()], hit_color);
+    }
+}
+#endif
 
 bool Mob::is_in_range(const Rectangle<int16_t> &range) const {
     return active_ && range.overlaps(get_hit_bounds());

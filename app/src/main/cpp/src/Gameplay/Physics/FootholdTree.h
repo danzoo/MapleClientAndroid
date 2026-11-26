@@ -60,19 +60,6 @@ public:
     // Returns the topmost and bottommost platform positions of the map.
     Range<int16_t> get_borders() const;
 
-    // Whether a wall stands between two points, and where the run meets it. Both ends are the
-    // caller's own ground: a character pressed against a wall is not behind it, and a mob on a
-    // platform is not behind that platform's own side.
-    bool blocks_line(Point<int16_t> from,
-                     Point<int16_t> to,
-                     Point<int16_t> &cross) const;
-
-    // The same sweep for one step of something already in the air, where the far end is only
-    // where this update happened to stop. A wall standing exactly there has stopped the shot.
-    bool first_crossing(Point<int16_t> from,
-                        Point<int16_t> to,
-                        Point<int16_t> &cross) const;
-
 private:
     // Recheck horizontal travel using the surface selected by this substep's landing.
     void limit_movement(PhysicsObject &object, double hmove, double vmove,
@@ -112,14 +99,8 @@ private:
                       double &crossx, double &crossy,
                       const PhysicsObject &object) const;
 
-    bool sweep_walls(Point<int16_t> from,
-                     Point<int16_t> to,
-                     bool include_end,
-                     Point<int16_t> &cross) const;
-
     std::unordered_map<uint16_t, Foothold> footholds_;
     std::unordered_multimap<int16_t, uint16_t> footholds_by_x_;
-    std::unordered_multimap<int16_t, uint16_t> walls_by_x_;
 
     Foothold null_fh_;
     Range<int16_t> walls_{std::numeric_limits<int16_t>::min(),

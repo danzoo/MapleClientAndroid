@@ -16,7 +16,6 @@
 #pragma once
 
 #include <array>
-#include <optional>
 
 #include "../../Graphics/Texture.h"
 #include "BodyDrawInfo.h"
@@ -45,10 +44,6 @@ public:
               Layer layer,
               uint8_t frame,
               const DrawArgument &args) const;
-
-    std::optional<Rectangle<int16_t>> get_bounds(Stance::Id stance,
-                                                uint8_t frame,
-                                                const DrawArgument &args) const;
 
     const std::string &get_name() const;
 

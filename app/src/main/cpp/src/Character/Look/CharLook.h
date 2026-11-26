@@ -80,10 +80,6 @@ public:
 
     Stance::Id get_stance() const;
 
-    // Offset from the physical character position to the geometric center of the current
-    // body/head canvas bounds, including the action's draw shift but no hair or equipment.
-    Point<int16_t> get_attack_origin_offset() const;
-
     const Body *get_body() const;
 
     const Hair *get_hair() const;
@@ -92,9 +88,8 @@ public:
 
     const CharEquips &get_equips() const;
 
-    // Close-range switching box, relative to the current attack origin and facing left.
-    // Preserve the candidate intersection's dimensions, center it vertically, and extend
-    // it forward from the origin. This is not a replacement for the IMG melee damage box.
+    // Close-range switching box: candidate afterimage intersection relative to the physical
+    // foot origin, facing left. This is not a replacement for the IMG melee damage box.
     Rectangle<int16_t> get_degenerate_range() const;
 
     // Initialize drawinfo
@@ -108,11 +103,6 @@ private:
               Expression::Id interexp,
               uint8_t interframe,
               uint8_t interfcframe) const;
-
-    Point<int16_t> get_attack_origin_offset(Stance::Id stance,
-                                           uint8_t frame,
-                                           Point<int16_t> move,
-                                           bool facing_right) const;
 
     uint16_t get_delay(Stance::Id stance, uint8_t frame) const;
 

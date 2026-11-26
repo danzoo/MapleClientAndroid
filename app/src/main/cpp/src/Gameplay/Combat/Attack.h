@@ -46,16 +46,11 @@ struct Attack {
     int32_t skill = 0;
     int32_t bullet = 0;
 
-    // Afterimage ranges and audited skill attack visuals use the physical sprite anchor.
-    // Other ranges use the geometric center of the character's body/head canvas bounds.
+    // All attacks originate at the character's physical foot position.
     Point<int16_t> origin;
     Rectangle<int16_t> range;
     float hrange = 1.0f;
-    // Set only when the selected hit range comes from the current weapon/skill afterimage.
-    bool uses_afterimage_range = false;
-    // Align an audited non-projectile skill's hitbox with its attack visual without changing range.
-    bool uses_skill_visual_origin = false;
-    // Keep explicit skill rectangles and afterimage hit ranges out of projectile trapezoids.
+    // Preserve explicit IMG/afterimage rectangles; unspecified ranges use a cone.
     bool preserve_rectangular_range = false;
     bool toleft = false;
     // Where an unaimed projectile of this attack dies: the far edge of the hit strip the attack

@@ -59,7 +59,7 @@ Stage::Stage() :
     state_(State::INACTIVE),
     map_id_(10000),
     level_before_(1),
-    combat_(player_, chars_, mobs_, reactors_, physics_.get_fht()),
+    combat_(player_, chars_, mobs_, reactors_),
     mob_combat_(player_, chars_, mobs_),
     exp_before_(0) {}
 
@@ -100,6 +100,7 @@ void Stage::clear() {
     magnet_active_ = false;
     player_.remove_magnet_effect();
 
+    combat_.clear();
     chars_.clear();
     npcs_.clear();
     mobs_.clear();
@@ -173,6 +174,11 @@ void Stage::draw(float alpha) const {
     portals_.draw(viewpos, alpha);
     backgrounds_.drawforegrounds(viewx, viewy, alpha);
     effect_.draw();
+
+#ifdef MS_DEBUG_HITBOXES
+    // Draw after all map layers/effects, so foregrounds cannot hide the diagnostic outlines.
+    combat_.draw_debug_hitboxes(viewx, viewy);
+#endif
 }
 
 void Stage::update() {
@@ -541,6 +547,7 @@ void Stage::transfer_player() {
 }
 
 void Stage::clear_channel_objects() {
+    combat_.clear();
     chars_.clear();
     mobs_.clear();
     drops_.clear();

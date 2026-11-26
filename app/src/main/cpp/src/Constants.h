@@ -175,17 +175,16 @@ constexpr double MOB_CHASE_RANGE = 40.0;
 // Target distance changes the flight duration, not the speed.
 constexpr double BULLET_SPEED = 750.0;
 
-// Default ranged hitbox relative to the geometric center of the body/head bounds, facing left.
+// Default ranged hitbox relative to the physical feet position, facing left.
 // Full height is 192px, extending 96px above and below the attack origin.
 // Mirror horizontally when facing right; skills with their own img lt/rb override this box.
 constexpr Point<int16_t> DEFAULT_RANGED_LT(-370, -96);
 constexpr Point<int16_t> DEFAULT_RANGED_RB(0, 96);
 
-// Only fallback projectile hitboxes taper; explicit img and afterimage ranges stay rectangular.
-// Expand from a 20px near edge to the resolved full height over the first 120px,
-// then retain a rectangular tail. Both segments keep the original total range.
-constexpr int16_t PROJECTILE_NEAR_HALF_HEIGHT = 10;
-constexpr int16_t PROJECTILE_TAPER_LENGTH = 300;
+// Fallback skill and projectile hitboxes expand from a point at the physical feet.
+// Reach the resolved top/bottom over the first 300px, then retain a rectangular tail.
+// Shorter ranges compress the cone; explicit img and afterimage ranges stay rectangular.
+constexpr int16_t DEFAULT_ATTACK_TAPER_LENGTH = 300;
 
 // Projectile launch offsets relative to the physical feet position, also used for line of sight.
 // These do not shift the separate attack hitbox.

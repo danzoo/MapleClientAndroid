@@ -113,6 +113,11 @@ namespace ms {
                             float blue,
                             float alpha);
 
+#ifdef MS_DEBUG_HITBOXES
+        // Draw a two-logical-pixel hitbox edge in view-space coordinates.
+        void draw_debug_line(Point<double> from, Point<double> to, const Color &color);
+#endif
+
         // Draw a circle filled with the specified color.
         void draw_circle(int16_t x,
                          int16_t y,

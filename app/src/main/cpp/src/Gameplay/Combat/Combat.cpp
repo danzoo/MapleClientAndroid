@@ -16,6 +16,7 @@
 #include "Combat.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 
@@ -23,8 +24,12 @@
 #include "../../IO/Messages.h"
 #include "../../Net/Packets/AttackAndSkillPackets.h"
 #include "../../Net/Packets/GameplayPackets.h"
-#include "../Physics/FootholdTree.h"
 #include "AttackHitbox.h"
+
+#ifdef MS_DEBUG_HITBOXES
+#include <android/log.h>
+#include "../../Graphics/GraphicsGL.h"
+#endif
 
 namespace ms {
 namespace {
@@ -37,23 +42,39 @@ auto fn_damage_reactor = []<typename... T>(T && ...args) {
 auto fn_use_skill = []<typename... T>(T && ...args) {
     UseSkillPacket(std::forward<T>(args)...).dispatch();
 };
+
+uint64_t next_hit_token() {
+    // Never reuse a token when a map or Combat instance changes.
+    static std::atomic<uint64_t> token { 0 };
+    return token.fetch_add(1, std::memory_order_relaxed) + 1;
+}
 }  // namespace
 
 Combat::Combat(Player &player,
                MapChars &chars,
                MapMobs &mobs,
-               MapReactors &reactors,
-               const FootholdTree &terrain) :
+               MapReactors &reactors) :
     player_(player),
     chars_(chars),
     mobs_(mobs),
     reactors_(reactors),
-    terrain_(terrain),
-    attack_results_([&](const AttackResult &attack) { apply_attack(attack); }),
+    attack_results_([&](const QueuedAttack &attack) { apply_attack(attack); }),
     bullet_effects_(
         [&](const BulletEffect &effect) { apply_bullet_effect(effect); }),
     damage_effects_(
         [&](const DamageEffect &effect) { apply_damage_effect(effect); }) {}
+
+void Combat::clear() {
+    attack_results_.clear();
+    bullet_effects_.clear();
+    damage_effects_.clear();
+    bullets_.clear();
+    damage_numbers_.clear();
+#ifdef MS_DEBUG_HITBOXES
+    debug_attack_hitbox_.reset();
+    debug_targets_.clear();
+#endif
+}
 
 void Combat::start_preload() {
     if (preloading_) {
@@ -80,7 +101,57 @@ void Combat::draw(double viewx, double viewy, float alpha) const {
     }
 }
 
+#ifdef MS_DEBUG_HITBOXES
+void Combat::draw_debug_hitboxes(double viewx, double viewy) const {
+    for (const auto &entry : *mobs_.get_mobs()) {
+        const auto *mob = static_cast<const Mob *>(entry.second.get());
+        if (mob) {
+            mob->draw_debug_hitbox(viewx, viewy);
+        }
+    }
+
+    if (!player_.is_attacking() || !debug_attack_hitbox_
+        || player_.get_stats().get_stat(MapleStat::Id::HP) == 0) {
+        return;
+    }
+
+    const Color attack_color(1.0f, 0.2f, 0.15f, 0.9f);
+    debug_attack_hitbox_->for_each_outline_edge(
+        [viewx, viewy, &attack_color](Point<int32_t> from, Point<int32_t> to) {
+            GraphicsGL::get().draw_debug_line(
+                Point<double>(from.x() + viewx, from.y() + viewy),
+                Point<double>(to.x() + viewx, to.y() + viewy), attack_color);
+        });
+
+    for (const auto &snapshot : debug_targets_) {
+        Color color(0.6f, 0.6f, 0.6f, 0.9f);
+        switch (snapshot.state) {
+            case DebugTarget::State::SELECTED:
+                color = Color(0.1f, 0.9f, 1.0f, 0.95f);
+                break;
+            case DebugTarget::State::TARGET_LIMIT:
+            case DebugTarget::State::NOT_ALIVE:
+                break;
+        }
+
+        const auto draw_edge = [viewx, viewy, &color](Point<int32_t> from,
+                                                     Point<int32_t> to) {
+            GraphicsGL::get().draw_debug_line(
+                Point<double>(from.x() + viewx, from.y() + viewy),
+                Point<double>(to.x() + viewx, to.y() + viewy), color);
+        };
+        AttackHitbox(snapshot.bounds).for_each_outline_edge(draw_edge);
+    }
+}
+#endif
+
 void Combat::update() {
+#ifdef MS_DEBUG_HITBOXES
+    if (!player_.is_attacking() || player_.get_stats().get_stat(MapleStat::Id::HP) == 0) {
+        debug_attack_hitbox_.reset();
+        debug_targets_.clear();
+    }
+#endif
     attack_results_.update();
     bullet_effects_.update();
     damage_effects_.update();
@@ -88,7 +159,8 @@ void Combat::update() {
     bullets_.remove_if([&](BulletEffect &mb) {
         int32_t target_oid = mb.damageeffect.target_oid;
 
-        if (mobs_.contains(target_oid)) {
+        if (mb.damageeffect.hit_token != 0
+            && mobs_.has_pending_hit(target_oid, mb.damageeffect.hit_token)) {
             mb.target = mobs_.get_mob_body_position(target_oid);
             Bullet::Flight flight = mb.bullet.update(mb.target);
 
@@ -97,17 +169,17 @@ void Combat::update() {
                     apply_damage_effect(mb.damageeffect);
                     break;
                 case Bullet::Flight::FLYING:
-                    // A projectile that is still travelling counts as a blow this mob has
-                    // coming for it, so a death reported over the network keeps waiting until
-                    // the arrow lands. A shot stopped by a wall renews nothing, so the pending
-                    // hit expires on its own.
                     mobs_.expect_hit(target_oid, 2 * Constants::TIMESTEP);
                     break;
-                case Bullet::Flight::BLOCKED: break;
             }
 
             return flight != Bullet::Flight::FLYING;
         }
+
+        // The target died, faded or was replaced. Finish the visible flight toward its
+        // last valid position, without reading DIE bounds or producing a corpse hit.
+        mobs_.finish_hit(target_oid, mb.damageeffect.hit_token);
+        mb.damageeffect.hit_token = 0;
         return mb.bullet.update(mb.target) != Bullet::Flight::FLYING;
     });
 
@@ -193,8 +265,8 @@ void Combat::use_move(int32_t move_id) {
 bool Combat::has_close_bow_target() const {
     const Point<int16_t> origin = player_.get_attack_origin();
     const bool toleft = !player_.getflip();
-    // The switching box is centered vertically and extends forward from the current
-    // body/head origin. Candidate frame-0 offsets determine its size, not its position.
+    // Candidate afterimage lt/rb share the physical feet anchor with the melee hitbox.
+    // Preserve their intersection's offsets; only mirror horizontally for facing.
     Rectangle<int16_t> range = player_.get_look().get_degenerate_range();
 
     if (range.empty()) {
@@ -212,18 +284,10 @@ bool Combat::has_close_bow_target() const {
                   static_cast<int16_t>(origin.y() + range.top()),
                   static_cast<int16_t>(origin.y() + range.bottom()) };
     }
-    // Keep the existing physical body LOS anchor; do not apply the old -26 offset
-    // to the new attack origin or move this check to the projectile muzzle.
-    const Point<int16_t> physical_origin = player_.get_position();
-    const Point<int16_t> body { physical_origin.x(),
-                               static_cast<int16_t>(physical_origin.y() - 26) };
-
     for (const auto &entry : *mobs_.get_mobs()) {
         const auto *mob = static_cast<const Mob *>(entry.second.get());
-        Point<int16_t> wall;
 
-        if (mob && mob->is_alive() && mob->is_in_range(range)
-            && !terrain_.blocks_line(body, mob->get_body_position(), wall)) {
+        if (mob && mob->is_alive() && mob->is_in_range(range)) {
             return true;
         }
     }
@@ -242,11 +306,8 @@ void Combat::apply_move(const SpecialMove &move, bool close) {
 
         move.apply_stats(player_, attack);
 
-        // Afterimage ranges and audited skill attack visuals share Char::draw's physical
-        // anchor, without action move. Other hit ranges keep the selected body's center.
-        attack.origin = (attack.uses_afterimage_range || attack.uses_skill_visual_origin)
-            ? player_.get_position()
-            : player_.get_attack_origin();
+        // All hit ranges share the physical feet anchor, independent of animation/action move.
+        attack.origin = player_.get_attack_origin();
 
         // A projectile with nothing to hit runs to the far edge of this attack's own hit strip,
         // read after apply_stats: a skill's lt/rb from the img - 蜗牛投掷术 flies to its defined 464
@@ -278,26 +339,65 @@ void Combat::apply_move(const SpecialMove &move, bool close) {
         uint8_t mobcount = attack.mobcount;
         AttackResult result = attack;
 
-        // The projectile leaves from the muzzle, so that is where the line to a target is
-        // judged from, and only an attack that flies something can be stopped by a wall.
         const Point<int16_t> physical_origin = player_.get_position();
-        Point<int16_t> muzzle = Bullet::muzzle(physical_origin, attack.toleft);
         const bool projectile = attack.bullet != 0;
-        // Only fallback projectiles use the short expanding segment plus a full-height tail.
-        // The resolved rectangle already includes range multipliers, facing and the body/head origin.
-        const AttackHitbox hitbox = projectile && !attack.preserve_rectangular_range
-            ? AttackHitbox::trapezoid_with_rectangular_tail(
-                  range, origin.y(), attack.toleft, Constants::PROJECTILE_NEAR_HALF_HEIGHT,
-                  Constants::PROJECTILE_TAPER_LENGTH)
+        // Skills without img lt/rb and ordinary projectile attacks use a feet-origin cone
+        // plus a full-height tail, including non-projectile skills with a fallback range.
+        // Explicit img/afterimage rectangles retain their bounds, multipliers and facing.
+        const bool tapered = !attack.preserve_rectangular_range
+                             && (move.is_skill() || projectile);
+        const AttackHitbox hitbox = tapered
+            ? AttackHitbox::cone_with_rectangular_tail(
+                  range, origin, attack.toleft, Constants::DEFAULT_ATTACK_TAPER_LENGTH)
             : AttackHitbox(range);
+
+#ifdef MS_DEBUG_HITBOXES
+        debug_attack_hitbox_ = hitbox;
+#endif
 
         MapObjects *mob_objs = mobs_.get_mobs();
         MapObjects *reactor_objs = reactors_.get_reactors();
 
         std::vector<int32_t> mob_targets =
-            find_closest(mob_objs, hitbox, physical_origin, mobcount, true, muzzle, projectile);
+            find_closest(mob_objs, hitbox, physical_origin, mobcount, true);
         std::vector<int32_t> reactor_targets =
-            find_closest(reactor_objs, hitbox, physical_origin, mobcount, false, muzzle, projectile);
+            find_closest(reactor_objs, hitbox, physical_origin, mobcount, false);
+
+#ifdef MS_DEBUG_HITBOXES
+        // No update has intervened since selection; freeze only intersecting world bounds
+        // before send_attack can calculate damage or change a mob's state.
+        debug_targets_.clear();
+        for (const auto &entry : *mob_objs) {
+            const auto *mob = static_cast<const Mob *>(entry.second.get());
+            if (!mob) {
+                continue;
+            }
+            const auto bounds = mob->get_debug_hit_bounds();
+            if (!hitbox.overlaps(bounds)) {
+                continue;
+            }
+
+            const int32_t oid = mob->get_oid();
+            DebugTarget snapshot { bounds, DebugTarget::State::TARGET_LIMIT };
+            const char *state = "TARGET_LIMIT";
+            if (std::find(mob_targets.begin(), mob_targets.end(), oid) != mob_targets.end()) {
+                snapshot.state = DebugTarget::State::SELECTED;
+                state = "SELECTED";
+            } else if (!mob->is_alive()) {
+                snapshot.state = DebugTarget::State::NOT_ALIVE;
+                state = "NOT_ALIVE";
+            }
+            debug_targets_.push_back(snapshot);
+            __android_log_print(
+                ANDROID_LOG_DEBUG, "HitboxDebug",
+                "Selection oid=%d state=%s bounds=(left=%d,right=%d,top=%d,bottom=%d) "
+                "skill=%d facing=%s",
+                static_cast<int>(oid), state,
+                static_cast<int>(bounds.left()), static_cast<int>(bounds.right()),
+                static_cast<int>(bounds.top()), static_cast<int>(bounds.bottom()),
+                static_cast<int>(move.get_id()), attack.toleft ? "left" : "right");
+        }
+#endif
 
         mobs_.send_attack(result, attack, mob_targets, mobcount);
         result.attacker = player_.get_oid();
@@ -320,6 +420,10 @@ void Combat::apply_move(const SpecialMove &move, bool close) {
             }
         }
     } else {
+#ifdef MS_DEBUG_HITBOXES
+        debug_attack_hitbox_.reset();
+        debug_targets_.clear();
+#endif
         move.apply_useeffects(player_);
         move.apply_actions(player_, Attack::Type::MAGIC);
 
@@ -333,9 +437,7 @@ std::vector<int32_t> Combat::find_closest(MapObjects *objs,
                                           const AttackHitbox &range,
                                           Point<int16_t> origin,
                                           uint8_t objcount,
-                                          bool use_mobs,
-                                          Point<int16_t> muzzle,
-                                          bool projectile) const {
+                                          bool use_mobs) const {
     std::multimap<uint16_t, int32_t> distances;
 
     for (auto &mmo : *objs) {
@@ -343,13 +445,6 @@ std::vector<int32_t> Combat::find_closest(MapObjects *objs,
             const Mob *mob = static_cast<const Mob *>(mmo.second.get());
 
             if (mob && mob->is_alive() && mob->is_in_range(range)) {
-                Point<int16_t> body = mob->get_body_position();
-                Point<int16_t> wall;
-
-                if (projectile && terrain_.blocks_line(muzzle, body, wall)) {
-                    continue;
-                }
-
                 int32_t oid = mob->get_oid();
                 uint16_t distance = mob->get_position().distance(origin);
                 distances.emplace(distance, oid);
@@ -362,12 +457,6 @@ std::vector<int32_t> Combat::find_closest(MapObjects *objs,
             if (reactor && reactor->is_hittable()
                 && reactor->is_in_range(range)) {
                 Point<int16_t> pos = reactor->get_position();
-                Point<int16_t> wall;
-
-                if (projectile && terrain_.blocks_line(muzzle, pos, wall)) {
-                    continue;
-                }
-
                 int32_t oid = reactor->get_oid();
                 uint16_t distance = pos.distance(origin);
                 distances.emplace(distance, oid);
@@ -420,14 +509,29 @@ void Combat::apply_rush(const AttackResult &result) {
 
 void Combat::apply_bullet_effect(const BulletEffect &effect) {
     bullets_.push_back(effect);
+    auto &bullet_effect = bullets_.back();
+    auto &damage = bullet_effect.damageeffect;
+    if (damage.hit_token != 0
+        && !mobs_.has_pending_hit(damage.target_oid, damage.hit_token)) {
+        mobs_.finish_hit(damage.target_oid, damage.hit_token);
+        damage.hit_token = 0;
+    }
 
-    if (bullets_.back().bullet.settarget(effect.target)) {
-        apply_damage_effect(effect.damageeffect);
+    if (bullet_effect.bullet.settarget(effect.target)) {
+        apply_damage_effect(damage);
         bullets_.pop_back();
     }
 }
 
 void Combat::apply_damage_effect(const DamageEffect &effect) {
+    // This gate also covers near-muzzle instant hits and queued non-projectile damage.
+    // is_alive() is intentionally not used: the server can report death before a lethal arrow lands.
+    if (effect.hit_token == 0
+        || !mobs_.has_pending_hit(effect.target_oid, effect.hit_token)) {
+        mobs_.finish_hit(effect.target_oid, effect.hit_token);
+        return;
+    }
+
     Point<int16_t> head_position =
         mobs_.get_mob_head_position(effect.target_oid);
     damage_numbers_.push_back(effect.number);
@@ -440,13 +544,23 @@ void Combat::apply_damage_effect(const DamageEffect &effect) {
                        effect.user,
                        move,
                        effect.knockback);
+    mobs_.finish_hit(effect.target_oid, effect.hit_token);
 }
 
 void Combat::push_attack(const AttackResult &attack) {
-    attack_results_.push(400, attack);
+    QueuedAttack queued { attack, {} };
+    for (const auto &[oid, lines] : attack.damage_lines) {
+        for (size_t i = 0; i < lines.size(); ++i) {
+            uint64_t token = next_hit_token();
+            mobs_.queue_hit(oid, token, 400);
+            queued.hit_tokens[oid].push_back(token);
+        }
+    }
+    attack_results_.push(400, queued);
 }
 
-void Combat::apply_attack(const AttackResult &attack) {
+void Combat::apply_attack(const QueuedAttack &queued) {
+    const AttackResult &attack = queued.result;
     if (auto ouser = chars_.get_char(attack.attacker)) {
         OtherChar &user = *ouser;
         user.update_skill(attack.skill, attack.level);
@@ -463,13 +577,21 @@ void Combat::apply_attack(const AttackResult &attack) {
 
         user.set_afterimage(attack.skill);
 
-        extract_effects(user, move, attack);
+        extract_effects(user, move, attack, &queued.hit_tokens);
+    } else {
+        // The attacker left during the display delay; none of its queued hits will run.
+        for (const auto &[oid, tokens] : queued.hit_tokens) {
+            for (uint64_t token : tokens) {
+                mobs_.finish_hit(oid, token);
+            }
+        }
     }
 }
 
 void Combat::extract_effects(const Char &user,
                              const SpecialMove &move,
-                             const AttackResult &result) {
+                             const AttackResult &result,
+                             const HitTokens *reserved_hits) {
     AttackUser attack_user = { user.get_skilllevel(move.get_id()),
                                user.get_level(),
                                user.is_twohanded(),
@@ -481,8 +603,32 @@ void Combat::extract_effects(const Char &user,
     Point<int16_t> from = user.get_position();
     std::vector<std::pair<int32_t, float>> ranges;
 
+    auto reserve_hit = [&](int32_t oid, size_t line, uint16_t delay) -> uint64_t {
+        if (reserved_hits) {
+            auto target = reserved_hits->find(oid);
+            if (target == reserved_hits->end() || line >= target->second.size()) {
+                return 0;
+            }
+            uint64_t token = target->second[line];
+            if (!mobs_.has_pending_hit(oid, token)) {
+                return 0;
+            }
+            mobs_.expect_hit(oid, delay);
+            return token;
+        }
+        uint64_t token = next_hit_token();
+        mobs_.queue_hit(oid, token, delay);
+        return token;
+    };
+
     for (const auto &[oid, vec] : result.damage_lines) {
-        if (mobs_.contains(oid)) {
+        bool original_target = true;
+        if (reserved_hits) {
+            auto target = reserved_hits->find(oid);
+            original_target = target != reserved_hits->end() && !target->second.empty()
+                              && mobs_.has_pending_hit(oid, target->second.front());
+        }
+        if (original_target && mobs_.can_receive_hit(oid)) {
             Point<int16_t> delta = mobs_.get_mob_position(oid) - from;
             ranges.emplace_back(oid, std::hypot(delta.x(), delta.y()));
 
@@ -530,13 +676,13 @@ void Combat::extract_effects(const Char &user,
                 };
 
                 uint16_t hitdelay = user.get_attackdelay(i) + wait;
-                mobs_.expect_hit(oid, hitdelay);
+                effect.hit_token = reserve_hit(oid, i, hitdelay);
 
                 int16_t yoff = static_cast<int16_t>(
                     (static_cast<int32_t>(i) * 2 - static_cast<int32_t>(n) + 1)
                     * Constants::ARROW_SPREAD_Y / 2);
                 Bullet hit_bullet { bullet_anim, origin + Point<int16_t>(0, yoff),
-                                    result.toleft, terrain_ };
+                                    result.toleft };
 
                 bullet_effects_.emplace(hitdelay,
                                         std::move(effect),
@@ -558,7 +704,7 @@ void Combat::extract_effects(const Char &user,
                 int16_t yoff = static_cast<int16_t>(
                     (i * 2 - result.hitcount + 1) * Constants::ARROW_SPREAD_Y / 2);
                 Bullet hit_bullet { bullet_anim, origin + Point<int16_t>(0, yoff),
-                                    result.toleft, terrain_ };
+                                    result.toleft };
                 bullet_effects_.emplace(user.get_attackdelay(i),
                                         std::move(effect),
                                         hit_bullet,
@@ -574,7 +720,7 @@ void Combat::extract_effects(const Char &user,
 
             for (auto &number : numbers) {
                 uint16_t hitdelay = user.get_attackdelay(i) + wait;
-                mobs_.expect_hit(oid, hitdelay);
+                uint64_t token = reserve_hit(oid, i, hitdelay);
 
                 damage_effects_.emplace(hitdelay,
                                         attack_user,
@@ -583,7 +729,8 @@ void Combat::extract_effects(const Char &user,
                                         result.toleft,
                                         oid,
                                         move.get_id(),
-                                        result.knockback);
+                                        result.knockback,
+                                        token);
 
                 i++;
             }

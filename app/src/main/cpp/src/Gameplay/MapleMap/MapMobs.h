@@ -78,15 +78,22 @@ public:
     // party id, so this is the only way to tell one's own kills from a party member's.
     bool is_top_damager(int32_t oid, int32_t cid) const;
 
-    // Note that a blow the client has queued locally is due to land on this mob in the specified
-    // number of milliseconds.
+    // Register/retire one queued damage line, including projectiles stopped by terrain.
+    void queue_hit(int32_t oid, uint64_t token, uint16_t delay);
+    bool has_pending_hit(int32_t oid, uint64_t token) const;
+    void finish_hit(int32_t oid, uint64_t token);
+
+    // Extend the wait estimate while a registered projectile is still flying.
     void expect_hit(int32_t oid, uint16_t delay);
 
-    // How long until the next locally queued blow lands on this mob, in milliseconds.
+    // Estimated wait for the last locally queued blow, used to synchronize drops.
     int32_t pending_hit(int32_t oid) const;
 
     // Check if the mob with the specified oid exists.
     bool contains(int32_t oid) const;
+
+    // Death waiting accepts local hits; DIE/fade/inactive/missing mobs do not.
+    bool can_receive_hit(int32_t oid) const;
 
     // Return the id of the first mob who collides with the object.
     int32_t find_colliding(const MovingObject &moveobj) const;

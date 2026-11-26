@@ -16,6 +16,7 @@
 #pragma once
 
 #include <array>
+#include <unordered_set>
 #include <vector>
 
 #include "../../Audio/Audio.h"
@@ -114,11 +115,16 @@ public:
     // Apply damage to the mob. knockback is the swung weapon's img value (0 when it has none).
     void apply_damage(int32_t damage, bool toleft, uint8_t knockback = 0);
 
-    // Note that a blow the client has queued locally for this mob is due to land in the specified
-    // number of milliseconds.
+    // Register each queued damage line once, then retire it on arrival or obstruction.
+    // Tokens belong to this mob instance, so old effects cannot hit a replacement with the same oid.
+    void queue_hit(uint64_t token, int32_t millis);
+    bool has_pending_hit(uint64_t token) const;
+    void finish_hit(uint64_t token);
+
+    // Extend the estimated wait for queued/in-flight blows without registering another hit.
     void expect_hit(int32_t millis);
 
-    // How long until the next locally queued blow lands on this mob, in milliseconds.
+    // Estimated wait for the last locally queued blow, used to synchronize drops.
     int32_t pending_hit() const;
 
     // Create a touch damage attack to the player
@@ -130,8 +136,19 @@ public:
     // Use the same animation bounds for rectangular and tapered attacks.
     bool is_in_range(const AttackHitbox &range) const;
 
+#ifdef MS_DEBUG_HITBOXES
+    // Draw the current collision bounds, without sprite mirroring/interpolation.
+    void draw_debug_hitbox(double viewx, double viewy) const;
+
+    // Read the exact world collision bounds for a target-selection snapshot.
+    Rectangle<int16_t> get_debug_hit_bounds() const { return get_hit_bounds(); }
+#endif
+
     // Check if this mob is still alive.
     bool is_alive() const;
+
+    // A reported death may still be waiting for local hits; DIE/fade/inactive mobs accept none.
+    bool can_receive_hit() const;
 
     // Return the head position.
     Point<int16_t> get_head_position() const;
@@ -279,9 +296,10 @@ private:
     // Set once the flinch and its sound for the blow being waited on have been played, so the
     // death doesn't add a second reaction for the same swing.
     bool hit_played_;
-    // Both countdowns are in milliseconds of game time.
+    // Both countdowns are in milliseconds of game time; tokens, not the estimate, gate death.
     int16_t death_wait_;
     int32_t pending_hit_;
+    std::unordered_set<uint64_t> pending_hits_;
     Linear<float> opacity_;
 };
 }  // namespace ms

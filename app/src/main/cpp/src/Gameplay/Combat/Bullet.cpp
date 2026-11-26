@@ -19,7 +19,6 @@
 #include <utility>
 
 #include "../../Constants.h"
-#include "../Physics/FootholdTree.h"
 
 namespace ms {
 
@@ -30,10 +29,8 @@ Point<int16_t> Bullet::muzzle(Point<int16_t> origin, bool toleft) {
 
 Bullet::Bullet(Animation a,
                Point<int16_t> origin,
-               bool toleft,
-               const FootholdTree &terrain) :
+               bool toleft) :
     animation_(std::move(a)),
-    terrain_(&terrain),
     flip_(toleft) {
     const Point<int16_t> start = muzzle(origin, toleft);
 
@@ -74,26 +71,20 @@ bool Bullet::settarget(Point<int16_t> target) {
 Bullet::Flight Bullet::update(Point<int16_t> target) {
     animation_.update();
 
-    const Point<int16_t> before = move_obj_.get_position();
+    const Point<double> before(move_obj_.crnt_x(), move_obj_.crnt_y());
+    const bool to_right = move_obj_.hspeed > 0.0;
+    const auto has_arrived = [to_right](double xdelta) {
+        // Mirror the same ten-pixel arrival tolerance for both flight directions.
+        return to_right ? xdelta < 10 : xdelta > -10;
+    };
+    if (has_arrived(target.x() - before.x())) {
+        // A moving target may have reached/passed the arrow since the previous update.
+        return Flight::ARRIVED;
+    }
 
     move_obj_.move();
 
-    const Point<int16_t> after = move_obj_.get_position();
-
-    // A wall this step runs into ends the flight where it meets it, not where the step was
-    // heading.
-    Point<int16_t> wall;
-
-    if (terrain_->first_crossing(before, after, wall)) {
-        move_obj_.set_x(wall.x());
-        move_obj_.set_y(wall.y());
-
-        return Flight::BLOCKED;
-    }
-
-    int16_t xdelta = target.x() - move_obj_.get_x();
-    bool arrived = move_obj_.hspeed > 0.0 ? xdelta < 10 : xdelta > 10;
-
-    return arrived ? Flight::ARRIVED : Flight::FLYING;
+    return has_arrived(target.x() - move_obj_.crnt_x())
+        ? Flight::ARRIVED : Flight::FLYING;
 }
 }  // namespace ms

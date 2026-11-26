@@ -168,11 +168,29 @@ void MapMobs::apply_damage(int32_t oid,
                            const SpecialMove &move,
                            uint8_t knockback) {
     flush_spawn_events();
-    if (auto mob = mobs_.get<Mob>(oid)) {
+    if (auto mob = mobs_.get<Mob>(oid); mob && mob->get().can_receive_hit()) {
         mob->get().apply_damage(damage, toleft, knockback);
-
-        // TODO: Maybe move this into the method above too?
         move.apply_hiteffects(user, *mob);
+    }
+}
+
+void MapMobs::queue_hit(int32_t oid, uint64_t token, uint16_t delay) {
+    flush_spawn_events();
+    if (auto mob = mobs_.get<Mob>(oid)) {
+        mob->get().queue_hit(token, delay);
+    }
+}
+
+bool MapMobs::has_pending_hit(int32_t oid, uint64_t token) const {
+    if (auto mob = mobs_.get<const Mob>(oid)) {
+        return mob->get().has_pending_hit(token);
+    }
+    return false;
+}
+
+void MapMobs::finish_hit(int32_t oid, uint64_t token) {
+    if (auto mob = mobs_.get<Mob>(oid)) {
+        mob->get().finish_hit(token);
     }
 }
 
@@ -192,6 +210,13 @@ int32_t MapMobs::pending_hit(int32_t oid) const {
 
 bool MapMobs::contains(int32_t oid) const {
     return mobs_.contains(oid);
+}
+
+bool MapMobs::can_receive_hit(int32_t oid) const {
+    if (auto mob = mobs_.get<const Mob>(oid)) {
+        return mob->get().can_receive_hit();
+    }
+    return false;
 }
 
 int32_t MapMobs::find_colliding(const MovingObject &moveobj) const {

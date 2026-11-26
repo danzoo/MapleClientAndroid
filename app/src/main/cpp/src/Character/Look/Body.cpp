@@ -15,7 +15,6 @@
 //	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "Body.h"
 
-#include <algorithm>
 #include <array>
 #include <imgwz/wz.hpp>
 #include <string>
@@ -101,72 +100,6 @@ void Body::draw(Stance::Id stance,
     }
 
     frameit->second.draw(args);
-}
-
-std::optional<Rectangle<int16_t>> Body::get_bounds(
-    Stance::Id stance, uint8_t frame, const DrawArgument &args) const {
-    std::optional<Rectangle<int16_t>> bounds;
-
-    if (stance >= Stance::Id::LENGTH) {
-        return bounds;
-    }
-
-    const auto include_layer = [&](Stance::Id layer_stance,
-                                   Layer layer,
-                                   uint8_t layer_frame) {
-        const auto &textures = stances_[layer_stance][layer];
-        const auto frameit = textures.find(layer_frame);
-
-        if (frameit == textures.end()) {
-            return;
-        }
-
-        const Texture &texture = frameit->second;
-
-        if (!texture.is_valid()) {
-            return;
-        }
-
-        const Point<int16_t> dimensions = texture.get_dimensions();
-
-        if (dimensions.x() <= 0 || dimensions.y() <= 0) {
-            return;
-        }
-
-        // Origins already include the constructor's stitching shifts.
-        const auto rectangle =
-            args.get_rectangle(texture.get_origin(), dimensions);
-        const Rectangle<int16_t> normalized(
-            std::min(rectangle.left(), rectangle.right()),
-            std::max(rectangle.left(), rectangle.right()),
-            std::min(rectangle.top(), rectangle.bottom()),
-            std::max(rectangle.top(), rectangle.bottom()));
-
-        if (!bounds) {
-            bounds = normalized;
-        } else {
-            bounds = Rectangle<int16_t>(
-                std::min(bounds->left(), normalized.left()),
-                std::max(bounds->right(), normalized.right()),
-                std::min(bounds->top(), normalized.top()),
-                std::max(bounds->bottom(), normalized.bottom()));
-        }
-    };
-
-    include_layer(stance, Layer::BODY, frame);
-    include_layer(stance, Layer::HEAD, frame);
-
-    if (stance == Stance::Id::DEAD) {
-        // CharLook also draws the standing head in its DEAD branch.
-        include_layer(Stance::Id::STAND1, Layer::HEAD, 1);
-    } else if (!Stance::is_climbing(stance)) {
-        // All arm/hand layers lie between BODY and HEAD; NONE is not drawn.
-        for (int layer = Layer::ARM; layer < Layer::HEAD; ++layer) {
-            include_layer(stance, static_cast<Layer>(layer), frame);
-        }
-    }
-
-    return bounds;
 }
 
 const std::string &Body::get_name() const {

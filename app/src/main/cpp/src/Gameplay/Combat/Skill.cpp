@@ -228,7 +228,6 @@ void Skill::apply_stats(const Char &user, Attack &attack) const {
 
         if (attack.type == Attack::CLOSE && !projectile_) {
             attack.range = user.get_afterimage().get_range();
-            attack.uses_afterimage_range = true;
             attack.preserve_rectangular_range = true;
 
             if (skill_id_ == SkillId::SLASH_BLAST) {
@@ -237,11 +236,6 @@ void Skill::apply_stats(const Char &user, Attack &attack) const {
             }
         }
     }
-
-    // Effect/afterimage drawing uses the physical anchor, without the body's action move.
-    // Check the final bullet too: skills without a ball can still inherit equipped ammunition.
-    attack.uses_skill_visual_origin = !projectile_ && attack.bullet == 0
-        && SkillId::has_physical_attack_visual(skill_id_);
 }
 
 void Skill::apply_hiteffects(const AttackUser &user, Mob &target) const {

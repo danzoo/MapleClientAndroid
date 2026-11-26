@@ -25,8 +25,13 @@
 #include "../MapleMap/MapReactors.h"
 #include "RegularAttack.h"
 
+#ifdef MS_DEBUG_HITBOXES
+#include <optional>
+#include <vector>
+#include "AttackHitbox.h"
+#endif
+
 namespace ms {
-class FootholdTree;
 class AttackHitbox;
 
 class Combat {
@@ -34,14 +39,21 @@ public:
     Combat(Player &player,
            MapChars &chars,
            MapMobs &mobs,
-           MapReactors &reactors,
-           const FootholdTree &terrain);
+           MapReactors &reactors);
 
     // Draw bullets, damage numbers etc.
     void draw(double viewx, double viewy, float alpha) const;
 
+#ifdef MS_DEBUG_HITBOXES
+    // Draw the local attack while attacking and current mob collision bounds every frame.
+    void draw_debug_hitboxes(double viewx, double viewy) const;
+#endif
+
     // Poll attacks, damage effects, etc.
     void update();
+
+    // Clear field-local effects on map changes; keep the skill resource cache.
+    void clear();
 
     // Begin preloading all active skill resources (effects, sounds, textures).
     // Work is distributed across frames with a time budget to avoid stutter.
@@ -80,6 +92,8 @@ private:
         // Weapon img knockback points behind this blow; 0 for arrows and every weapon without
         // the key.
         uint8_t knockback = 0;
+        // Nonzero for an aimed damage line registered on the original mob instance.
+        uint64_t hit_token = 0;
     };
 
     struct BulletEffect {
@@ -88,22 +102,25 @@ private:
         Point<int16_t> target;
     };
 
-    void apply_attack(const AttackResult &attack);
+    using HitTokens = std::unordered_map<int32_t, std::vector<uint64_t>>;
+    struct QueuedAttack {
+        AttackResult result;
+        HitTokens hit_tokens;
+    };
+
+    void apply_attack(const QueuedAttack &attack);
 
     void apply_move(const SpecialMove &move, bool close = false);
 
-    // Minimum shooting range is checked before choosing an action, only against live reachable mobs.
+    // Minimum shooting range is checked before choosing an action, against live mobs in range.
     bool has_close_bow_target() const;
 
-    // A shot only reaches what it has a clear line to, so the muzzle the line starts from and
-    // whether this attack flies anything at all both come along; a swing needs neither.
+    // Choose the nearest eligible targets inside the actual attack hitbox.
     std::vector<int32_t> find_closest(MapObjects *objs,
                                       const AttackHitbox &range,
                                       Point<int16_t> origin,
                                       uint8_t objcount,
-                                      bool use_mobs,
-                                      Point<int16_t> muzzle,
-                                      bool projectile) const;
+                                      bool use_mobs) const;
 
     void apply_use_movement(const SpecialMove &move);
 
@@ -118,7 +135,8 @@ private:
 
     void extract_effects(const Char &user,
                          const SpecialMove &move,
-                         const AttackResult &result);
+                         const AttackResult &result,
+                         const HitTokens *reserved_hits = nullptr);
 
     std::vector<DamageNumber> place_numbers(
         int32_t oid,
@@ -130,17 +148,29 @@ private:
     MapChars &chars_;
     MapMobs &mobs_;
     MapReactors &reactors_;
-    const FootholdTree &terrain_;
 
     std::unordered_map<int32_t, Skill> skills_;
     RegularAttack regular_attack_;
 
-    TimedQueue<AttackResult> attack_results_;
+    TimedQueue<QueuedAttack> attack_results_;
     TimedQueue<BulletEffect> bullet_effects_;
     TimedQueue<DamageEffect> damage_effects_;
 
     std::list<BulletEffect> bullets_;
     std::list<DamageNumber> damage_numbers_;
+
+#ifdef MS_DEBUG_HITBOXES
+    struct DebugTarget {
+        enum class State { SELECTED, TARGET_LIMIT, NOT_ALIVE };
+
+        Rectangle<int16_t> bounds;
+        State state;
+    };
+
+    // Exact world-space snapshots used to select targets; never move them with the sprites.
+    std::optional<AttackHitbox> debug_attack_hitbox_;
+    std::vector<DebugTarget> debug_targets_;
+#endif
 
     // Skill preloading state
     std::deque<int32_t> preload_queue_;

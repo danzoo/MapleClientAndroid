@@ -20,6 +20,10 @@
 #include <iostream>
 #include <vector>
 
+#ifdef MS_DEBUG_HITBOXES
+#include <limits>
+#endif
+
 #include <android/log.h>
 
 #include "../Configuration.h"
@@ -1659,6 +1663,129 @@ namespace ms {
                                    Color(red, green, blue, alpha),
                                    0.0f);
     }
+
+#ifdef MS_DEBUG_HITBOXES
+    void GraphicsGL::draw_debug_line(Point<double> from, Point<double> to, const Color &color) {
+        if (locked_ || color.invisible() || VWIDTH <= 0 || VHEIGHT <= 0) {
+            return;
+        }
+
+        double x0 = from.x();
+        double y0 = from.y();
+        double x1 = to.x();
+        double y1 = to.y();
+
+        if (!std::isfinite(x0) || !std::isfinite(y0)
+            || !std::isfinite(x1) || !std::isfinite(y1)) {
+            return;
+        }
+
+        // Clip the centreline before narrowing any coordinates. Two pixels of margin cover both
+        // the one-pixel half-width and the one-pixel square caps, including diagonal overhang.
+        const double min_x = -2.0;
+        const double min_y = -2.0;
+        const double max_x = static_cast<double>(VWIDTH) + 2.0;
+        const double max_y = static_cast<double>(VHEIGHT) + 2.0;
+        auto clip_axis = [](double &a0, double &b0, double &a1, double &b1,
+                            double lower, double upper) {
+            if ((a0 < lower && a1 < lower) || (a0 > upper && a1 > upper)) {
+                return false;
+            }
+            if (a0 >= lower && a0 <= upper && a1 >= lower && a1 <= upper) {
+                return true;
+            }
+
+            double da = a1 - a0;
+            double db = b1 - b0;
+            if (!std::isfinite(da) || !std::isfinite(db)) {
+                // Opposite finite endpoints can overflow their difference, but not this half-step.
+                da = a1 * 0.5 - a0 * 0.5;
+                db = b1 * 0.5 - b0 * 0.5;
+            }
+            const double slope = db / da;
+            // Anchor near the viewport to keep slope roundoff from becoming a huge intercept.
+            // The midpoint also preserves symmetric distant segments passing through the origin.
+            double origin_a = a0 * 0.5 + a1 * 0.5;
+            double origin_b = b0 * 0.5 + b1 * 0.5;
+            if (std::abs(a0) < std::abs(origin_a)) {
+                origin_a = a0;
+                origin_b = b0;
+            }
+            if (std::abs(a1) < std::abs(origin_a)) {
+                origin_a = a1;
+                origin_b = b1;
+            }
+            const double intercept = std::fma(-origin_a, slope, origin_b);
+            if (!std::isfinite(slope) || !std::isfinite(intercept)) {
+                return false;
+            }
+
+            // Intersect at each boundary directly: a shared parametric t can round both ends of
+            // an extremely long segment to the same point and lose its entire visible portion.
+            if (a0 < lower || a0 > upper) {
+                a0 = std::max(lower, std::min(upper, a0));
+                b0 = std::fma(a0, slope, intercept);
+            }
+            if (a1 < lower || a1 > upper) {
+                a1 = std::max(lower, std::min(upper, a1));
+                b1 = std::fma(a1, slope, intercept);
+            }
+            return std::isfinite(b0) && std::isfinite(b1);
+        };
+
+        // Start with the dominant axis so the first slope stays bounded even for very distant
+        // endpoints. The second clip operates on the already shortened segment.
+        if (std::abs(x1 * 0.5 - x0 * 0.5) >= std::abs(y1 * 0.5 - y0 * 0.5)) {
+            if (!clip_axis(x0, y0, x1, y1, min_x, max_x)
+                || !clip_axis(y0, x0, y1, x1, min_y, max_y)) {
+                return;
+            }
+        } else {
+            if (!clip_axis(y0, x0, y1, x1, min_y, max_y)
+                || !clip_axis(x0, y0, x1, y1, min_x, max_x)) {
+                return;
+            }
+        }
+
+        // Remove possible boundary-intersection roundoff before constructing the stroke.
+        x0 = std::max(min_x, std::min(max_x, x0));
+        y0 = std::max(min_y, std::min(max_y, y0));
+        x1 = std::max(min_x, std::min(max_x, x1));
+        y1 = std::max(min_y, std::min(max_y, y1));
+        const double dx = x1 - x0;
+        const double dy = y1 - y0;
+        const double length = std::hypot(dx, dy);
+        const double ux = length > 0.0 ? dx / length : 1.0;
+        const double uy = length > 0.0 ? dy / length : 0.0;
+        const double nx = -uy;
+        const double ny = ux;
+
+        // Extend one pixel at each end so adjacent hitbox edges overlap at their corners. With
+        // coincident endpoints the fallback tangent above produces a visible 2x2 square instead.
+        x0 -= ux;
+        y0 -= uy;
+        x1 += ux;
+        y1 += uy;
+        auto to_coord = [](double value) {
+            const double lower = std::numeric_limits<GLshort>::lowest();
+            const double upper = std::numeric_limits<GLshort>::max();
+            return static_cast<GLshort>(std::max(lower, std::min(upper, std::round(value))));
+        };
+
+        std::vector<Quad> &batch = batch_quads();
+        batch.emplace_back(0, 0, 0, 0, null_offset_, color, 0.0f);
+        Quad &quad = batch.back();
+        // Preserve Quad's perimeter order: submit emits (0,1,2) and (0,2,3).
+        quad.vertices[0].localcoord_x = to_coord(x0 - nx);
+        quad.vertices[0].localcoord_y = to_coord(y0 - ny);
+        quad.vertices[1].localcoord_x = to_coord(x0 + nx);
+        quad.vertices[1].localcoord_y = to_coord(y0 + ny);
+        quad.vertices[2].localcoord_x = to_coord(x1 + nx);
+        quad.vertices[2].localcoord_y = to_coord(y1 + ny);
+        quad.vertices[3].localcoord_x = to_coord(x1 - nx);
+        quad.vertices[3].localcoord_y = to_coord(y1 - ny);
+    }
+#endif
 
     void GraphicsGL::draw_circle(int16_t x,
                                  int16_t y,

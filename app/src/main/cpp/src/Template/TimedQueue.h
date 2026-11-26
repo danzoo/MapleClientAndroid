@@ -31,6 +31,11 @@ public:
 
     void push(int64_t delay, const T &t) { queue_.emplace(time_ + delay, t); }
 
+    void clear() {
+        queue_ = {};
+        time_ = 0;
+    }
+
     template<typename... Args>
     void emplace(int64_t delay, Args &&... args) {
         queue_.emplace(time_ + delay, std::forward<Args>(args)...);
