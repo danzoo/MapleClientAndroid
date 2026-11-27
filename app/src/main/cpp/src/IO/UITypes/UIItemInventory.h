@@ -83,6 +83,14 @@ private:
 
     Point<int16_t> get_tabpos(InventoryType::Id tab) const;
 
+    // The carry strip is the background's head, which the art's origin lifts above the window
+    // anchor when its top is stretched, so the fixed band of the base class no longer sits on it.
+    bool is_in_drag_range(Point<int16_t> cursorpos) const override;
+
+    // The window owns what its art covers, head above the anchor included, or a touch on the
+    // stretched head never reaches it and falls through to the map.
+    bool is_in_range(Point<int16_t> cursorpos) const override;
+
     Icon *get_icon(int16_t slot);
 
     class ItemIcon : public Icon::Type {

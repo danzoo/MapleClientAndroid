@@ -117,7 +117,7 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
 
     // TODO: Change these to production
     backgrnd_ = Item["backgrnd"];
-    backgrnd2_ = Item["productionBackgrnd2"];
+    backgrnd2_ = Item["backgrnd2"];
     backgrnd3_ = Item["backgrnd3"];
 
     bg_dimensions_ = backgrnd_.get_dimensions();
@@ -197,7 +197,6 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
                      });
 
     dimension_ = bg_dimensions_;
-    drag_area_ = Point<int16_t>(dimension_.x(), 20);
     buttons_[Buttons::BT_CLOSE]->set_position(Point<int16_t>(dimension_.x() - 22, 6));
 
     buttons_[Buttons::BT_COIN]->set_active(true);
@@ -486,6 +485,33 @@ Cursor::State UIItemInventory::send_cursor(bool pressed,
     clear_tooltip();
 
     return UIElement::send_cursor(pressed, cursorpos);
+}
+
+// The head of the background hangs its origin above the window anchor, so stretching the art's top
+// lifts the title strip with it and the fixed band of the base class ends up on plain body. The
+// strip that carries the window therefore starts at the art's top edge and runs to the tab row;
+// the close button on it keeps its press.
+bool UIItemInventory::is_in_drag_range(Point<int16_t> cursorpos) const {
+    uint16_t buttonid;
+
+    if (button_at(cursorpos, buttonid)) {
+        return false;
+    }
+
+    Point<int16_t> relative = cursorpos - position_;
+    int16_t head_top = -backgrnd_.get_origin().y();
+
+    return relative.x() >= 0 && relative.x() < dimension_.x()
+           && relative.y() >= head_top && relative.y() < get_tabpos(tab_).y();
+}
+
+bool UIItemInventory::is_in_range(Point<int16_t> cursorpos) const {
+    int16_t head_top = -backgrnd_.get_origin().y();
+    Rectangle<int16_t> bounds(position_ + Point<int16_t>(0, head_top),
+                              position_ + Point<int16_t>(dimension_.x(),
+                                                         head_top + dimension_.y()));
+
+    return bounds.contains(cursorpos);
 }
 
 void UIItemInventory::send_key(int32_t keycode, bool pressed, bool escape) {
