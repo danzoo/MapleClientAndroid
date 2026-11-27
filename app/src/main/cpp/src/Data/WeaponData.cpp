@@ -36,7 +36,13 @@ WeaponData::WeaponData(int32_t equipid) : equip_data_(EquipData::get(equipid)) {
 
     bool twosounds = soundsrc["Attack2"].data_type() == img::node::type::audio;
 
-    if (twosounds) {
+    // A bow/crossbow/claw/gun keeps its projectile shot in Attack2 and reuses a plain melee whoosh
+    // in Attack (the bow's Attack is byte-identical to the sword/barehands swing). The degenerate
+    // swing must play that melee whoosh, so it takes Attack rather than the shot in Attack2.
+    bool ranged = type_ == Weapon::BOW || type_ == Weapon::CROSSBOW
+                  || type_ == Weapon::CLAW || type_ == Weapon::GUN;
+
+    if (twosounds && !ranged) {
         use_sounds_[false] = soundsrc["Attack"];
         use_sounds_[true] = soundsrc["Attack2"];
     } else {

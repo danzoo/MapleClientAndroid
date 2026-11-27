@@ -173,7 +173,7 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
     slot_range_[InventoryType::Id::CASH] = { 1, window_last };
 
     slider_ = Slider(Slider::Type::DEFAULT_SILVER,
-                     Range<int16_t>(60, 255),
+                     Range<int16_t>(60, 265),
                      260,
                      ROWS_,
                      // Rows of content = ceil(slots / columns). Subtracting the ROWS_ viewport
@@ -211,14 +211,17 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
 void UIItemInventory::draw(float alpha) const {
     UIElement::draw_sprites(alpha);
 
-    Point<int16_t> mesolabel_pos = position_ + Point<int16_t>(160, 262);
-    Point<int16_t> maplepointslabel_pos = position_ + Point<int16_t>(160, 278);
+    // The value boxes live in backgrnd3; the numbers hang two pixels off each box's right border
+    // and ride the box when it moves, so the points row sits three pixels lower than the meso row's
+    // own box top offset because its box is drawn three pixels down the panel.
+    Point<int16_t> mesolabel_pos = position_ + Point<int16_t>(184, 263);
+    Point<int16_t> maplepointslabel_pos = position_ + Point<int16_t>(184, 284);
 
     backgrnd_.draw(position_);
     backgrnd2_.draw(position_);
     backgrnd3_.draw(position_);
 
-    slider_.draw(position_ + Point<int16_t>(0, 1));
+    slider_.draw(position_ + Point<int16_t>(0, -16));
 
     meso_label_.draw(mesolabel_pos);
     maple_points_label_.draw(maplepointslabel_pos);
@@ -445,7 +448,14 @@ Cursor::State UIItemInventory::send_cursor(bool pressed,
 
     Point<int16_t> cursor_relative = cursorpos - position_;
 
-    if (slider_.isenabled()) {
+    // The slider's touch strip is its eight pixel track padded by six on each side, and the sort
+    // and gather button now sits under that strip. Asked first, the slider swallows the button's
+    // right column - a press there scrolls a grid that cannot scroll instead of pressing the
+    // button the finger is on - so a press that lands on a button never reaches the strip.
+    uint16_t buttonid;
+    bool on_button = button_at(cursorpos, buttonid);
+
+    if (slider_.isenabled() && !on_button) {
         Cursor::State sstate = slider_.send_cursor(cursor_relative, pressed);
 
         if (sstate != Cursor::State::IDLE) {

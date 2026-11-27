@@ -238,7 +238,16 @@ void Combat::use_move(int32_t move_id) {
     SpecialMove::ForbidReason reason = player_.can_use(*move);
     const Weapon::Type weapontype = player_.get_weapontype();
     const bool bow = weapontype == Weapon::BOW || weapontype == Weapon::CROSSBOW;
+    const bool ammo_weapon = weapontype == Weapon::BOW || weapontype == Weapon::CROSSBOW
+                            || weapontype == Weapon::CLAW;
     bool close = move->is_attack() && SkillId::bow_melee(move->get_id());
+
+    // Out of arrows/bolts/stars, a skill that needs them still warns why it did not fire even
+    // though the key swings instead; the basic attack stays silent. display_message throttles
+    // repeats per type (MESSAGE_COOLDOWN_), so holding the key does not spam the red line.
+    if (ammo_weapon && move->is_skill() && reason == SpecialMove::FBR_BULLETCOST) {
+        ForbidSkillMessage(SpecialMove::FBR_BULLETCOST, weapontype).drop();
+    }
 
     if (bow && move->is_attack() && SkillId::bow_has_minimum_range(move->get_id())
         && !player_.can_shoot_bow_at_close_range()
@@ -253,6 +262,16 @@ void Combat::use_move(int32_t move_id) {
         if (reason == SpecialMove::FBR_BULLETCOST) {
             reason = SpecialMove::FBR_NONE; // A weapon swing does not consume arrows.
         }
+    }
+
+    // Out of arrows, bolts or throwing stars, a bow/crossbow/claw still answers the attack key:
+    // swing it as a degenerate melee attack instead of dead-pressing. prepare_attack turns the
+    // empty projectile slot into a CLOSE swing; fall back to the basic move so the failed skill
+    // spends no MP, multiplier or effect. Ownership/weapon/cooldown refusals never reach here.
+    if (ammo_weapon && move->is_attack() && reason == SpecialMove::FBR_BULLETCOST) {
+        move = &get_move(0);
+        close = true;
+        reason = SpecialMove::FBR_NONE;
     }
 
     if (reason == SpecialMove::ForbidReason::FBR_NONE) {
