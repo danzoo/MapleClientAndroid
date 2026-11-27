@@ -26,6 +26,9 @@ void CharacterParser::parse_inventory(InPacket &recv, Inventory &invent) {
     invent.set_slotmax(InventoryType::SETUP, recv.read_ubyte());
     invent.set_slotmax(InventoryType::ETC, recv.read_ubyte());
     invent.set_slotmax(InventoryType::CASH, recv.read_ubyte());
+    // Custom dedicated inventories; the server writes these two limits right after CASH.
+    invent.set_slotmax(InventoryType::SCROLL, recv.read_ubyte());
+    invent.set_slotmax(InventoryType::ORE, recv.read_ubyte());
 
     recv.skip(8);
 
@@ -44,9 +47,11 @@ void CharacterParser::parse_inventory(InPacket &recv, Inventory &invent) {
 
     recv.skip(2);
 
-    InventoryType::Id toparse[4] = { InventoryType::USE,
+    InventoryType::Id toparse[6] = { InventoryType::USE,
                                      InventoryType::SETUP,
                                      InventoryType::ETC,
+                                     InventoryType::SCROLL,
+                                     InventoryType::ORE,
                                      InventoryType::CASH };
 
     for (auto inv : toparse) {

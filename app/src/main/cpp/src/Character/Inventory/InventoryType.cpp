@@ -23,10 +23,33 @@ InventoryType::Id InventoryType::by_item_id(int32_t item_id) {
     constexpr std::array<Id, 6> values_by_id = { NONE,  EQUIP, USE,
                                                  SETUP, ETC,   CASH };
 
+    // Dedicated tabs: scrolls (204xxxx/234xxxx) and ores are subsets of USE/ETC, so they must be
+    // matched before the generic prefix routing. Must mirror the server's ItemConstants routing.
+    if (is_scroll_item(item_id)) {
+        return Id::SCROLL;
+    }
+    if (is_ore_item(item_id)) {
+        return Id::ORE;
+    }
+
     int32_t prefix = item_id / 1000000;
 
     return (prefix > Id::NONE && prefix <= Id::CASH) ? values_by_id[prefix]
                                                      : Id::NONE;
+}
+
+bool InventoryType::is_scroll_item(int32_t item_id) {
+    int32_t prefix = item_id / 10000;
+    return prefix == 204 || prefix == 234;
+}
+
+bool InventoryType::is_ore_item(int32_t item_id) {
+    return (item_id >= 4004000 && item_id <= 4004004)
+        || (item_id >= 4010000 && item_id <= 4010007)
+        || (item_id >= 4011000 && item_id <= 4011008)
+        || (item_id >= 4020000 && item_id <= 4020008)
+        || (item_id >= 4021000 && item_id <= 4021008)
+        || item_id == 4001018 || item_id == 4001154 || item_id == 4001197;
 }
 
 InventoryType::Id InventoryType::by_value(int8_t value) {
@@ -37,6 +60,8 @@ InventoryType::Id InventoryType::by_value(int8_t value) {
         case 3: return Id::SETUP;
         case 4: return Id::ETC;
         case 5: return Id::CASH;
+        case 7: return Id::SCROLL;
+        case 8: return Id::ORE;
         default: break;
     }
 

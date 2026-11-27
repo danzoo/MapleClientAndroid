@@ -171,6 +171,8 @@ void ModifyInventoryHandler::handle(InPacket &recv) const {
                     case InventoryType::Id::SETUP:
                     case InventoryType::Id::ETC:
                     case InventoryType::Id::CASH:
+                    case InventoryType::Id::SCROLL:
+                    case InventoryType::Id::ORE:
                         if (itinvent) {
                             itinvent->get().modify(mod.type,
                                                    mod.pos,

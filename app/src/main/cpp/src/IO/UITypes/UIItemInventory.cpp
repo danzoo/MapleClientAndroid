@@ -142,10 +142,15 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
         std::make_unique<TwoSpriteButton>(tabdis["1"], taben["1"]);
     buttons_[Buttons::BT_TAB_ETC] =
         std::make_unique<TwoSpriteButton>(tabdis["2"], taben["2"]);
-    buttons_[Buttons::BT_TAB_SETUP] =
+    // Tab art order is equip/use/etc/scroll/ore/setup/cash; setup and cash moved to images 5/6.
+    buttons_[Buttons::BT_TAB_SCROLL] =
         std::make_unique<TwoSpriteButton>(tabdis["3"], taben["3"]);
-    buttons_[Buttons::BT_TAB_CASH] =
+    buttons_[Buttons::BT_TAB_ORE] =
         std::make_unique<TwoSpriteButton>(tabdis["4"], taben["4"]);
+    buttons_[Buttons::BT_TAB_SETUP] =
+        std::make_unique<TwoSpriteButton>(tabdis["5"], taben["5"]);
+    buttons_[Buttons::BT_TAB_CASH] =
+        std::make_unique<TwoSpriteButton>(tabdis["6"], taben["6"]);
 
     buttons_[Buttons::BT_COIN] = std::make_unique<MapleButton>(Item["BtCoin3"]);
     buttons_[Buttons::BT_POINT] =
@@ -171,6 +176,8 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
     slot_range_[InventoryType::Id::SETUP] = { 1, window_last };
     slot_range_[InventoryType::Id::ETC] = { 1, window_last };
     slot_range_[InventoryType::Id::CASH] = { 1, window_last };
+    slot_range_[InventoryType::Id::SCROLL] = { 1, window_last };
+    slot_range_[InventoryType::Id::ORE] = { 1, window_last };
 
     slider_ = Slider(Slider::Type::DEFAULT_SILVER,
                      Range<int16_t>(60, 265),
@@ -355,6 +362,8 @@ Button::State UIItemInventory::button_pressed(uint16_t buttonid) {
         case Buttons::BT_TAB_SETUP: tab_ = InventoryType::Id::SETUP; break;
         case Buttons::BT_TAB_ETC: tab_ = InventoryType::Id::ETC; break;
         case Buttons::BT_TAB_CASH: tab_ = InventoryType::Id::CASH; break;
+        case Buttons::BT_TAB_SCROLL: tab_ = InventoryType::Id::SCROLL; break;
+        case Buttons::BT_TAB_ORE: tab_ = InventoryType::Id::ORE; break;
         case Buttons::BT_GATHER: fn_gather_items(tab_); break;
         case Buttons::BT_SORT: fn_sort_items(tab_); break;
         case Buttons::BT_COIN: {
@@ -541,12 +550,21 @@ void UIItemInventory::send_key(int32_t keycode, bool pressed, bool escape) {
                     newtab = InventoryType::Id::ETC;
                     break;
                 case InventoryType::Id::ETC:
+                    newtab = InventoryType::Id::SCROLL;
+                    break;
+                case InventoryType::Id::SCROLL:
+                    newtab = InventoryType::Id::ORE;
+                    break;
+                case InventoryType::Id::ORE:
                     newtab = InventoryType::Id::SETUP;
                     break;
                 case InventoryType::Id::SETUP:
                     newtab = InventoryType::Id::CASH;
                     break;
                 case InventoryType::Id::CASH:
+                    newtab = InventoryType::Id::EQUIP;
+                    break;
+                default:
                     newtab = InventoryType::Id::EQUIP;
                     break;
             }
@@ -844,14 +862,22 @@ Point<int16_t> UIItemInventory::get_slotpos(int16_t slot) const {
 }
 
 Point<int16_t> UIItemInventory::get_tabpos(InventoryType::Id tb) const {
-    int8_t fixed_tab = tb;
+    // Visual order is equip/use/etc/scroll/ore/setup/cash. Each tab button sits at the position
+    // its sprite origin gives it (33px art, 36px pitch, first at x=9, top y=26), so the new-item
+    // tab indicator and the head hit-test line up with the actual buttons.
+    int8_t visual;
 
     switch (tb) {
-        case InventoryType::Id::ETC: fixed_tab = 3; break;
-        case InventoryType::Id::SETUP: fixed_tab = 4; break;
+        case InventoryType::Id::USE: visual = 1; break;
+        case InventoryType::Id::ETC: visual = 2; break;
+        case InventoryType::Id::SCROLL: visual = 3; break;
+        case InventoryType::Id::ORE: visual = 4; break;
+        case InventoryType::Id::SETUP: visual = 5; break;
+        case InventoryType::Id::CASH: visual = 6; break;
+        default: visual = 0; break;  // EQUIP
     }
 
-    return Point<int16_t>(10 + ((fixed_tab - 1) * 31), 29);
+    return Point<int16_t>(9 + visual * 36, 26);
 }
 
 uint16_t UIItemInventory::button_by_tab(InventoryType::Id tb) const {
@@ -860,6 +886,8 @@ uint16_t UIItemInventory::button_by_tab(InventoryType::Id tb) const {
         case InventoryType::Id::USE: return Buttons::BT_TAB_USE;
         case InventoryType::Id::SETUP: return Buttons::BT_TAB_SETUP;
         case InventoryType::Id::ETC: return Buttons::BT_TAB_ETC;
+        case InventoryType::Id::SCROLL: return Buttons::BT_TAB_SCROLL;
+        case InventoryType::Id::ORE: return Buttons::BT_TAB_ORE;
         default: return Buttons::BT_TAB_CASH;
     }
 }
@@ -916,6 +944,9 @@ void UIItemInventory::ItemIcon::drop_on_equips(EquipSlot::Id eqslot) const {
 
             break;
         case InventoryType::Id::USE: fn_scroll_equip(source_, eqslot); break;
+        // Scrolls live in the dedicated SCROLL tab now; dragging one onto an equipment slot
+        // applies it (the server reads the scroll from the SCROLL inventory).
+        case InventoryType::Id::SCROLL: fn_scroll_equip(source_, eqslot); break;
     }
 }
 

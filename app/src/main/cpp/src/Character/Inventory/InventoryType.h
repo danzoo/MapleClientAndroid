@@ -20,13 +20,19 @@
 namespace ms {
 namespace InventoryType {
 // Inventory types
-enum Id : int8_t { NONE, EQUIP, USE, SETUP, ETC, CASH, EQUIPPED, LENGTH };
+enum Id : int8_t { NONE, EQUIP, USE, SETUP, ETC, CASH, EQUIPPED, SCROLL, ORE, LENGTH };
 
 // Return the inventory type by item id
 Id by_item_id(int32_t item_id);
 
 // Return the inventory type by value.
 Id by_value(int8_t value);
+
+// True if the item belongs to the dedicated scroll tab (204xxxx upgrade scrolls, 234xxxx).
+bool is_scroll_item(int32_t item_id);
+
+// True if the item belongs to the dedicated ore tab (minerals, gems, mother-ores).
+bool is_ore_item(int32_t item_id);
 }  // namespace InventoryType
 
 struct InventoryPosition {

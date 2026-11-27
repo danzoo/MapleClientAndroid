@@ -156,7 +156,9 @@ private:
         BT_EXTRACT,
         BT_DISASSEMBLE,
         BT_TOAD,
-        BT_CASHSHOP
+        BT_CASHSHOP,
+        BT_TAB_SCROLL,
+        BT_TAB_ORE
     };
 
     const Inventory &inventory_;
