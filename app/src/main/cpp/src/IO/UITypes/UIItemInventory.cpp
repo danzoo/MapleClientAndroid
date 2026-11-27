@@ -161,18 +161,26 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
         Text(Text::Font::A11M, Text::Alignment::RIGHT, Color::Name::BLACK);
     maple_points_label_.change_text("0");  // TODO: Implement
 
-    slot_range_[InventoryType::Id::EQUIPPED] = { 1, 24 };
-    slot_range_[InventoryType::Id::EQUIP] = { 1, 24 };
-    slot_range_[InventoryType::Id::USE] = { 1, 24 };
-    slot_range_[InventoryType::Id::SETUP] = { 1, 24 };
-    slot_range_[InventoryType::Id::ETC] = { 1, 24 };
-    slot_range_[InventoryType::Id::CASH] = { 1, 24 };
+    // The bag is a fixed 6x7 grid: every tab's visible window is exactly the whole grid, so a tab
+    // whose slot limit fits (<= MAX_SLOTS_) shows all of it at once and never scrolls. A tab with
+    // more slots than the grid (CASH) starts here and slides the window with the slider.
+    const int16_t window_last = static_cast<int16_t>(MAX_SLOTS_);
+    slot_range_[InventoryType::Id::EQUIPPED] = { 1, window_last };
+    slot_range_[InventoryType::Id::EQUIP] = { 1, window_last };
+    slot_range_[InventoryType::Id::USE] = { 1, window_last };
+    slot_range_[InventoryType::Id::SETUP] = { 1, window_last };
+    slot_range_[InventoryType::Id::ETC] = { 1, window_last };
+    slot_range_[InventoryType::Id::CASH] = { 1, window_last };
 
     slider_ = Slider(Slider::Type::DEFAULT_SILVER,
                      Range<int16_t>(60, 255),
                      260,
                      ROWS_,
-                     1 + inventory_.get_slotmax(tab_) / COLUMNS_,
+                     // Rows of content = ceil(slots / columns). Subtracting the ROWS_ viewport
+                     // inside the slider leaves a row_max_ of 0 when the whole tab fits the grid
+                     // (so it cannot scroll items out of view) and the exact number of scroll
+                     // steps when it does not (CASH).
+                     static_cast<int16_t>((inventory_.get_slotmax(tab_) + COLUMNS_ - 1) / COLUMNS_),
                      [&](bool upwards) {
                          int16_t shift = upwards ? -COLUMNS_ : COLUMNS_;
                          bool above = slot_range_[tab_].first + shift > 0;
@@ -184,6 +192,7 @@ UIItemInventory::UIItemInventory(const Inventory &invent) :
                              clear_tooltip();
                              slot_range_[tab_].first += shift;
                              slot_range_[tab_].second += shift;
+                             load_icons();
                          }
                      });
 
@@ -219,19 +228,20 @@ void UIItemInventory::draw(float alpha) const {
 
     size_t numslots = inventory_.get_slotmax(tab_);
 
-    for (size_t i = 0; i <= MAX_SLOTS_; i++) {
-        Point<int16_t> slotpos = get_slotpos(i);
+    // Walk the grid cell by cell and resolve each cell to the slot the window puts there, so a
+    // scrolled window (CASH) draws the slots it actually covers, not always slots 1..MAX_SLOTS_.
+    for (uint16_t cell = 0; cell < MAX_SLOTS_; cell++) {
+        int16_t slot = static_cast<int16_t>(range.first + cell);
+        Point<int16_t> slotpos = get_slotpos(slot);
 
-        if (icons_.find(i) != icons_.end()) {
-            const auto &icon = icons_.at(i);
+        auto icon = icons_.find(slot);
 
-            if (icon && i >= range.first && i <= range.second) {
-                icon->draw(position_ + slotpos);
+        if (icon != icons_.end()) {
+            if (icon->second) {
+                icon->second->draw(position_ + slotpos);
             }
-        } else {
-            if (i > numslots && i <= range.second) {
-                disabled_.draw(position_ + slotpos);
-            }
+        } else if (static_cast<size_t>(slot) > numslots) {
+            disabled_.draw(position_ + slotpos);
         }
     }
 
@@ -322,11 +332,13 @@ void UIItemInventory::load_icons() {
     }
     icons_.clear();
 
-    uint8_t numslots = inventory_.get_slotmax(tab_);
+    const auto range = slot_range_.at(tab_);
+    uint16_t numslots = inventory_.get_slotmax(tab_);
 
-    for (size_t i = 0; i <= MAX_SLOTS_; i++) {
-        if (i <= numslots) {
-            update_slot(i);
+    // Only the slots the window currently covers need icons; scrolling reloads for the new window.
+    for (int16_t slot = range.first; slot <= range.second; slot++) {
+        if (slot >= 0 && static_cast<uint16_t>(slot) <= numslots) {
+            update_slot(slot);
         }
     }
 }
@@ -354,7 +366,10 @@ Button::State UIItemInventory::button_pressed(uint16_t buttonid) {
 
     if (tab_ != oldtab) {
         uint16_t row = slot_range_.at(tab_).first / COLUMNS_;
-        slider_.setrows(row, ROWS_, 1 + inventory_.get_slotmax(tab_) / COLUMNS_);
+        slider_.setrows(row,
+                        ROWS_,
+                        static_cast<int16_t>((inventory_.get_slotmax(tab_) + COLUMNS_ - 1)
+                                             / COLUMNS_));
 
         buttons_[button_by_tab(oldtab)]->set_state(Button::State::NORMAL);
         buttons_[button_by_tab(tab_)]->set_state(Button::State::PRESSED);
