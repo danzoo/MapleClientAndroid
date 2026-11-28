@@ -46,6 +46,13 @@ namespace ms {
         // Clear all bitmaps if most of the space is used up
         void clear();
 
+        // Rewind only the atlases that overflowed during a previous frame, at a frame-safe point
+        // before any quad for the new frame is batched. A mid-frame overflow invalidates the
+        // offsets of quads already in the batch, which makes one frame show the wrong sprites -
+        // a background animation appears to jump back to its first frame for a single picture.
+        // Called once per drawn frame; it never touches an atlas that is merely well filled.
+        void reclaim();
+
         // Add a bitmap to the available resources.
         void add_bitmap(const img::bitmap &bmp);
 
@@ -354,6 +361,10 @@ namespace ms {
             size_t rlid = 1;
             size_t wasted = 0;
             std::unordered_map<size_t, Offset> offsets;
+
+            // Set when a bitmap cannot be packed mid-frame. The atlas is then rewound at the
+            // start of the next frame instead, where no quad is holding an offset into it yet.
+            bool overflow_pending = false;
 
             // Device pixels one logical pixel of this pass's coordinates covers. Glyphs are
             // rasterised at exactly this density and drawn in device pixels, so a glyph is one texel

@@ -328,6 +328,7 @@ namespace ms {
                 });
         atlas.rlid = 1;
         atlas.wasted = 0;
+        atlas.overflow_pending = false;
     }
 
     void GraphicsGL::reset_glyph_region(AtlasState &atlas) {
@@ -605,10 +606,28 @@ namespace ms {
             double usedpercent = static_cast<double>(used) / (atlas->width * atlas->height);
 
             // usedpercent is a 0..1 fraction, so the threshold has to be one too. Comparing it
-            // against 80.0 kept this reclaim dead, which left the mid-frame overflow inside
-            // get_offset as the only way to free the atlas, and that one invalidates the offsets
-            // of quads already batched for the frame being drawn.
-            if (usedpercent > 0.80) {
+            // against 80.0 kept this reclaim dead. clear() runs at discrete state changes (a map
+            // load, leaving a session); an overflow seen while a frame is drawn is handled by
+            // reclaim() at the start of the next frame, where no quad holds an offset yet.
+            if (atlas->overflow_pending || usedpercent > 0.80) {
+                clear_internal(*atlas);
+            }
+        }
+    }
+
+    void GraphicsGL::reclaim() {
+        // A locked renderer re-submits the previous picture's batches during a fade, so moving
+        // the atlas under it would invalidate those quads too. Wait for the fade to finish.
+        if (locked_) {
+            return;
+        }
+
+        // Only an overflow actually seen during a previous frame asks for a rewind. Reclaiming on
+        // a plain occupancy threshold at the start of every frame would discard the whole offset
+        // cache before the frame could use it and force every bitmap to be decoded and uploaded
+        // again; an overflow is the only case that actually needs the atlas rewound.
+        for (AtlasState *atlas : {&scene_atlas_, &ui_atlas_, &panel_atlas_}) {
+            if (atlas->overflow_pending) {
                 clear_internal(*atlas);
             }
         }
@@ -715,14 +734,32 @@ namespace ms {
             }
         } else {
             if (atlas.border.x() + pw > atlas.width) {
+                // Save the packer's cursor before trying the next row. An overflow has to leave
+                // the atlas exactly as it was: leaving it on a row past the texture hands every
+                // bitmap packed after it in this frame an out-of-range slot, which is sampled as
+                // a transparent glyph - the whole backdrop disappears for the rest of the frame.
+                const GLshort prev_x = atlas.border.x();
+                const GLshort prev_y = atlas.border.y();
+                const Range<GLshort> prev_range = atlas.y_range;
+
                 atlas.border.set_x(0);
                 atlas.border.shift_y(atlas.y_range.second());
 
                 if (atlas.border.y() + ph > atlas.height) {
-                    clear_internal(atlas);
-                } else {
-                    atlas.y_range = Range<GLshort>();
+                    atlas.border = Point<GLshort>(prev_x, prev_y);
+                    atlas.y_range = prev_range;
+
+                    // Rewinding the atlas here would overwrite the texels of quads already batched
+                    // for this frame. The background animation is drawn first, so it was the
+                    // clearest victim: one picture sampled a stale slot and looked as though the
+                    // animation had started over. Remember the overflow and reclaim at the start
+                    // of the next frame instead; this bitmap sits out the rest of this one.
+                    atlas.overflow_pending = true;
+
+                    return atlas.offsets.emplace(id, null_offset_).first->second;
                 }
+
+                atlas.y_range = Range<GLshort>();
             }
 
             x = atlas.border.x();

@@ -116,15 +116,27 @@ struct MovingObject {
     Point<int16_t> get_position() const { return { get_x(), get_y() }; }
 
     int16_t get_absolute_x(double viewx, float alpha) const {
-        double interx = x.normalized() ? std::round(x.get()) : x.get(alpha);
-
-        return static_cast<int16_t>(std::round(interx + viewx));
+        return static_cast<int16_t>(std::round(get_absolute_x_d(viewx, alpha)));
     }
 
     int16_t get_absolute_y(double viewy, float alpha) const {
+        return static_cast<int16_t>(std::round(get_absolute_y_d(viewy, alpha)));
+    }
+
+    // Unrounded absolute coordinates. A scrolling background accumulates its offset forever;
+    // the int16_t accessors above would wrap that sum once it passed 32767 pixels and make the
+    // picture jump. Callers that tile the result need the full sum so they can wrap it by the
+    // tile size first and only truncate the small remainder.
+    double get_absolute_x_d(double viewx, float alpha) const {
+        double interx = x.normalized() ? std::round(x.get()) : x.get(alpha);
+
+        return interx + viewx;
+    }
+
+    double get_absolute_y_d(double viewy, float alpha) const {
         double intery = y.normalized() ? std::round(y.get()) : y.get(alpha);
 
-        return static_cast<int16_t>(std::round(intery + viewy));
+        return intery + viewy;
     }
 
     Point<int16_t> get_absolute(double viewx, double viewy, float alpha) const {

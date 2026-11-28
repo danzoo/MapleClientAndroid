@@ -133,6 +133,10 @@ void Game::update() {
 }
 
 void Game::draw(float alpha) {
+    // Rewind an atlas that overflowed during a previous frame, before this frame batches a single
+    // quad. Clearing it mid-frame would overwrite the texels of quads already in the batch.
+    GraphicsGL::get().reclaim();
+
     Window::get().begin();
     Stage::get().draw(alpha);
     UI::get().draw(alpha);

@@ -17,6 +17,8 @@
 
 #include <imgwz/wz.hpp>
 
+#include <cmath>
+
 #include "../../Constants.h"
 #include "../../Graphics/GraphicsGL.h"
 
@@ -97,22 +99,27 @@ void Background::draw(double viewx, double viewy, float alpha) const {
     double x;
 
     if (move_obj_.hmobile()) {
-        x = move_obj_.get_absolute_x(viewx, alpha);
+        x = move_obj_.get_absolute_x_d(viewx, alpha);
     } else {
         double shift_x = rx_ * (WOFFSET - viewx) / 100 + WOFFSET;
-        x = move_obj_.get_absolute_x(shift_x, alpha);
+        x = move_obj_.get_absolute_x_d(shift_x, alpha);
     }
 
     double y;
 
     if (move_obj_.vmobile()) {
-        y = move_obj_.get_absolute_y(viewy, alpha);
+        y = move_obj_.get_absolute_y_d(viewy, alpha);
     } else {
         double shift_y = ry_ * (HOFFSET - viewy) / 100 + HOFFSET;
-        y = move_obj_.get_absolute_y(shift_y, alpha);
+        y = move_obj_.get_absolute_y_d(shift_y, alpha);
     }
 
+    // A scrolling background's offset grows without bound. Reduce it by the tile size while it
+    // is still a double: truncating the raw sum to int16_t first would make it wrap at 32767
+    // pixels and the background jump to a different phase for one frame.
     if (htile_ > 1) {
+        x = std::fmod(x, static_cast<double>(cx_));
+
         while (x > 0) {
             x -= cx_;
         }
@@ -123,6 +130,8 @@ void Background::draw(double viewx, double viewy, float alpha) const {
     }
 
     if (vtile_ > 1) {
+        y = std::fmod(y, static_cast<double>(cy_));
+
         while (y > 0) {
             y -= cy_;
         }
