@@ -107,7 +107,7 @@ UIShop::UIShop(const CharLook &in_charlook, const Inventory &in_inventory) :
     }
 
     sell_x_ = 284;
-    sell_width_ = 200;
+    sell_width_ = 286;
 
     for (int i = Buttons::SELL0; i <= Buttons::SELL8; i++) {
         Point<int16_t> pos(sell_x_, item_y + 42 * (i - Buttons::SELL0));
@@ -149,7 +149,7 @@ UIShop::UIShop(const CharLook &in_charlook, const Inventory &in_inventory) :
 
     sell_slider_ = Slider(Slider::Type::DEFAULT_SILVER,
                           Range<int16_t>(123, 484),
-                          488,
+                          574,
                           5,
                           1,
                           [&](bool upwards) {
@@ -875,7 +875,7 @@ void UIShop::SellState::draw(Point<int16_t> parentpos,
         // The sprite's own origin is the old control's anchor, so it is added back to place the box.
         const Texture &tick =
             checked_slots.count(items[slot].get_slot()) ? check_on : check_off;
-        tick.draw(parentpos + itempos + Point<int16_t>(221, 20) + tick.get_origin());
+        tick.draw(parentpos + itempos + Point<int16_t>(307, 20) + tick.get_origin());
     }
 }
 
